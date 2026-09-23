@@ -51,7 +51,9 @@ function paceStatus(messages, config, now) {
   const last = sorted[0]
   let minutesSinceLast = null
   if (last) {
-    const lastAt = new Date(String(last.sent_at || last.created_at).replace(/-/g, '/').replace('T', ' ').replace(/\..*$/, ''))
+    // 用 format.parseDate 而不是自己 replace —— 与 Web 端 pace.ts 的 `new Date(...)` 同口径。
+    // 自己剥掉 T/时区后缀会把 UTC 时间当成本地时间，算出「距上次发送」差几个小时。
+    const lastAt = format.parseDate(last.sent_at || last.created_at)
     if (!isNaN(lastAt.getTime())) minutesSinceLast = Math.floor((current.getTime() - lastAt.getTime()) / 60000)
   }
 

@@ -77,6 +77,35 @@ export default function JobsSquare({ profile, onChanged, go }: PageProps) {
 
   const joinedCount = useMemo(() => publicJobs.filter((j) => inPool(j, keys)).length, [publicJobs, keys])
 
+  /**
+   * 当前筛选下「可加入」的岗位（还没进池的）。
+   *
+   * 原先这段推导在渲染里散了三处：joinSelected 里 filter 一次、按钮计数里
+   * 又用 `selected.filter((id) => shown.some(...))` 现算一次、表头全选框里第三次。
+   * 表头那次的 `shown.some` 是 O(选中数 × shown 长度) 的嵌套扫描，公共岗位上千条时
+   * 每次勾选都要重跑一遍。集中成一个 memo，三处共用同一份结果，口径也不会再漂。
+   */
+  const joinable = useMemo(() => shown.filter((j) => !inPool(j, keys)), [shown, keys])
+
+  /** 已勾选且当前可见可加入的岗位 —— 按钮计数与真正提交的目标必须同源 */
+  const selectedJoinable = useMemo(() => joinable.filter((j) => selected.includes(j.id)), [joinable, selected])
+
+  /**
+   * 本地匹配分。必须 memo，不能写在渲染里。
+   *
+   * `localScore` 会逐字扫描 jd_text（最长 8000 字）并做关键词命中统计，
+   * 放在 `shown.map()` 里的话，用户在广场上每勾一个岗位都触发一次全量重算 ——
+   * 上千条公共岗位时，勾选框的响应会明显发涩。分数只跟 (jd_text, title, profile) 有关，
+   * 与勾选状态无关，所以按 id 缓存一次即可。
+   */
+  const scoreById = useMemo(() => {
+    const map = new Map<number, number>()
+    for (const job of shown) {
+      map.set(job.id, localScore(job.jd_text ?? '', job.title ?? '', profile).score)
+    }
+    return map
+  }, [shown, profile])
+
   /** 加入岗位池 = 复制一份快照。广场数据一字不动，重复点击由 dedupeKey 挡住 */
   async function join(job: PublicJob): Promise<boolean> {
     if (inPool(job, keys)) {
@@ -107,7 +136,7 @@ export default function JobsSquare({ profile, onChanged, go }: PageProps) {
   }
 
   async function joinSelected() {
-    const targets = shown.filter((j) => selected.includes(j.id) && !inPool(j, keys))
+    const targets = selectedJoinable
     if (!targets.length) {
       notifyErr('选中的岗位都已经在岗位池里了')
       return
@@ -137,7 +166,17 @@ export default function JobsSquare({ profile, onChanged, go }: PageProps) {
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
   }
 
-  const joinable = shown.filter((j) => !inPool(j, keys))
+  /**
+   * 筛选一变就清勾选。与 Jobs 页同源处理：`selected` 存的是全量 id，
+   * 而筛选只改 `shown`，不清的话「批量加入（N）」的 N 会把已经看不见、
+   * 或已经被筛掉的岗位也算进去，用户看到的数字与实际动作不一致。
+   */
+  function changeFilter<T>(setter: (v: T) => void) {
+    return (value: T) => {
+      setter(value)
+      setSelected([])
+    }
+  }
 
   return (
     <div className="grid" style={{ gap: 14 }}>
@@ -167,26 +206,26 @@ export default function JobsSquare({ profile, onChanged, go }: PageProps) {
               style={{ minWidth: 230 }}
               placeholder="搜索公司 / 岗位 / JD 关键词"
               value={keyword}
-              onChange={(e) => setKeyword(e.target.value)}
+              onChange={(e) => changeFilter(setKeyword)(e.target.value)}
             />
-            <select className="select" value={filterCity} onChange={(e) => setFilterCity(e.target.value)}>
+            <select className="select" value={filterCity} onChange={(e) => changeFilter(setFilterCity)(e.target.value)}>
               {['全部', ...cities].map((v) => (
                 <option key={v}>{v}</option>
               ))}
             </select>
-            <select className="select" value={filterType} onChange={(e) => setFilterType(e.target.value)}>
+            <select className="select" value={filterType} onChange={(e) => changeFilter(setFilterType)(e.target.value)}>
               {['全部', ...JOB_TYPES].map((v) => (
                 <option key={v}>{v}</option>
               ))}
             </select>
-            <select className="select" value={filterPool} onChange={(e) => setFilterPool(e.target.value)}>
+            <select className="select" value={filterPool} onChange={(e) => changeFilter(setFilterPool)(e.target.value)}>
               {['全部', '未加入', '已加入'].map((v) => (
                 <option key={v}>{v}</option>
               ))}
             </select>
             <span className="spacer" />
-            <button className="btn" onClick={() => void joinSelected()} disabled={busyAll || !selected.length}>
-              {busyAll ? '加入中…' : `批量加入（${selected.filter((id) => shown.some((j) => j.id === id && !inPool(j, keys))).length}）`}
+            <button className="btn" onClick={() => void joinSelected()} disabled={busyAll || !selectedJoinable.length}>
+              {busyAll ? '加入中…' : `批量加入（${selectedJoinable.length}）`}
             </button>
             <button className="btn" onClick={() => void load()} disabled={loading}>
               刷新
@@ -199,7 +238,7 @@ export default function JobsSquare({ profile, onChanged, go }: PageProps) {
             <div className="row wrap mt8" style={{ gap: 6 }}>
               <span className="small muted">城市：</span>
               {cities.slice(0, 12).map((c) => (
-                <button key={c} className={filterCity === c ? 'chip on' : 'chip'} onClick={() => setFilterCity(filterCity === c ? '全部' : c)}>
+                <button key={c} className={filterCity === c ? 'chip on' : 'chip'} onClick={() => changeFilter(setFilterCity)(filterCity === c ? '全部' : c)}>
                   {c}
                 </button>
               ))}
@@ -322,7 +361,7 @@ export default function JobsSquare({ profile, onChanged, go }: PageProps) {
                 <tbody>
                   {shown.map((job) => {
                     const already = inPool(job, keys)
-                    const score = localScore(job.jd_text ?? '', job.title ?? '', profile).score
+                    const score = scoreById.get(job.id) ?? 0
                     return (
                       <tr key={job.id}>
                         <td>

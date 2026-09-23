@@ -100,7 +100,12 @@ Page({
           }
         })
       })
-      .catch(toastError)
+      .catch(function (err) {
+        // 必须复位 loading：WXML 用 wx:if="{{!loading}}" 包住正文，
+        // 不复位的话请求一旦失败，用户看到的就是一个永远转不完的圈、连重试入口都没有。
+        that.setData({ loading: false })
+        toastError(err)
+      })
   },
 
   onContent(e) {

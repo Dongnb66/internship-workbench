@@ -6,8 +6,12 @@ const STAGES = [
   { key: 'rejected', label: '已挂', color: '#9aa3af' }
 ]
 
-const CHANNELS = ['BOSS直聘', '实习僧', '官网投递', '内推', '牛客', '其它']
+// ⚠️ 必须与 src/lib/constants.ts 的 CHANNELS 逐字一致、顺序一致。
+// 少了「浏览器采集」「岗位广场」两项时，openEdit 里的 indexOf 会返回 -1 →
+// 落到 index 0 → 编辑表单显示成「BOSS直聘」→ 保存即把真实来源抹掉。
+const CHANNELS = ['BOSS直聘', '实习僧', '官网投递', '内推', '牛客', '浏览器采集', '岗位广场', '其它']
 const JOB_TYPES = ['实习', '日常实习', '暑期实习', '校招', '社招']
+const INDUSTRIES = ['互联网', '人工智能', '金融', '游戏', '硬件/芯片', '政企/国企', '其它']
 const PRIORITIES = ['高', '中', '低']
 const DIMS = ['技能匹配', '经验匹配', '成长空间', '薪资结构', '工作强度', '稳定性', '通勤']
 
@@ -57,7 +61,7 @@ const GREETING_RULES = [
   '1) 开场身份只写「届数 + 专业 + 姓名」，绝不出现任何学校名称。',
   '2) 只放大真实存在、能被 GitHub 仓库 clone 验证的能力；不会的、没做过的技术一个字都不提，也不写「概念通/上手快/没做过」这类自我设限。',
   '3) JD 里未接触过的加分项，用同类且更硬的能力顶上（例如要 Redis 就只讲 MySQL；要 Vue 就讲 React）。',
-  '4) 技术数字口径必须与简历一致，不得出现简历里没有的数字。',
+  '4) 技术数字口径必须与简历一致：5 个项目 / 6 个仓库 / 508 条测试（146 + 71 + 79 + 48 + 129 + 35）、9 条评测，不得出现其它数字。',
   '5) 长度贴住对方问题的强度：问一个词就回 2-3 行；只有对方问技术才展开。',
   '6) 用口语化的自己的话，保留一处不完美，不要每句都踩点、不要三项并列等长、不要照搬简历原句、不要引用对方 JD 原文。',
   '7) 不承诺无法兑现的事，不虚构经历。'
@@ -67,6 +71,7 @@ module.exports = {
   STAGES: STAGES,
   CHANNELS: CHANNELS,
   JOB_TYPES: JOB_TYPES,
+  INDUSTRIES: INDUSTRIES,
   PRIORITIES: PRIORITIES,
   DIMS: DIMS,
   TASK_KINDS: TASK_KINDS,

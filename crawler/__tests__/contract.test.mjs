@@ -7,9 +7,24 @@
  * 两者都不会报错，只会安静地把数据弄脏。所以在这里逐条钉死。
  */
 
+import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
-import { CHANNELS, JOB_TYPES as UI_JOB_TYPES } from '../../src/lib/constants.ts'
+import {
+  CHANNELS,
+  GREETING_RULES,
+  JOB_TYPES as UI_JOB_TYPES,
+  PROFILE_TEMPLATE,
+} from '../../src/lib/constants.ts'
+import {
+  daysLeft as webDaysLeft,
+  fmtDate as webFmtDate,
+  fmtDateTime as webFmtDateTime,
+} from '../../src/lib/format.ts'
+import { paceStatus as webPaceStatus } from '../../src/lib/pace.ts'
 import {
   dedupeKey as uiDedupeKey,
   looksLikeCollectorJson,
@@ -33,6 +48,150 @@ describe('常量口径', () => {
     for (const site of SITES) {
       expect(CHANNELS, `${site.id} 的 channel「${site.channel}」不在 CHANNELS 里`).toContain(site.channel)
     }
+  })
+})
+
+/**
+ * Web 端与小程序端是两份手写的常量副本，没有任何工具保证它们同步。
+ * 这里用 `createRequire` 直接加载小程序的 CommonJS 模块来逐项比对 ——
+ * 踩过的坑：小程序 CHANNELS 少了「浏览器采集」「岗位广场」两项，导致
+ * jobs.js 里 `indexOf` 返回 -1、picker 落到第 0 项、编辑一次就把真实来源
+ * 静默改成「BOSS直聘」。这类错位不会报错，只会安静地篡改数据。
+ */
+describe('Web ↔ 小程序 常量口径', () => {
+  const require = createRequire(import.meta.url)
+  const MP_ROOT = fileURLToPath(new URL('../../miniprogram/utils/', import.meta.url))
+  const mpConstants = require(path.join(MP_ROOT, 'constants.js'))
+
+  it('CHANNELS 逐项一致且顺序一致（顺序变了 picker 下标就会指错）', () => {
+    expect(mpConstants.CHANNELS).toEqual(CHANNELS)
+  })
+
+  it('JOB_TYPES 逐项一致且顺序一致', () => {
+    expect(mpConstants.JOB_TYPES).toEqual(UI_JOB_TYPES)
+  })
+
+  it('PROFILE_TEMPLATE 的键集合两端一致（漏键会让一键填入少字段）', () => {
+    const webKeys = Object.keys(PROFILE_TEMPLATE).sort()
+    const mpKeys = Object.keys(mpConstants.PROFILE_TEMPLATE).sort()
+    expect(mpKeys).toEqual(webKeys)
+  })
+
+  it('PROFILE_TEMPLATE 的可验证数字两端一致（508 条测试口径不能漂）', () => {
+    const nums = (s) => String(s).match(/\d+/g) ?? []
+    expect(nums(mpConstants.PROFILE_TEMPLATE.self_intro)).toEqual(nums(PROFILE_TEMPLATE.self_intro))
+    expect(nums(mpConstants.PROFILE_TEMPLATE.resume_summary)).toEqual(nums(PROFILE_TEMPLATE.resume_summary))
+  })
+
+  it('GREETING_RULES 两端都钉住了完整的拆分数字（只写总数挡不住模型自己编分解）', () => {
+    // 踩过的坑：小程序这份只写了「合计 508 条测试」，Web 端才是完整的
+    // 「508 条测试（146 + 71 + 79 + 48 + 129 + 35）、9 条评测」。
+    // 只断言出现过「508」是挡不住的 —— 拆分项一个不少才算钉住。
+    // 6 个仓库的测试数必须逐个出现在规则里，模型没有空间自行加减。
+    const PARTS = ['508', '146', '71', '79', '48', '129', '35']
+    for (const source of [GREETING_RULES, mpConstants.GREETING_RULES]) {
+      for (const n of PARTS) {
+        expect(source, `打招呼纪律里缺了测试数拆分项 ${n}`).toContain(n)
+      }
+    }
+  })
+
+  it('小程序常量文件导出的每一项都被 Web 端认识（防拼写漂移）', () => {
+    // 只做「小程序不该有 Web 端不认识的常量」这一个方向：
+    // 反向（Web 有、小程序没有）不一定都是 bug —— 小程序未实现的页面不需要那些常量。
+    // 但小程序**导出了**的，必须是 Web 端真实存在的口径，否则说明有人改错了名字。
+    const known = new Set([
+      'STAGES', 'CHANNELS', 'JOB_TYPES', 'INDUSTRIES', 'PRIORITIES', 'DIMS',
+      'TASK_KINDS', 'PROFILE_TEMPLATE', 'GREETING_RULES', 'stageLabel', 'stageColor',
+    ])
+    for (const key of Object.keys(mpConstants)) {
+      expect(known.has(key), `小程序 constants.js 导出了 Web 端不认识的「${key}」`).toBe(true)
+    }
+  })
+
+  it('小程序常量文件里声明的顶层 const 都被导出了（防「写了但忘了导出」）', () => {
+    // 踩过的坑：往 constants.js 里加了 INDUSTRIES，却没加进 module.exports，
+    // 结果是页面 `constants.INDUSTRIES` 拿到 undefined —— 不报错，只是筛选项空了。
+    // 这里直接读源码，比对「声明了哪些顶层 const」与「导出了哪些」。
+    const src = readFileSync(path.join(MP_ROOT, 'constants.js'), 'utf8')
+    const declared = [...src.matchAll(/^const ([A-Z][A-Z0-9_]*)\s*=/gm)].map((m) => m[1])
+    expect(declared.length, '没解析到任何顶层常量，正则可能失效了').toBeGreaterThan(0)
+    const exported = new Set(Object.keys(mpConstants))
+    const forgotten = declared.filter((name) => !exported.has(name))
+    expect(forgotten, `这些常量声明了却没导出：${forgotten.join(', ')}`).toEqual([])
+  })
+})
+
+/**
+ * 日期解析两端必须同结果。
+ *
+ * 踩过的坑：小程序 `format.js` 先 `replace(/-/g,'/')` 再剥掉 `T...` 后缀，
+ * 等于丢掉时区、强制按本地时间解释；Web 端是 `new Date(value)`，带 Z 时按 UTC。
+ * 于是同一个 deadline 两端能差一整天 —— 直接决定「剩 N 天」与「是否 3 天内截止」
+ * 两个用户可见的判定。deadline 存成时间戳时这个偏差就会出现。
+ */
+describe('Web ↔ 小程序 日期解析', () => {
+  const require = createRequire(import.meta.url)
+  const mpFormat = require(path.join(fileURLToPath(new URL('../../miniprogram/utils/', import.meta.url)), 'format.js'))
+
+  // 真实输入：deadline / due_at 这类字段可能是纯日期串，也可能是带 Z 的时间戳。
+  // 覆盖纯日期串、带 Z 的时间戳、带毫秒的、跨月跨年的边界。
+  const CASES = [
+    '2026-09-25',
+    '2026-09-25T00:00:00.000Z',
+    '2026-09-25T16:00:00.000Z',
+    '2026-12-31T23:59:59.999Z',
+    '2027-01-01T00:00:00.000Z',
+    '2026-03-01',
+  ]
+
+  // fmtDateTime 只用于展示**时间戳**（sent_at / scheduled_at / created_at / new Date().toISOString()），
+  // 全仓没有一处拿它格式化纯日期串。所以这里只喂带时间部分的输入 ——
+  // 对着「纯日期串」比对 fmtDateTime 等于测一条永不执行的分支，
+  // 而 Web 端把 '2026-09-25' 解析成 UTC 后显示 08:00，本身也是个不该扩散的怪癖。
+  const DATE_TIME_CASES = CASES.filter((v) => v.includes('T'))
+
+  it('fmtDate 两端同结果（用户看到的截止日不能两边不一样）', () => {
+    for (const value of CASES) {
+      expect(mpFormat.fmtDate(value), `fmtDate(${value})`).toBe(webFmtDate(value))
+    }
+  })
+
+  it('fmtDateTime 两端同结果', () => {
+    for (const value of DATE_TIME_CASES) {
+      expect(mpFormat.fmtDateTime(value), `fmtDateTime(${value})`).toBe(webFmtDateTime(value))
+    }
+  })
+
+  it('daysLeft 两端同结果（「剩 N 天」与 3 天内截止标记的依据）', () => {
+    for (const value of CASES) {
+      expect(mpFormat.daysLeft(value), `daysLeft(${value})`).toBe(webDaysLeft(value))
+    }
+  })
+
+  it('空值与坏值两端都退化，不抛异常', () => {
+    for (const value of [null, undefined, '', '不是日期']) {
+      expect(mpFormat.fmtDate(value), `fmtDate(${String(value)})`).toBe(webFmtDate(value))
+      expect(mpFormat.daysLeft(value), `daysLeft(${String(value)})`).toBe(webDaysLeft(value))
+    }
+  })
+
+  it('paceStatus 的「距上次发送多久」两端同结果（决定冷却是否放行）', () => {
+    // 这条最容易出错：小程序原先自己剥 T/时区后缀，会把 UTC 发送时间当本地时间，
+    // 算出的小时数偏掉，于是「距上次发送仅 N 分钟」的拦截时松时紧。
+    const require2 = createRequire(import.meta.url)
+    const mpPace = require2(path.join(fileURLToPath(new URL('../../miniprogram/utils/', import.meta.url)), 'pace.js'))
+    const now = new Date('2026-09-23T10:00:00.000Z')
+    const config = { dailyLimit: 8, window: '09:00-21:00', minIntervalMin: 30 }
+    const messages = [
+      { direction: 'out', sent_at: '2026-09-23T09:40:00.000Z', content: '你好' },
+      { direction: 'out', sent_at: '2026-09-22T09:00:00.000Z', content: '旧消息' },
+    ]
+    const web = webPaceStatus(messages, config, now)
+    const mp = mpPace.paceStatus(messages, config, now)
+    expect(mp.sentToday).toBe(web.sentToday)
+    expect(mp.minutesSinceLast).toBe(web.minutesSinceLast)
+    expect(mp.allowed).toBe(web.allowed)
   })
 })
 

@@ -45,6 +45,23 @@ export default function Jobs({ profile, onChanged, go }: PageProps) {
   const [busy, setBusy] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [selected, setSelected] = useState<number[]>([])
+  /**
+   * 筛选条件一变就清空勾选。
+   *
+   * 不清的后果很隐蔽：`selected` 是全量 rows 的 id，而筛选只改 `shown`。
+   * 用户先勾一批、再切筛选、然后点「批量 AI 评分」，按钮上写的是「（3）」，
+   * 实际会把已经看不见的行一起送去评分 —— 消耗真实模型额度，且用户无从察觉。
+   * 在这里清空，按钮计数与真实目标就再也不会对不上。
+   *
+   * 写成事件处理器而不是 `useEffect(..., [筛选条件])`：effect 里 setState 会多触发
+   * 一轮渲染，而清勾选本身正是「用户改筛选」这个事件的结果，放在事件里更贴。
+   */
+  function changeFilter<T>(setter: (v: T) => void) {
+    return (value: T) => {
+      setter(value)
+      setSelected([])
+    }
+  }
   const abortRef = useRef(false)
   const [batch, setBatch] = useState({
     running: false,
@@ -221,6 +238,10 @@ export default function Jobs({ profile, onChanged, go }: PageProps) {
 
       try {
         const evaluated = await evaluateJD(job.jd_text ?? '', profile)
+        // ⚠️ await 之后必须重新检查中断标记：用户点「停止」的时刻几乎总是落在
+        // 某一次 await 期间，只在循环开头检查的话，这一条会照常把分数和 AI 报告写进去，
+        // 用户以为停了、数据却多了一条，而且无法撤销。
+        if (abortRef.current) break
         await updateRow('jobs', job.id, {
           match_score: evaluated.score,
           priority: evaluated.score >= 75 ? '高' : evaluated.score >= 55 ? '中' : '低',
@@ -349,18 +370,18 @@ export default function Jobs({ profile, onChanged, go }: PageProps) {
       <div className="card">
         <div className="card-body">
           <div className="filters">
-            <input className="input" style={{ minWidth: 230 }} placeholder="搜索公司 / 岗位 / JD 关键词" value={keyword} onChange={(e) => setKeyword(e.target.value)} />
-            <select className="select" value={filterType} onChange={(e) => setFilterType(e.target.value)}>
+            <input className="input" style={{ minWidth: 230 }} placeholder="搜索公司 / 岗位 / JD 关键词" value={keyword} onChange={(e) => changeFilter(setKeyword)(e.target.value)} />
+            <select className="select" value={filterType} onChange={(e) => changeFilter(setFilterType)(e.target.value)}>
               {['全部', ...JOB_TYPES].map((v) => (
                 <option key={v}>{v}</option>
               ))}
             </select>
-            <select className="select" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+            <select className="select" value={filterStatus} onChange={(e) => changeFilter(setFilterStatus)(e.target.value)}>
               {['全部', 'pool', 'applied', 'archived'].map((v) => (
                 <option key={v}>{v}</option>
               ))}
             </select>
-            <select className="select" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+            <select className="select" value={sortBy} onChange={(e) => changeFilter(setSortBy)(e.target.value)}>
               {['匹配度', '截止最近', '最新录入'].map((v) => (
                 <option key={v}>{v}</option>
               ))}
@@ -397,7 +418,7 @@ export default function Jobs({ profile, onChanged, go }: PageProps) {
             <div className="row wrap mt8" style={{ gap: 6 }}>
               <span className="small muted">城市：</span>
               {cities.slice(0, 12).map((c) => (
-                <button key={c} className={keyword === c ? 'chip on' : 'chip'} onClick={() => setKeyword(keyword === c ? '' : c)}>
+                <button key={c} className={keyword === c ? 'chip on' : 'chip'} onClick={() => changeFilter(setKeyword)(keyword === c ? '' : c)}>
                   {c}
                 </button>
               ))}

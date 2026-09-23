@@ -5,6 +5,22 @@ const format = require('../../utils/format')
 const constants = require('../../utils/constants')
 const { ensureLogin, toastError } = require('../../utils/auth')
 
+/**
+ * 把某个字段值映射成 picker 的下标。
+ *
+ * picker 必须落在 0..options.length-1 之间，但**兜底值不能是 0** —— 从前写
+ * `Math.max(0, indexOf(v))`，值不在选项里时静默变成第一项，用户一保存就把真实值
+ * 覆盖了（岗位来源被改成「BOSS直聘」就是这么来的）。所以这里对未识别值追加一项，
+ * 让它在 picker 里显式可见，用户能看到「这条记录的值不在选项里」而不是被悄悄改掉。
+ */
+function pickIndex(options, value, appendUnknown) {
+  const i = options.indexOf(value)
+  if (i >= 0) return { index: i, options: options }
+  if (!appendUnknown) return { index: 0, options: options }
+  const next = options.concat([value]) // 保真显示原值，保存时不会被改写
+  return { index: next.length - 1, options: next }
+}
+
 const EMPTY_FORM = {
   id: null,
   company: '',
@@ -12,7 +28,7 @@ const EMPTY_FORM = {
   city: '',
   job_type: '实习',
   salary: '',
-  source: 'BOSS直聘',
+  source: constants.CHANNELS[0],
   url: '',
   deadline: '',
   jd_text: '',
@@ -110,7 +126,14 @@ Page({
   },
 
   openNew() {
-    this.setData({ formOpen: true, form: Object.assign({}, EMPTY_FORM), jobTypeIndex: 0, channelIndex: 0 })
+    this.setData({
+      formOpen: true,
+      form: Object.assign({}, EMPTY_FORM),
+      jobTypes: constants.JOB_TYPES,
+      channels: constants.CHANNELS,
+      jobTypeIndex: 0,
+      channelIndex: 0
+    })
   },
 
   openEdit(e) {
@@ -120,6 +143,8 @@ Page({
       .then(function (rows) {
         const j = rows[0]
         if (!j) return
+        const type = pickIndex(constants.JOB_TYPES, j.job_type || '实习', false)
+        const chan = pickIndex(constants.CHANNELS, j.source || EMPTY_FORM.source, true)
         that.setData({
           formOpen: true,
           form: {
@@ -129,14 +154,16 @@ Page({
             city: j.city || '',
             job_type: j.job_type || '实习',
             salary: j.salary || '',
-            source: j.source || 'BOSS直聘',
+            source: j.source || EMPTY_FORM.source,
             url: j.url || '',
             deadline: j.deadline ? format.dateOnly(j.deadline) : '',
             jd_text: j.jd_text || '',
             notes: j.notes || ''
           },
-          jobTypeIndex: Math.max(0, constants.JOB_TYPES.indexOf(j.job_type || '实习')),
-          channelIndex: Math.max(0, constants.CHANNELS.indexOf(j.source || 'BOSS直聘'))
+          jobTypes: type.options,
+          channels: chan.options,
+          jobTypeIndex: type.index,
+          channelIndex: chan.index
         })
       })
       .catch(toastError)

@@ -2,6 +2,44 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 与 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.7.3] - 2026-09-23
+
+一次**逐条实证的代码审查**：修掉 7 个真 bug，其中两个会**静默篡改用户数据**，一个会让**批量 AI 评分在用户以为停止后继续写入**。核心收获是补上了一组此前完全缺失的 **Web ↔ 小程序 跨端契约测试**（20 → 32 条）。
+
+### Fixed
+
+- **小程序「岗位来源」被静默改写（数据损坏级）**。`miniprogram/utils/constants.js` 的 `CHANNELS` 只有 6 项，Web 端有 8 项（少「浏览器采集」「岗位广场」）。`jobs.js` 里 `Math.max(0, constants.CHANNELS.indexOf(j.source))` 对这两个值返回 `-1` → 被 `Math.max(0, …)` 兜成 `0` → 编辑表单把来源显示成「BOSS直聘」→ **用户点一次保存，岗位的真实来源就被永久覆盖**。抓取器导入的岗位全都是这两个值，所以「抓回来的岗位编辑一次就变 BOSS 直聘」是必然发生的。
+  - 修法不是简单补全数组：新增 `pickIndex()`，对**不在选项里的值追加成一项**并在表单里显式展示，让「这条记录的值不认识」变得可见，而不是悄悄替换成第一项。
+- **批量 AI 评分在停止后仍写入**（`Jobs.tsx`）。`abortRef` 只在 `for` 循环开头检查，而用户点「停止」的时刻几乎总是落在 `await evaluateJD(...)` 期间 —— 该次 `await` 返回后代码继续 `updateRow` + `insertRow`，分数和 AI 报告照常落库。用户以为停了，数据却多了一条且无法撤销。
+- **批量评分会作用到筛选后不可见的岗位**（`Jobs.tsx`）。`selected` 保存的是**全量** `rows` 的 id，而筛选只改变 `shown`；`toggleAll` 只写 `shown`，按钮计数却用 `selected.length`。用户勾一批 → 切筛选 → 点「批量 AI 评分」，实际会连带对已经看不见的岗位发起真实模型调用。改为筛选变化时清空勾选（`changeFilter(setter)` 包装器，在事件里清，不用 effect）。
+- **小程序会话页 loading 永不复位**（`conversation.js`）。`.catch(toastError)` 没有 `setData({ loading: false })`，而 WXML 用 `wx:if="{{!loading}}"` 包住正文 —— 三个并发请求任一个失败，用户就会看到**永远转不完的圈，且没有任何重试入口**。同项目的 `index.js` / `pipeline.js` 都正确复位，只有这一页漏了。
+- **两端口径不一致：日期解析（实测差一整天 / 差 8 小时）**。小程序 `format.js` / `pace.js` 先把 `-` 换成 `/`、再剥掉 `T…` 后缀，等于**丢弃时区信息、强制按本地时间解释**；Web 端是 `new Date(value)`，保留 ISO 语义。实测后果：
+  - `paceStatus` 的「距上次发送多少分钟」算出 **500 vs 20**（冷却门禁时松时紧，直接影响「现在能不能发」）；
+  - `daysLeft` 在 `2026-09-25T16:00:00.000Z` 上两端差 1 天，进而影响「剩 N 天」与「3 天内截止」的紧急标记。
+  - 修法：抽出 `parseDate()`（纯日期串按本地构造、其余交给 `new Date`），两处统一调用。
+- **`useTable` 的类型陷阱**（`src/lib/hooks.ts`）。全仓 0 引用的死代码，且 opts 手写成 `{ order, ascending }`，而 `listRows` 还支持 `limit` / `filters` —— 未来调用方传 `limit` 会被 TS 静默丢弃（多余的属性检查只对直接传字面量生效），变成「以为分了页、实际全表拉取」。已改为复用 `ListOptions`。
+
+### Performance
+
+- **`JobsSquare.tsx` 的本地评分不再逐行重算**。`localScore` 会逐字扫描 `jd_text`（最长 8000 字），原先裸写在 `shown.map()` 的渲染里 —— 广场上千条岗位时，**每勾一个复选框都会触发全量重扫**。改为按 id 的 `useMemo` 查表。
+- 同一文件里「可加入岗位」的推导原本散在三处，其中按钮计数用了 `selected.filter((id) => shown.some(...))`，是 **O(选中数 × shown 长度)** 的嵌套扫描。合并为 `joinable` / `selectedJoinable` 两个 memo，三处共用同一份结果（口径也不会再漂）。
+- lint warnings 24 → 22（重构重复推导自然下降）。
+
+### Added
+
+- **Web ↔ 小程序 跨端契约测试**（`crawler/__tests__/contract.test.mjs`，+12 条）。此前这组测试只覆盖「抓取器 ↔ Web」，**完全没有覆盖「Web ↔ 小程序」**——而这两端是两份手写的常量与算法副本，没有任何工具保证同步，正是上面 `CHANNELS` 事故的成因。新测试用 `createRequire` 直接加载小程序的 CommonJS 模块逐项比对：
+  - `CHANNELS` / `JOB_TYPES` 逐项**且顺序**一致（顺序变了 picker 下标就会指错）；
+  - `PROFILE_TEMPLATE` 键集合一致、可验证数字一致；
+  - `GREETING_RULES` 必须钉住完整拆分数字（只写总数挡不住模型自行编分解）；
+  - 顶层 `const` 声明了就必须导出（防「写了但忘了导出」）；
+  - `fmtDate` / `fmtDateTime` / `daysLeft` / `paceStatus` 两端同结果。
+  - 每条断言都做了**「关掉修复必须变红」自检**；首轮自检发现两条断言**没有牙**（只断言出现过「508」——原文本来就有；拿纯日期串去比对 `fmtDateTime` 是测一条永不执行的分支），已改为真正能失败的版本。
+
+### 说明
+
+- `Jobs.tsx` 的 `detail` / `applyFor` 持有 `Row` **快照**而非 id（`load()` 之后可能指向旧数据）。实际暴露面很窄（只有显式保存 / 删除会触发 `load`，且弹窗期间模态阻挡交互），属潜在健壮性问题而非活跃 bug；改成「提交时按 id 重查」是行为变更，本轮未改，先记录。
+- 测试基线 192 → **204**；`tsc -b` 零错；`crawler selftest` 全过。
+
 ## [0.7.2] - 2026-09-23
 
 这一版做三件事：**开通云服务并发布线上、初始化 git 仓库、更正上一轮关于云服务工具的错误结论。**
