@@ -143,6 +143,7 @@ export default function JobsSquare({ profile, onChanged, go }: PageProps) {
     }
     setBusyAll(true)
     let ok = 0
+    let failed = 0
     try {
       for (const job of targets) {
         try {
@@ -150,10 +151,16 @@ export default function JobsSquare({ profile, onChanged, go }: PageProps) {
           await insertRow('jobs', publicToPoolRow(job, score))
           ok += 1
         } catch {
-          // 单条失败不中断整批
+          // 单条失败不中断整批，但失败数必须可见：全部失败时只报
+          // 「已加入 0 个」会把 RLS/网络问题藏起来，无从排查
+          failed += 1
         }
       }
-      notifyOk(`已加入 ${ok} 个岗位到岗位池`)
+      if (failed) {
+        notifyErr(`已加入 ${ok} 个，失败 ${failed} 个 —— 通常是网络或登录态问题，可重试`)
+      } else {
+        notifyOk(`已加入 ${ok} 个岗位到岗位池`)
+      }
       setSelected([])
       await load()
       await onChanged()

@@ -17,6 +17,9 @@ export default function AiLab({ profile, onChanged, go }: PageProps) {
   const [busy, setBusy] = useState(false)
   const [raw, setRaw] = useState('')
   const [result, setResult] = useState<Evaluated | null>(null)
+  // 评估时刻的 JD 快照：结果卡里的 highlights/gaps 来自这份 JD，
+  // 「待确认」档也必须按同一份算，否则评估完再改输入框会让一张卡里两套口径混排
+  const [resultJd, setResultJd] = useState('')
   const [history, setHistory] = useState<Row[]>([])
   const [detail, setDetail] = useState<Row | null>(null)
 
@@ -57,6 +60,7 @@ export default function AiLab({ profile, onChanged, go }: PageProps) {
     try {
       const evaluated = await evaluateJD(jd, profile, (t) => setRaw((prev) => prev + t))
       setResult(evaluated)
+      setResultJd(jd)
       await insertRow('ai_reports', {
         company: company || '未填写',
         title: title || '未填写',
@@ -126,6 +130,7 @@ export default function AiLab({ profile, onChanged, go }: PageProps) {
     setJd(row.jd_text ?? '')
     setDetail(null)
     const dims = (row.dims ?? {}) as Record<string, number>
+    setResultJd(row.jd_text ?? '')
     setResult({
       score: Number(row.score ?? 0),
       verdict: row.verdict ?? '',
@@ -168,6 +173,7 @@ export default function AiLab({ profile, onChanged, go }: PageProps) {
                   setTitle('')
                   setJd('')
                   setResult(null)
+                  setResultJd('')
                 }}
                 disabled={busy}
               >
@@ -286,7 +292,7 @@ export default function AiLab({ profile, onChanged, go }: PageProps) {
               </div>
               <div className="card-body">
                 {(() => {
-                  const plan = gapPlan(result.highlights, result.gaps, jd)
+                  const plan = gapPlan(result.highlights, result.gaps, resultJd)
                   return (
                     <>
                       {plan.confirm.length ? (

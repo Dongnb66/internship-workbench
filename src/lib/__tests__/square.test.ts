@@ -96,6 +96,15 @@ describe('岗位广场 · 已在池中判定', () => {
     expect(keys.has(dedupeKey(job.company, job.title))).toBe(true)
     expect(inPool(job, keys)).toBe(true)
   })
+
+  it('空公司/空岗位的公共岗位：加入后必须判为「已在池中」（兜底口径与入库一致）', () => {
+    // 回归钉子：publicToPoolRow 会把空公司写成「未填公司」，inPool 若仍按原始
+    // 空串算 key，加入后刷新仍显示「未加入」，用户再点一次就静默产生重复行
+    const job = pub({ company: '', title: '前端实习' })
+    // 模拟 join 落库后的行（company 被 publicToPoolRow 兜底成「未填公司」）
+    const pool: Row[] = [{ company: '未填公司', title: '前端实习' } as Row]
+    expect(inPool(job, poolKeySet(pool))).toBe(true)
+  })
 })
 
 describe('岗位广场 · 筛选', () => {

@@ -5,7 +5,7 @@
 [![React](https://img.shields.io/badge/React-19-3b82f6.svg)](https://react.dev)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6-3178c6.svg)](https://www.typescriptlang.org)
 [![Vite](https://img.shields.io/badge/Vite-8-8b5cf6.svg)](https://vite.dev)
-[![Tests](https://img.shields.io/badge/tests-204%20passed-12a150.svg)](./src/lib/__tests__)
+[![Tests](https://img.shields.io/badge/tests-234%20passed-12a150.svg)](./src/lib/__tests__)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-f59e0b.svg)](../../pulls)
 
 一个面向在校生的实习 / 校招求职工作台：**岗位池 → 投递看板 → 沟通台账 → 面试跟进 → Offer 对比**，全流程一条线管到底。

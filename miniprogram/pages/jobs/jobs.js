@@ -144,7 +144,9 @@ Page({
         const j = rows[0]
         if (!j) return
         const type = pickIndex(constants.JOB_TYPES, j.job_type || '实习', false)
-        const chan = pickIndex(constants.CHANNELS, j.source || EMPTY_FORM.source, true)
+        // 来源为空时不能用 EMPTY_FORM.source（BOSS直聘）兜底：那会把「没填来源」
+        // 静默改写成「BOSS直聘」。追加一个空项让 picker 显式显示「未填」，保存写 null 保真。
+        const chan = pickIndex(constants.CHANNELS, j.source ?? '', true)
         that.setData({
           formOpen: true,
           form: {
@@ -154,7 +156,7 @@ Page({
             city: j.city || '',
             job_type: j.job_type || '实习',
             salary: j.salary || '',
-            source: j.source || EMPTY_FORM.source,
+            source: j.source ?? '',
             url: j.url || '',
             deadline: j.deadline ? format.dateOnly(j.deadline) : '',
             jd_text: j.jd_text || '',
@@ -183,14 +185,19 @@ Page({
   onJobType(e) {
     const i = Number(e.detail.value)
     const form = Object.assign({}, this.data.form)
-    form.job_type = constants.JOB_TYPES[i]
+    // 必须用当前 picker 实际显示的数组：openEdit 可能追加了原值项，
+    // 用常量表映射会把下标对到错误的项上（历史事故：来源被静默改写）
+    form.job_type = this.data.jobTypes[i]
     this.setData({ form: form, jobTypeIndex: i })
   },
 
   onChannel(e) {
     const i = Number(e.detail.value)
     const form = Object.assign({}, this.data.form)
-    form.source = constants.CHANNELS[i]
+    // 同上：openEdit 用 pickIndex 追加了原值项，channels 已不是常量表本身；
+    // 若这里仍写 constants.CHANNELS[i]，选中追加项会得到 undefined → 保存写 null，
+    // 真实来源（如「AI 评估」「批量导入」）被静默抹掉
+    form.source = this.data.channels[i]
     this.setData({ form: form, channelIndex: i })
   },
 

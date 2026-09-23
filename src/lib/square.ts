@@ -61,7 +61,10 @@ export function poolKeySet(poolRows: Row[]): Set<string> {
 
 /** 某条公共岗位是否已经在用户自己的岗位池里 */
 export function inPool(job: PublicJob, keys: Set<string>): boolean {
-  const key = dedupeKey(job.company, job.title)
+  // 兜底口径必须与 publicToPoolRow 一致：入库时空公司/空岗位被写成
+  // 「未填公司/未填岗位」，这里若仍按原始空串算 key，加入后刷新会显示
+  // 「未加入」，用户再点一次就静默产生重复行
+  const key = dedupeKey(job.company || '未填公司', job.title || '未填岗位')
   if (key === '||') return false
   return keys.has(key)
 }

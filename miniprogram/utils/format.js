@@ -81,9 +81,18 @@ function num(value) {
   return isFinite(n) ? n : 0
 }
 
-/** 去掉 ISO 时间串里的时区与毫秒，供 <picker mode="date"> 使用 */
+/**
+ * 去掉时间部分，供 <picker mode="date"> 回填使用。
+ *
+ * 不能用 `slice(0,10)`：那截的是 UTC 日期，`2026-10-01T16:00:00.000Z` 在 UTC+8
+ * 实际已是 10-02 的 00:00，回填成 10-01 后用户一保存截止日就悄悄提前了一天。
+ * 走 parseDate 保留时区语义、取**本地日历日**，与 fmtDate/daysLeft 同源。
+ */
 function dateOnly(value) {
-  return value ? String(value).slice(0, 10) : todayISO()
+  if (!value) return todayISO()
+  const d = parseDate(value)
+  if (isNaN(d.getTime())) return String(value).slice(0, 10)
+  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate())
 }
 
 module.exports = { pad, todayISO, fmtDate, fmtDateTime, daysLeft, leftText, textToArray, num, dateOnly, parseDate }

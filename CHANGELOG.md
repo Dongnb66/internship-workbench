@@ -2,6 +2,35 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 与 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.7.4] - 2026-09-23
+
+第二次**逐条实证的代码审查**（两个探索代理并行审 + 每条结论亲自读代码复验）。修掉 13 处确认问题，其中 2 个高危、4 个中级。**本轮最核心的发现：上一轮引入的 `pickIndex()` 修复只对了一半——映射函数 `onChannel` 仍用常量表按扩展后的下标取值，等于修复自相矛盾。**
+
+### Fixed
+
+- **小程序「岗位来源」仍会被抹掉（高危，上一轮修复的回旋镖）**（`jobs.js`）。`openEdit` 用 `pickIndex(CHANNELS, source, true)` 把「AI 评估」这类非常量来源**追加**进 picker 选项，但 `onChannel` 写回时仍写 `constants.CHANNELS[i]`——选中追加项（index 8，超出来源表长度）取到 `undefined`，保存即写 `null`。用户哪怕只是打开 picker 确认一下原值，来源也会丢。修法：`onChannel`/`onJobType` 一律用 `this.data.channels[i]`（picker 实际显示的数组）映射。
+- **「未填来源」被伪造成「BOSS直聘」（中）**（`jobs.js` + `Jobs.tsx`）。来源为空的岗位打开编辑时用 `'BOSS直聘'` 兜底显示，保存即伪造来源。改为追加空项显式展示，保存写 `null` 保真；Web 端 select 同样对不在 `CHANNELS` 里的当前值（含空串）追加一项。
+- **抓取器超出 `--limit` 的岗位被永久丢弃（中高）**（`run.mjs`）。切片 `slice(0, limit)` 之后，checkpoint 写入的却是**全部** fresh 键——日志说「其余留到下次」，实际下一轮它们全部被判为已见而跳过。修法：checkpoint 只写入本次真正产出的岗位键。
+- **多个 `--url` 被默认 `--pages 2` 截断（中）**（`run.mjs`）。`--url a --url b --url c` 只抓前 2 个，第 3 个静默跳过。URL 模式的循环上限改为 URL 个数。
+- **批量 AI 评分运行中「重算匹配度」仍可点（中）**（`Jobs.tsx`）。`batchScore` 不设 `busy`，rescore 会并发写 `match_score`，last-writer-wins 把刚花的 AI 深评额度直接覆盖。修法：`batchScore` 全程 `setBusy(true)`，`try/finally` 保证释放。
+- **广场「空公司」岗位可被重复加入（中）**（`square.ts`）。`publicToPoolRow` 把空公司兜底成「未填公司」入库，但 `inPool` 对**原始空串**算 key——加入后刷新仍显示「未加入」，再点一次就静默产生重复行。修法：`inPool` 的兜底口径与入库对齐（回归测试钉住）。
+- **编辑表单回填截止日用 UTC 日期（中）**（`format.js`/`format.ts` + 两端表单）。`dateOnly` 仍是 `slice(0,10)` 截 UTC 日期，`2026-10-01T16:00:00.000Z` 在 UTC+8 实际已是 10-02，回填成 10-01 后用户不改直接保存，截止日悄悄提前一天。改为 `parseDate` → 本地日历日，两端同口径（`dateOnly` 进入跨端契约测试，+1 条）。
+- **登记失败却清空自检清单（中低）**（`conversation.js`）。`record` 吞错后返回 resolved，`confirmGate` 的 `.then` 在失败时也执行——弹层关闭、6 项自检清零，用户输入全丢。改为失败返回 `false`，`.then` 判定后才清。
+- **gapPlan 届数规则误报（低）**（`gapPlan.ts`）。`/20\d{2}年[^度]/` 把「公司成立于2019年」当成届数待确认。收紧为 `届` 字样或「XX年+应届/毕业」邻近匹配（测试钉住误报与漏报两侧）。
+- **评估后改 JD 导致「差距三档」口径混排（低）**（`AiLab.tsx`）。live 视图的待确认档按当前输入框现算，而 highlights/gaps 是评估时刻的——存一份评估时 JD 快照，统一口径。
+- **中止批量评分的提示与正常结束相同（低）**（`Jobs.tsx`）——改为「已停止：…」。
+- **批量加入全部失败只报「已加入 0 个」（低）**（`JobsSquare.tsx`）——失败数可见并可重试。
+- **数字字段无校验（低-中）**（`Settings.tsx`）——输入「2000元」会把 NaN 存库，绕过 `?? 默认值` 链路后总览页显示「剩余 NaN 条」。保存前校验三个数字字段。
+- 顺手修：小程序退出登录无 `.catch`（失败静默）、OTP 验证错误一刀切文案掩盖限流、抓取器 `--detail/--pages` 缺值时 `Number('')===0` 静默变 0。
+
+### 记录但未动
+
+- `daily.ts` 对非法日期串静默按「无截止日」处理（当前所有写入路径都有 `normalizeDate`，防御缺口非活跃 bug）；`split-exec.mjs` 不识别块注释/双引号（当前迁移文件不含这些语法）；`useTable` 仍是死代码；契约测试的日期用例在负偏移时区会分叉（CI 为 UTC、本机为 +8，均不触发）。
+
+### Tests
+
+- 231 → **234**（dateOnly 契约 +1、inPool 兜底回归 +1、gapPlan 届数误报 +1）；新增断言均做「还原 bug 必须变红」自检（旧 `dateOnly` 实现在 `16:00Z` 用例上 `2026-09-25` vs `2026-09-26` 分叉，证实有牙）。
+
 ## [0.7.3] - 2026-09-23
 
 一次**逐条实证的代码审查**：修掉 7 个真 bug，其中两个会**静默篡改用户数据**，一个会让**批量 AI 评分在用户以为停止后继续写入**。核心收获是补上了一组此前完全缺失的 **Web ↔ 小程序 跨端契约测试**（20 → 32 条）。

@@ -151,7 +151,10 @@ Page({
       return
     }
     const that = this
-    this.record('sent', 'out').then(function () {
+    // record 失败时 catch 返回 false：此时**不能**清自检清单、关弹层——
+    // 否则用户登记失败却看到弹层正常关闭，勾了 6 项的输入全部丢失
+    this.record('sent', 'out').then(function (ok) {
+      if (!ok) return
       that.setData({ gate: false, checks: pace.GREET_CHECKLIST.map(function () { return false }), allChecked: false })
     })
   },
@@ -178,6 +181,7 @@ Page({
       .catch(function (err) {
         that.setData({ busy: false })
         toastError(err)
+        return false
       })
   }
 })

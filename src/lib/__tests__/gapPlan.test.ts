@@ -49,6 +49,13 @@ describe('gapPlan · 三档结构', () => {
     expect(gapPlan([], [], null).confirm).toEqual([])
   })
 
+  it('成立年份/无关年份不误报届数；「XX年应届/毕业」仍命中', () => {
+    // 旧规则 `20\d{2}年[^度]` 会把「公司成立于2019年」「2024年加入我们」
+    // 全部当成届数待确认——多出一条误导项，用户会白跑一趟 HR
+    expect(gapPlan([], [], '公司成立于2019年，团队规模 500 人').confirm.some((c) => c.includes('届数'))).toBe(false)
+    expect(gapPlan([], [], '本岗位面向2026年应届毕业生').confirm.some((c) => c.includes('届数'))).toBe(true)
+  })
+
   it('待确认不重复', () => {
     const jd = '本科及以上，本科学历，每周 4 天，实习 6 个月'
     const plan = gapPlan([], [], jd)

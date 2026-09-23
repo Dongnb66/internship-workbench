@@ -86,6 +86,20 @@ export default function Settings({ profile, onChanged }: PageProps) {
   }, [profile])
 
   async function save() {
+    // 数字字段必须校验：Number('2000元') = NaN，NaN 会原样存库并绕过下游的
+    // `?? 默认值` 链路（NaN 不是 nullish），总览页会显示「剩余 NaN 条」且上限判断失效
+    const numericFields: Array<[keyof typeof form, string]> = [
+      ['expect_daily', '期望日薪'],
+      ['daily_greet_limit', '每日打招呼上限'],
+      ['min_interval_min', '最小间隔（分钟）'],
+    ]
+    for (const [key, label] of numericFields) {
+      const raw = String(form[key] ?? '').trim()
+      if (raw && !Number.isFinite(Number(raw))) {
+        notifyErr(`「${label}」需要填数字（当前：${raw}）`)
+        return
+      }
+    }
     setBusy(true)
     try {
       await saveProfile({

@@ -22,6 +22,7 @@ import path from 'node:path'
 import { MORE_TEXTS, NEXT_TEXTS, SITES, STRATEGIES, companyFor, detectSiteByUrl, findSite } from './sites.mjs'
 import { COLLECTOR, CRAWLER_DIR, OUT_DIR, PROFILE_DIR, launchBrowser, msgOf, politeDelay } from './lib/browser.mjs'
 import {
+  dedupeKey,
   expandTemplate,
   makePayload,
   mergeDetail,
@@ -258,9 +259,12 @@ async function crawlTarget({ context, target, opts, log }) {
   let lastPage = startPage
 
   try {
-    for (let index = startPage; index <= opts.pages; index += 1) {
-      const url = urlForPage(target, opts, index)
-      if (target.kind === 'url' && index > target.urls.length) break
+  // --url 模式的页数语义是「第 N 个 URL」，上限必须取 URL 个数而不是 --pages
+  //（默认 2）：否则 `--url a --url b --url c` 会静默跳过第 3 个
+  const maxIndex = target.kind === 'url' ? target.urls.length : opts.pages
+  for (let index = startPage; index <= maxIndex; index += 1) {
+    const url = urlForPage(target, opts, index)
+    if (target.kind === 'url' && index > target.urls.length) break
 
       try {
         await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 })
@@ -350,10 +354,19 @@ async function crawlTarget({ context, target, opts, log }) {
     log('  跳过补 JD（--detail 0）：岗位会缺少 JD 正文，匹配分不准')
   }
 
+  // ⚠️ checkpoint 只能写入**本次真正产出**的岗位键。被 --limit 切掉的那部分
+  // 绝不能提前记进去——日志说「其余留到下次」，如果把全部 fresh 键都写进去，
+  // 下一轮它们会被判为已见而永久跳过，用户根本无感知。
+  const checkpointKeys = new Set(seen)
+  for (const job of jobs) {
+    const key = dedupeKey(job?.company, job?.title)
+    if (key !== '||') checkpointKeys.add(key)
+  }
+
   await writeCheckpoint(checkpointFile, {
     site: targetKey(target),
     page: lastPage + 1,
-    keys: deduped.keys,
+    keys: Array.from(checkpointKeys),
     updated_at: new Date().toISOString(),
   })
 

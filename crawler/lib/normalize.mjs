@@ -282,6 +282,10 @@ export function parseArgs(argv = []) {
   }
 
   const asNumber = (raw, fallback) => {
+    // 空串必须回退：`--detail` 漏写值时下一个 token 可能是 '' 或下一个 flag，
+    // Number('') === 0 会把「没给参数」静默变成「0 个」——detail=0 跳过补 JD、
+    // pages=0 一页都不抓，两种都是无声的空跑
+    if (raw === undefined || raw === '' || raw === null) return fallback
     const n = Number(raw)
     return Number.isFinite(n) && n >= 0 ? n : fallback
   }

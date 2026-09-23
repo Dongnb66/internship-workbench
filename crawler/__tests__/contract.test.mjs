@@ -20,6 +20,7 @@ import {
   PROFILE_TEMPLATE,
 } from '../../src/lib/constants.ts'
 import {
+  dateOnly as webDateOnly,
   daysLeft as webDaysLeft,
   fmtDate as webFmtDate,
   fmtDateTime as webFmtDateTime,
@@ -174,6 +175,15 @@ describe('Web ↔ 小程序 日期解析', () => {
       expect(mpFormat.fmtDate(value), `fmtDate(${String(value)})`).toBe(webFmtDate(value))
       expect(mpFormat.daysLeft(value), `daysLeft(${String(value)})`).toBe(webDaysLeft(value))
     }
+  })
+
+  it('dateOnly 两端同结果（编辑表单回填截止日的依据）', () => {
+    // 这条钉的是「回填必须取本地日历日」：两边任何一边退回 slice(0,10)（UTC 日期），
+    // 带 16:00Z 以后时间戳的用例就会差一天——用户不改直接保存，截止日被悄悄提前
+    for (const value of CASES) {
+      expect(mpFormat.dateOnly(value), `dateOnly(${value})`).toBe(webDateOnly(value))
+    }
+    expect(mpFormat.dateOnly('不是日期')).toBe(webDateOnly('不是日期'))
   })
 
   it('paceStatus 的「距上次发送多久」两端同结果（决定冷却是否放行）', () => {

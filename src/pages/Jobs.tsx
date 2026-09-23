@@ -7,7 +7,7 @@ import { deleteRow, insertRow, listRows, updateRow } from '../lib/api'
 import { localScore, prefilterJob } from '../lib/score'
 import { SAMPLE_JOBS, isSampleRow, sampleToRow } from '../lib/samples'
 import { CHANNELS, INDUSTRIES, JOB_TYPES, PRIORITIES } from '../lib/constants'
-import { fmtDate, leftText, textToArray, todayISO } from '../lib/format'
+import { dateOnly, fmtDate, leftText, textToArray, todayISO } from '../lib/format'
 import { notifyErr, notifyOk } from '../lib/toast'
 import type { Row } from '../types'
 import type { PageProps } from './Overview'
@@ -121,12 +121,16 @@ export default function Jobs({ profile, onChanged, go }: PageProps) {
       industry: row.industry ?? '互联网',
       education: row.education ?? '本科',
       salary: row.salary ?? '',
-      source: row.source ?? 'BOSS直聘',
+      // 来源为空时不能用 'BOSS直聘' 兜底：那会把「没填来源」静默改写成「BOSS直聘」。
+      // select 侧会对不在 CHANNELS 里的值（含空串）追加一项显式展示。
+      source: row.source ?? '',
       url: row.url ?? '',
       jd_text: row.jd_text ?? '',
       tags: (row.tags ?? []).join('、'),
       priority: row.priority ?? '中',
-      deadline: row.deadline ? String(row.deadline).slice(0, 10) : '',
+      // 截止日回填必须取本地日历日：slice(0,10) 截的是 UTC 日期，带时间的
+      // timestamptz 在 UTC+8 会差一天，用户不改直接保存就把截止日悄悄提前了
+      deadline: row.deadline ? dateOnly(row.deadline) : '',
       notes: row.notes ?? '',
     })
     setEditing(row)
@@ -210,66 +214,79 @@ export default function Jobs({ profile, onChanged, go }: PageProps) {
     const targets = rows.filter((r) => ids.includes(r.id))
     if (!targets.length) return
     abortRef.current = false
+    // 复用 busy 与 rescore/保存/导入互斥：批量评分一轮要跑几分钟，
+    // 期间「重算匹配度」若可点会并发写 match_score，last-writer-wins
+    // 把刚花的 AI 深评额度直接覆盖掉
+    setBusy(true)
     let scored = 0
     let skipped = 0
     let failed = 0
     const failedIds: number[] = []
     setBatch({ running: true, index: 0, total: targets.length, scored, skipped, failed, current: '', failedIds: [] })
 
-    for (let i = 0; i < targets.length; i += 1) {
-      if (abortRef.current) break
-      const job = targets[i]
-      setBatch((b) => ({ ...b, index: i + 1, current: `${job.company} · ${job.title}` }))
-
-      const pre = prefilterJob(job.jd_text ?? '', job.title ?? '', profile)
-      if (!pre.pass) {
-        skipped += 1
-        try {
-          await updateRow('jobs', job.id, {
-            match_score: pre.score,
-            notes: `${job.notes ? `${job.notes}\n` : ''}[预筛 ${todayISO()}] 本地分 ${pre.score}，跳过 AI 深评`,
-          })
-        } catch {
-          // 预筛结果的写入失败不影响后续岗位
-        }
-        setBatch((b) => ({ ...b, skipped }))
-        continue
-      }
-
-      try {
-        const evaluated = await evaluateJD(job.jd_text ?? '', profile)
-        // ⚠️ await 之后必须重新检查中断标记：用户点「停止」的时刻几乎总是落在
-        // 某一次 await 期间，只在循环开头检查的话，这一条会照常把分数和 AI 报告写进去，
-        // 用户以为停了、数据却多了一条，而且无法撤销。
+    try {
+      for (let i = 0; i < targets.length; i += 1) {
         if (abortRef.current) break
-        await updateRow('jobs', job.id, {
-          match_score: evaluated.score,
-          priority: evaluated.score >= 75 ? '高' : evaluated.score >= 55 ? '中' : '低',
-        })
-        await insertRow('ai_reports', {
-          company: job.company,
-          title: job.title,
-          jd_text: job.jd_text ?? '',
-          score: evaluated.score,
-          verdict: evaluated.verdict,
-          dims: evaluated.dims,
-          highlights: evaluated.highlights.join('\n'),
-          gaps: evaluated.gaps.join('\n'),
-          greeting: evaluated.greeting,
-          model: 'cloud-llm',
-        })
-        scored += 1
-      } catch {
-        failed += 1
-        failedIds.push(job.id)
-      }
-      setBatch((b) => ({ ...b, scored, failed, failedIds: [...failedIds] }))
-    }
+        const job = targets[i]
+        setBatch((b) => ({ ...b, index: i + 1, current: `${job.company} · ${job.title}` }))
 
-    setBatch((b) => ({ ...b, running: false, current: '' }))
-    notifyOk(`批量评分结束：AI 深评 ${scored} · 预筛跳过 ${skipped} · 失败 ${failed}`)
-    await load()
-    await onChanged()
+        const pre = prefilterJob(job.jd_text ?? '', job.title ?? '', profile)
+        if (!pre.pass) {
+          skipped += 1
+          try {
+            await updateRow('jobs', job.id, {
+              match_score: pre.score,
+              notes: `${job.notes ? `${job.notes}\n` : ''}[预筛 ${todayISO()}] 本地分 ${pre.score}，跳过 AI 深评`,
+            })
+          } catch {
+            // 预筛结果的写入失败不影响后续岗位
+          }
+          setBatch((b) => ({ ...b, skipped }))
+          continue
+        }
+
+        try {
+          const evaluated = await evaluateJD(job.jd_text ?? '', profile)
+          // ⚠️ await 之后必须重新检查中断标记：用户点「停止」的时刻几乎总是落在
+          // 某一次 await 期间，只在循环开头检查的话，这一条会照常把分数和 AI 报告写进去，
+          // 用户以为停了、数据却多了一条，而且无法撤销。
+          if (abortRef.current) break
+          await updateRow('jobs', job.id, {
+            match_score: evaluated.score,
+            priority: evaluated.score >= 75 ? '高' : evaluated.score >= 55 ? '中' : '低',
+          })
+          await insertRow('ai_reports', {
+            company: job.company,
+            title: job.title,
+            jd_text: job.jd_text ?? '',
+            score: evaluated.score,
+            verdict: evaluated.verdict,
+            dims: evaluated.dims,
+            highlights: evaluated.highlights.join('\n'),
+            gaps: evaluated.gaps.join('\n'),
+            greeting: evaluated.greeting,
+            model: 'cloud-llm',
+          })
+          scored += 1
+        } catch {
+          failed += 1
+          failedIds.push(job.id)
+        }
+        setBatch((b) => ({ ...b, scored, failed, failedIds: [...failedIds] }))
+      }
+
+      setBatch((b) => ({ ...b, running: false, current: '' }))
+      // 中止与正常结束必须可区分：否则用户点了「停止」也看到「结束」，分不清这批跑没跑完
+      notifyOk(
+        abortRef.current
+          ? `已停止：AI 深评 ${scored} · 预筛跳过 ${skipped} · 失败 ${failed}`
+          : `批量评分结束：AI 深评 ${scored} · 预筛跳过 ${skipped} · 失败 ${failed}`,
+      )
+      await load()
+      await onChanged()
+    } finally {
+      setBusy(false)
+    }
   }
 
   async function remove(row: Row) {
@@ -733,7 +750,9 @@ export default function Jobs({ profile, onChanged, go }: PageProps) {
             </Field>
             <Field label="来源">
               <select className="select" value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value })}>
-                {CHANNELS.map((v) => (
+                {/* 当前值不在 CHANNELS（如「AI 评估」「批量导入」）或为空串时追加一项显式展示，
+                    否则 select 会显示成第一项「BOSS直聘」，用户一保存真实来源就被覆盖 */}
+                {(CHANNELS.includes(form.source) ? CHANNELS : [...CHANNELS, form.source]).map((v) => (
                   <option key={v}>{v}</option>
                 ))}
               </select>

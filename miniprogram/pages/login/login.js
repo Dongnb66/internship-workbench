@@ -150,7 +150,9 @@ Page({
       })
       .then(function (res) {
         if (res.error) {
-          that.setData({ busy: false, error: '验证码不正确或已过期，可重新获取' })
+          // 用 errText 透出真实原因：限流、验证码过期、密码错误是三种完全不同的
+          // 问题，一刀切写成「验证码不正确」会把限流用户引去反复重发验证码
+          that.setData({ busy: false, error: errText(res.error) })
           return
         }
         pendingPhone = null

@@ -195,10 +195,15 @@ Page({
       content: '退出后需要重新登录才能看到自己的数据。',
       success(res) {
         if (!res.confirm) return
-        cloud.auth.signOut().then(function () {
-          getApp().globalData.session = null
-          wx.reLaunch({ url: '/pages/login/login' })
-        })
+        cloud.auth.signOut()
+          .then(function () {
+            getApp().globalData.session = null
+            wx.reLaunch({ url: '/pages/login/login' })
+          })
+          .catch(function (err) {
+            // 退出失败静默会让用户以为已登出（数据还在本页可见），必须提示
+            wx.showToast({ title: '退出失败：' + (err && err.message ? err.message : '请重试'), icon: 'none' })
+          })
       }
     })
   }

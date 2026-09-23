@@ -38,6 +38,20 @@ export function leftText(value?: string | null): string {
   return `剩 ${n} 天`
 }
 
+/**
+ * 去掉时间部分，供 <input type="date"> 回填。
+ *
+ * 不能用 `slice(0, 10)`：那截的是 UTC 日期，`2026-10-01T16:00:00.000Z` 在 UTC+8
+ * 实际已是 10-02 的 00:00，回填成 10-01 后用户一保存截止日就悄悄提前了一天。
+ * 取**本地日历日**，与小程序端 `format.js` 的 dateOnly 同口径（契约测试钉住）。
+ */
+export function dateOnly(value?: string | null): string {
+  if (!value) return todayISO()
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return String(value).slice(0, 10)
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
 export function textToArray(value: string): string[] {
   return value
     .split(/[,，、\s]+/)
