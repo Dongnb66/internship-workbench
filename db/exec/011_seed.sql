@@ -1,7 +1,5 @@
--- 岗位广场种子数据（由 db/build-seed.mjs 生成，请勿手工编辑）
--- 共 41 条 · 源数据在 db/seed/*.json
--- 先清空再灌：广场是公共只读库，重复执行不应产生重复行
-DELETE FROM jobs_public;
+-- 011_seed.sql · seed · 来源 seed.sql
+-- 执行方式：单条语句，一次一个请求（不要多条拼接）
 
 INSERT INTO jobs_public (company, title, city, job_type, industry, education, salary, source, url, jd_text, tags, deadline, posted_at) VALUES
   ('腾讯', 'AI全栈工程师', '深圳', '校招', '互联网', NULL, NULL, '官网投递', NULL, 'AI全栈工程师
@@ -315,4 +313,4 @@ MKT经理-商务
 运营
 上海
 2027届
-2026-09-02', NULL, NULL, '2026-09-23');
+2026-09-02', NULL, NULL, '2026-09-23')

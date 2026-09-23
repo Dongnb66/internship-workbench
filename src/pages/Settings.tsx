@@ -3,6 +3,7 @@ import { cloud, errText } from '../cloud'
 import { Field, Modal } from '../components/ui'
 import { listRows, saveProfile } from '../lib/api'
 import { PROFILE_TEMPLATE } from '../lib/constants'
+import { healthSummary, profileHealth } from '../lib/healthCheck'
 import { textToArray } from '../lib/format'
 import { DEFAULT_PACE, GREET_CHECKLIST } from '../lib/pace'
 import { notifyErr, notifyOk } from '../lib/toast'
@@ -45,6 +46,17 @@ export default function Settings({ profile, onChanged }: PageProps) {
   const [pwOpen, setPwOpen] = useState(false)
   const [pw, setPw] = useState({ oldPassword: '', newPassword: '' })
   const [exporting, setExporting] = useState(false)
+  const [resumeCount, setResumeCount] = useState(0)
+
+  useEffect(() => {
+    // 体检需要知道简历库有几份；失败不影响主表单（按 0 处理，体检会提示去录简历）
+    listRows('resumes', { limit: 200 })
+      .then((rows) => setResumeCount(rows.length))
+      .catch(() => setResumeCount(0))
+  }, [])
+
+  const health = profileHealth(profile, resumeCount)
+  const healthSum = healthSummary(health)
 
   useEffect(() => {
     if (!profile) return
@@ -260,6 +272,30 @@ export default function Settings({ profile, onChanged }: PageProps) {
       </section>
 
       <div className="grid" style={{ gap: 14 }}>
+        <section className="card">
+          <div className="card-head">
+            <h3>简历体检</h3>
+            <span className="spacer" />
+            <span className={healthSum.allOk ? 'badge ok' : 'badge warn'}>
+              {healthSum.passed}/{healthSum.total} 通过
+            </span>
+          </div>
+          <div className="card-body">
+            <div className="hint mb16">
+              规则版体检，不消耗模型额度：只查事实完整性与数字口径。全部通过后，AI 评估和打招呼话术才有可靠的原料。
+            </div>
+            {health.map((item) => (
+              <div key={item.label} className="row" style={{ alignItems: 'flex-start', marginBottom: 7 }}>
+                <span className={item.ok ? 'badge ok' : 'badge warn'}>{item.ok ? '✓' : '!'}</span>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div className={item.ok ? 'muted' : ''}>{item.label}</div>
+                  {!item.ok && item.fix ? <div className="small muted">→ {item.fix}</div> : null}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
         <section className="card">
           <div className="card-head">
             <h3>账号</h3>

@@ -4,6 +4,7 @@ import { Empty, Stat } from '../components/ui'
 import { listRows, updateRow } from '../lib/api'
 import { STAGES } from '../lib/constants'
 import { daysLeft, fmtDate, fmtDateTime, leftText, recentDays, todayISO } from '../lib/format'
+import { todayPicks } from '../lib/daily'
 import { DEFAULT_PACE, paceStatus, staleApplications } from '../lib/pace'
 import { notifyErr, notifyOk } from '../lib/toast'
 import type { Profile, Row } from '../types'
@@ -89,6 +90,9 @@ export default function Overview({ profile, go }: PageProps) {
   const paceNow = paceStatus(msgs, pace)
   const stale = staleApplications(apps, msgs, 7)
 
+  // 「今天先投哪几个」：按 截止紧急 → 优先级 → 匹配分 排，每条带依据和待确认标记
+  const picks = todayPicks(jobs, apps, profile, 3)
+
   async function toggleTask(row: Row) {
     try {
       await updateRow('tasks', row.id, { done: true })
@@ -108,6 +112,44 @@ export default function Overview({ profile, go }: PageProps) {
         <Stat label="Offer" value={offers.length} foot={offers.length ? `待决策 ${offers.filter((o) => (o.decision ?? 'undecided') === 'undecided').length}` : '还没有 Offer'} icon="🏆" color="#12a150" />
         <Stat label="待办" value={openTasks.length} foot={`7 天内到期 ${dueSoon.length}`} icon="⏰" color="#f59e0b" />
       </div>
+
+      <section className="card">
+        <div className="card-head">
+          <h3>今日优先投递</h3>
+          <span className="spacer" />
+          <span className="small muted">按截止紧急 · 优先级 · 匹配分排序</span>
+          <button className="btn sm ghost" onClick={() => go('jobs')}>
+            去岗位池
+          </button>
+        </div>
+        <div className="card-body">
+          {picks.length === 0 ? (
+            <Empty text="岗位池里没有待投的岗位。去岗位广场或 AI 评估里加几个。" action={<button className="btn primary sm" onClick={() => go('square')}>去岗位广场</button>} />
+          ) : (
+            picks.map((p) => (
+              <div key={p.job.id} className="row" style={{ alignItems: 'flex-start', marginBottom: 12 }}>
+                <span className={p.urgency === 'today' || p.urgency === 'overdue' ? 'badge danger' : p.urgency === 'soon' ? 'badge warn' : 'badge ok'}>
+                  {p.score !== null ? `${p.score}分` : p.local.score + '分'}
+                </span>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div className="cell-main">
+                    {p.job.company} · {p.job.title}
+                  </div>
+                  <div className="cell-sub">{p.reason}</div>
+                  {p.confirm.length ? (
+                    <div className="small mt4" style={{ color: '#b45309' }}>
+                      待确认：{p.confirm.join('；')}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ))
+          )}
+          {picks.length ? (
+            <div className="small muted mt8">依据来自本地关键词匹配与截止日，不消耗模型额度；「待确认」是只有你自己能核实的事实，投前过一遍。</div>
+          ) : null}
+        </div>
+      </section>
 
       <div className="grid grid-2" style={{ alignItems: 'start' }}>
         <section className="card">

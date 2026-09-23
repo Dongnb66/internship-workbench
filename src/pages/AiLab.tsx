@@ -5,6 +5,7 @@ import { evaluateJD, type Evaluated } from '../lib/ai'
 import { deleteRow, insertRow, listRows, updateRow } from '../lib/api'
 import { DIMS } from '../lib/constants'
 import { fmtDateTime } from '../lib/format'
+import { gapPlan } from '../lib/gapPlan'
 import { notifyErr, notifyOk } from '../lib/toast'
 import type { Row } from '../types'
 import type { PageProps } from './Overview'
@@ -279,19 +280,45 @@ export default function AiLab({ profile, onChanged, go }: PageProps) {
 
             <section className="card">
               <div className="card-head">
-                <h3>缺口（自己看，不主动对 HR 说）</h3>
+                <h3>差距三档 · 补齐计划</h3>
+                <span className="spacer" />
+                <span className="small muted">自己看，不主动对 HR 说</span>
               </div>
               <div className="card-body">
-                {result.gaps.length ? (
-                  result.gaps.map((g, i) => (
-                    <div key={i} className="row" style={{ alignItems: 'flex-start', marginBottom: 6 }}>
-                      <span className="badge warn">!</span>
-                      <span>{g}</span>
-                    </div>
-                  ))
-                ) : (
-                  <div className="small muted">没有明显缺口。</div>
-                )}
+                {(() => {
+                  const plan = gapPlan(result.highlights, result.gaps, jd)
+                  return (
+                    <>
+                      {plan.confirm.length ? (
+                        <>
+                          <div className="small muted mb8">待确认 —— 只有你自己能核实的事实，投前过一遍：</div>
+                          {plan.confirm.map((c, i) => (
+                            <div key={i} className="row" style={{ alignItems: 'flex-start', marginBottom: 6 }}>
+                              <span className="badge warn">?</span>
+                              <span>{c}</span>
+                            </div>
+                          ))}
+                          <div className="divider" style={{ margin: '10px 0' }} />
+                        </>
+                      ) : null}
+                      {plan.missing.length ? (
+                        <>
+                          {plan.missing.map((m, i) => (
+                            <div key={i} className="row" style={{ alignItems: 'flex-start', marginBottom: 8 }}>
+                              <span className="badge">!</span>
+                              <div style={{ minWidth: 0, flex: 1 }}>
+                                <div>{m.item}</div>
+                                <div className="small muted mt4">→ {m.action}</div>
+                              </div>
+                            </div>
+                          ))}
+                        </>
+                      ) : (
+                        <div className="small muted">没有明显缺口。</div>
+                      )}
+                    </>
+                  )
+                })()}
               </div>
             </section>
 
@@ -362,12 +389,32 @@ export default function AiLab({ profile, onChanged, go }: PageProps) {
           </div>
           <div className="grid grid-2">
             <div>
-              <div className="small muted">亮点</div>
+              <div className="small muted">已满足（亮点）</div>
               <div className="md">{detail.highlights}</div>
             </div>
             <div>
-              <div className="small muted">缺口</div>
-              <div className="md">{detail.gaps}</div>
+              <div className="small muted">差距与补齐动作</div>
+              {(() => {
+                const plan = gapPlan(null, String(detail.gaps ?? ''), String(detail.jd_text ?? ''))
+                if (!plan.missing.length && !plan.confirm.length) return <div className="md">（无）</div>
+                return (
+                  <div className="md">
+                    {plan.missing.map((m, i) => (
+                      <div key={i} style={{ marginBottom: 8 }}>
+                        · {m.item}
+                        <br />
+                        <span className="small muted">→ {m.action}</span>
+                      </div>
+                    ))}
+                    {plan.confirm.map((c, i) => (
+                      <div key={`c${i}`} style={{ marginBottom: 8 }}>
+                        <span style={{ color: '#b45309' }}>? 待确认：</span>
+                        {c}
+                      </div>
+                    ))}
+                  </div>
+                )
+              })()}
             </div>
           </div>
           <div className="small muted mt16">打招呼</div>
