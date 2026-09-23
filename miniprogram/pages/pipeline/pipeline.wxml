@@ -1,0 +1,51 @@
+<view class="page">
+  <scroll-view scroll-x class="stage-tabs" enable-flex>
+    <view
+      wx:for="{{stageTabs}}"
+      wx:key="key"
+      class="chip {{stage === item.key ? 'chip-on' : ''}}"
+      data-key="{{item.key}}"
+      bindtap="pickStageTab"
+    >{{item.label}} {{item.count}}</view>
+  </scroll-view>
+
+  <view wx:if="{{staleCount}}" class="hint mb-m">
+    有 {{staleCount}} 个岗位超过 7 天没有新进展，卡片上已标红。点「会话」记一条跟进，或者换渠道再试一次。
+  </view>
+
+  <view wx:if="{{!loading && !rows.length}}" class="empty">
+    这个阶段还没有记录。从「岗位池」选一个岗位点「转入投递」就会出现在这里。
+  </view>
+
+  <view wx:for="{{rows}}" wx:key="id" class="card">
+    <view class="row-top">
+      <view style="flex:1; min-width:0;">
+        <view class="cell-main">{{item.company}}</view>
+        <view class="cell-sub">{{item.title}}{{item.city ? ' · ' + item.city : ''}}</view>
+      </view>
+      <view class="stage-pill" style="background:{{item.stageColor}}">{{item.stageLabel}}</view>
+    </view>
+
+    <view class="row wrap mt-s" style="gap:10rpx;">
+      <view class="{{item.lastCls}}">{{item.lastText}}</view>
+      <view class="badge">投递 {{item.appliedText}}</view>
+      <view class="badge">{{item.channel}}</view>
+    </view>
+
+    <view wx:if="{{item.staleDays}}" class="stale-line {{item.staleUrgent ? 'stale-urgent' : ''}}">
+      ⚠ {{item.staleDays}} 天没有新进展，该跟进了
+    </view>
+
+    <view wx:if="{{item.nextAction}}" class="cell-sub mt-s">
+      下一步：{{item.nextAction}}{{item.nextAt ? '（' + item.nextAt + '）' : ''}}
+    </view>
+
+    <view class="row mt-m">
+      <button class="btn btn-sm btn-primary" data-id="{{item.id}}" catchtap="openConversation">会话台账</button>
+      <button class="btn btn-sm" data-id="{{item.id}}" catchtap="changeStage">改阶段</button>
+      <button class="btn btn-sm btn-ghost" data-id="{{item.id}}" catchtap="removeApp">删除</button>
+    </view>
+  </view>
+
+  <view class="safe-bottom"></view>
+</view>

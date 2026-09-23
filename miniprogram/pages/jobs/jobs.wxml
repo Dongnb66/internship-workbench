@@ -1,0 +1,156 @@
+<view class="page">
+  <view class="search-bar">
+    <input class="input" style="flex:1" placeholder="搜公司 / 岗位 / 城市" value="{{keyword}}" bindinput="onKeyword" confirm-type="search" bindconfirm="onKeyword" />
+    <view wx:if="{{keyword}}" class="badge" bindtap="clearKeyword">清空</view>
+  </view>
+
+  <view class="row mb-m">
+    <view class="small muted">共 {{total}} 个岗位，匹配度高的排前面</view>
+    <view class="spacer"></view>
+    <view class="badge badge-accent" bindtap="openNew">+ 新增岗位</view>
+  </view>
+
+  <view wx:if="{{!loading && !rows.length}}" class="empty">
+    岗位池是空的。新增一条、粘上完整 JD，本地匹配度会立刻算出来。
+  </view>
+
+  <view wx:for="{{rows}}" wx:key="id" class="card">
+    <view class="row-top">
+      <view style="flex:1; min-width:0;">
+        <view class="cell-main">{{item.company}}</view>
+        <view class="cell-sub">{{item.title}}{{item.city ? ' · ' + item.city : ''}}{{item.salary ? ' · ' + item.salary : ''}}</view>
+      </view>
+      <view class="score-box">
+        <view class="score-val {{item.score === null ? 'score-none' : (item.score >= 75 ? 'score-high' : (item.score >= 55 ? 'score-mid' : 'score-low'))}}">{{item.score === null ? '—' : item.score}}</view>
+        <view class="score-cap">{{item.score === null ? '未评' : '匹配度'}}</view>
+      </view>
+    </view>
+
+    <view class="row wrap mt-s" style="gap:10rpx;">
+      <view wx:if="{{item.priority}}" class="badge badge-accent">优先级 {{item.priority}}</view>
+      <view class="badge {{item.deadlineUrgent ? 'badge-danger' : ''}}">{{item.deadlineText}}</view>
+      <view wx:if="{{!item.hasJd}}" class="badge badge-warn">缺 JD 原文</view>
+      <view class="badge">本地分 {{item.localScore}}</view>
+    </view>
+
+    <view class="row mt-m">
+      <button class="btn btn-sm btn-ghost" data-id="{{item.id}}" catchtap="openEdit">详情</button>
+      <button class="btn btn-sm" data-id="{{item.id}}" catchtap="aiScore">AI 评分</button>
+      <button class="btn btn-sm btn-primary" data-id="{{item.id}}" catchtap="toPipeline">转入投递</button>
+    </view>
+  </view>
+
+  <view class="safe-bottom"></view>
+</view>
+
+<!-- 新增 / 编辑 -->
+<view wx:if="{{formOpen}}" class="mask">
+  <view class="sheet">
+    <view class="sheet-head">
+      <view class="card-title">{{form.id ? '编辑岗位' : '新增岗位'}}</view>
+      <view class="spacer"></view>
+      <view class="badge" bindtap="closeForm">关闭</view>
+    </view>
+
+    <scroll-view scroll-y class="sheet-body">
+      <view class="field">
+        <view class="field-label">公司 *</view>
+        <input class="input" value="{{form.company}}" data-key="company" bindinput="onField" placeholder="如：某某科技" />
+      </view>
+      <view class="field">
+        <view class="field-label">岗位 *</view>
+        <input class="input" value="{{form.title}}" data-key="title" bindinput="onField" placeholder="如：AI 应用开发实习生" />
+      </view>
+      <view class="field">
+        <view class="field-label">城市</view>
+        <input class="input" value="{{form.city}}" data-key="city" bindinput="onField" placeholder="如：广州" />
+      </view>
+      <view class="field">
+        <view class="field-label">岗位类型</view>
+        <picker mode="selector" range="{{jobTypes}}" value="{{jobTypeIndex}}" bindchange="onJobType">
+          <view class="picker-value">{{form.job_type}}</view>
+        </picker>
+      </view>
+      <view class="field">
+        <view class="field-label">薪资</view>
+        <input class="input" value="{{form.salary}}" data-key="salary" bindinput="onField" placeholder="如：150-200/天" />
+      </view>
+      <view class="field">
+        <view class="field-label">渠道</view>
+        <picker mode="selector" range="{{channels}}" value="{{channelIndex}}" bindchange="onChannel">
+          <view class="picker-value">{{form.source}}</view>
+        </picker>
+      </view>
+      <view class="field">
+        <view class="field-label">投递截止</view>
+        <picker mode="date" value="{{form.deadline}}" bindchange="onDeadline">
+          <view class="picker-value">{{form.deadline || '未填'}}</view>
+        </picker>
+      </view>
+      <view class="field">
+        <view class="field-label">JD 原文</view>
+        <textarea class="textarea" value="{{form.jd_text}}" data-key="jd_text" bindinput="onField" placeholder="整段粘进来。AI 评估、匹配度和打招呼话术都依赖它。" />
+        <view class="field-hint">JD 越完整，AI 判断越准；缺 JD 的岗位会被本地预筛直接挡在 AI 之前。</view>
+      </view>
+      <view class="field">
+        <view class="field-label">备注</view>
+        <textarea class="textarea" style="min-height:120rpx" value="{{form.notes}}" data-key="notes" bindinput="onField" placeholder="内推人、联系人、注意事项" />
+      </view>
+      <view class="safe-bottom"></view>
+    </scroll-view>
+
+    <view class="sheet-foot">
+      <button wx:if="{{form.id}}" class="btn btn-danger" style="flex:1" bindtap="remove" disabled="{{busy}}">删除</button>
+      <button class="btn btn-primary" style="flex:2" bindtap="save" disabled="{{busy}}">{{busy ? '保存中…' : '保存'}}</button>
+    </view>
+  </view>
+</view>
+
+<!-- AI 评估结果 -->
+<view wx:if="{{aiOpen}}" class="mask">
+  <view class="sheet">
+    <view class="sheet-head">
+      <view class="card-title">AI 评估</view>
+      <view class="spacer"></view>
+      <view class="badge" bindtap="closeAi">关闭</view>
+    </view>
+    <scroll-view scroll-y class="sheet-body">
+      <view class="cell-sub" style="margin-top:0">{{aiResultCompany}}</view>
+
+      <view class="row mt-m">
+        <view class="big-score {{aiResult.score >= 75 ? 'score-high' : (aiResult.score >= 55 ? 'score-mid' : 'score-low')}}">{{aiResult.score}}</view>
+        <view style="flex:1; margin-left:22rpx;">
+          <view class="cell-main">{{aiResult.verdict}}</view>
+        </view>
+      </view>
+
+      <view class="divider"></view>
+
+      <view wx:for="{{aiDims}}" wx:key="name" class="dim-row">
+        <view class="dim-name">{{item.name}}</view>
+        <view class="dim-bar"><view class="dim-fill" style="width:{{item.value * 10}}%"></view></view>
+        <view class="dim-num">{{item.value}}</view>
+      </view>
+
+      <view wx:if="{{aiResult.highlights.length}}" class="mt-m">
+        <view class="field-label">对得上的亮点</view>
+        <view wx:for="{{aiResult.highlights}}" wx:key="*this" class="cell-sub">· {{item}}</view>
+      </view>
+
+      <view wx:if="{{aiResult.gaps.length}}" class="mt-m">
+        <view class="field-label">缺口</view>
+        <view wx:for="{{aiResult.gaps}}" wx:key="*this" class="cell-sub">· {{item}}</view>
+      </view>
+
+      <view wx:if="{{aiResult.greeting}}" class="mt-m">
+        <view class="field-label">打招呼话术</view>
+        <view class="hint">{{aiResult.greeting}}</view>
+        <view class="field-hint">发之前先读一遍改成你自己的语气。HR 一天看几十条模板腔消息，一眼就能认出来。</view>
+      </view>
+      <view class="safe-bottom"></view>
+    </scroll-view>
+    <view wx:if="{{aiResult.greeting}}" class="sheet-foot">
+      <button class="btn btn-primary" style="flex:1" bindtap="copyGreeting">复制话术</button>
+    </view>
+  </view>
+</view>

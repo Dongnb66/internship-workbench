@@ -1,0 +1,579 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>实习管理工作台 · 架构图</title>
+    <style>
+      :root {
+        --bg: #f5f6f8;
+        --card: #ffffff;
+        --line: #e4e7ec;
+        --text: #1f2430;
+        --muted: #6b7280;
+        --accent: #f2542d;
+        --accent2: #ff8a3d;
+        --blue: #3b82f6;
+        --violet: #8b5cf6;
+        --green: #12a150;
+        --amber: #f59e0b;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 40px 28px 64px;
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .wrap {
+        max-width: 1180px;
+        margin: 0 auto;
+      }
+      header {
+        margin-bottom: 28px;
+      }
+      h1 {
+        font-size: 26px;
+        margin: 0 0 8px;
+        letter-spacing: 0.2px;
+      }
+      h1 span {
+        background: linear-gradient(100deg, var(--accent), var(--accent2));
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+      .sub {
+        color: var(--muted);
+        font-size: 13.5px;
+        line-height: 1.75;
+        max-width: 900px;
+      }
+      .layer {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 16px 18px 18px;
+        margin-bottom: 14px;
+      }
+      .layer-head {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        margin-bottom: 12px;
+      }
+      .layer-head h2 {
+        font-size: 14px;
+        margin: 0;
+        letter-spacing: 0.3px;
+      }
+      .layer-head .tag {
+        font-size: 11px;
+        color: var(--muted);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 2px 9px;
+      }
+      .layer-head .note {
+        font-size: 12px;
+        color: var(--muted);
+        margin-left: auto;
+      }
+      .bar {
+        height: 3px;
+        border-radius: 3px;
+        width: 46px;
+        background: linear-gradient(100deg, var(--accent), var(--accent2));
+        margin-bottom: 12px;
+      }
+      .grid {
+        display: grid;
+        gap: 10px;
+      }
+      .g3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+      .g4 {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+      .g5 {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+      }
+      .node {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 10px 12px;
+        background: #fcfcfd;
+      }
+      .node b {
+        display: block;
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 4px;
+      }
+      .node small {
+        font-size: 11.5px;
+        color: var(--muted);
+        line-height: 1.6;
+        display: block;
+      }
+      .node.accent {
+        border-color: #ffd6c6;
+        background: #fff8f4;
+      }
+      .node.accent b {
+        color: #c8420f;
+      }
+      .node.blue b {
+        color: var(--blue);
+      }
+      .node.violet b {
+        color: var(--violet);
+      }
+      .node.green b {
+        color: var(--green);
+      }
+      .node.amber b {
+        color: #b26a00;
+      }
+      .arrow {
+        text-align: center;
+        color: var(--muted);
+        font-size: 12px;
+        margin: 2px 0 12px;
+        letter-spacing: 1px;
+      }
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .chip {
+        font-size: 11.5px;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        padding: 4px 9px;
+        background: #fcfcfd;
+        color: #3c4250;
+      }
+      .chip.on {
+        border-color: #ffd6c6;
+        background: #fff3ec;
+        color: #c8420f;
+      }
+      .flow {
+        display: flex;
+        align-items: stretch;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .step {
+        flex: 1;
+        min-width: 130px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 11px 12px;
+        background: #fcfcfd;
+        position: relative;
+      }
+      .step em {
+        font-style: normal;
+        font-size: 11px;
+        color: var(--muted);
+        display: block;
+        margin-bottom: 3px;
+      }
+      .step b {
+        font-size: 13px;
+      }
+      .step i {
+        display: block;
+        font-style: normal;
+        font-size: 11.5px;
+        color: var(--muted);
+        margin-top: 4px;
+        line-height: 1.55;
+      }
+      .step.s1 {
+        border-top: 3px solid var(--blue);
+      }
+      .step.s2 {
+        border-top: 3px solid var(--amber);
+      }
+      .step.s3 {
+        border-top: 3px solid var(--violet);
+      }
+      .step.s4 {
+        border-top: 3px solid var(--green);
+      }
+      .step.s5 {
+        border-top: 3px solid #9aa3af;
+      }
+      .two {
+        display: grid;
+        grid-template-columns: 1.15fr 0.85fr;
+        gap: 14px;
+        align-items: start;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12.5px;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 7px 10px;
+        border-bottom: 1px solid var(--line);
+      }
+      th {
+        color: var(--muted);
+        font-weight: 500;
+        font-size: 11.5px;
+      }
+      td.mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 11.5px;
+        color: #3c4250;
+      }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 11.5px;
+        background: #f1f2f5;
+        border-radius: 5px;
+        padding: 1px 5px;
+      }
+      pre {
+        margin: 0;
+        background: #1f2430;
+        color: #e6e8ee;
+        border-radius: 10px;
+        padding: 14px 16px;
+        overflow: auto;
+        font-size: 11.5px;
+        line-height: 1.7;
+      }
+      pre .c {
+        color: #8b93a7;
+      }
+      pre .k {
+        color: #ff9d6b;
+      }
+      pre .s {
+        color: #9fd6a0;
+      }
+      .legend {
+        font-size: 11.5px;
+        color: var(--muted);
+        margin-top: 10px;
+        line-height: 1.7;
+      }
+      footer {
+        margin-top: 26px;
+        font-size: 12px;
+        color: var(--muted);
+        line-height: 1.8;
+      }
+      @media (max-width: 900px) {
+        .two {
+          grid-template-columns: 1fr;
+        }
+        .g5 {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .g4,
+        .g3 {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1><span>实习管理工作台</span> · 架构图</h1>
+        <p class="sub">
+          单页 Web 应用 + 云端后端 + 浏览器扩展。没有自建服务器，没有中间层：前端把数据访问收敛到一个 <code>api.ts</code>，安全边界交给数据库的 RLS，AI 能力走云服务的免密钥大模型通道。
+        </p>
+      </header>
+
+      <!-- 1. 客户端 -->
+      <section class="layer">
+        <div class="bar"></div>
+        <div class="layer-head">
+          <h2>① 客户端</h2>
+          <span class="tag">浏览器 / Chrome</span>
+          <span class="note">无 UI 库 · 纯手写 CSS · 图表用原生 SVG</span>
+        </div>
+        <div class="grid g3">
+          <div class="node accent">
+            <b>React 19 + TypeScript + Vite 8</b>
+            <small>11 个页面模块 · hash 路由<br />无状态管理库 · 无组件库 · 无图表库</small>
+          </div>
+          <div class="node blue">
+            <b>Chrome MV3 扩展</b>
+            <small>仅 activeTab / scripting / storage<br />导入 applykit.json → 一键填充网申表单<br />数据不出本机，不请求任何远程接口</small>
+          </div>
+          <div class="node">
+            <b>样式与图表</b>
+            <small>styles.css 单文件 · CSS 变量主题<br />进度条 / 趋势柱 / 雷达全用 DOM + SVG 手绘</small>
+          </div>
+        </div>
+      </section>
+
+      <div class="arrow">▼ 调用</div>
+
+      <!-- 2. 前端模块 -->
+      <section class="layer">
+        <div class="bar"></div>
+        <div class="layer-head">
+          <h2>② 前端模块（信息架构）</h2>
+          <span class="tag">三组导航</span>
+          <span class="note">岗位池 → 投递 → 沟通 → 面试 → Offer</span>
+        </div>
+        <div class="grid g3">
+          <div class="node">
+            <b>工作台</b>
+            <div class="chips">
+              <span class="chip">总览</span>
+              <span class="chip">岗位池</span>
+              <span class="chip">投递看板</span>
+              <span class="chip">面试跟进</span>
+              <span class="chip">Offer 对比</span>
+            </div>
+          </div>
+          <div class="node">
+            <b>资产</b>
+            <div class="chips">
+              <span class="chip">简历库</span>
+              <span class="chip">网申填写包</span>
+              <span class="chip">AI · JD 评估</span>
+              <span class="chip">提醒日历</span>
+              <span class="chip">个人知识库</span>
+            </div>
+          </div>
+          <div class="node">
+            <b>配置</b>
+            <div class="chips">
+              <span class="chip">目标条件</span>
+              <span class="chip on">投递节奏守则</span>
+              <span class="chip">账号 / 数据导出</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="arrow">▼ 收敛</div>
+
+      <!-- 3. 业务逻辑层 -->
+      <section class="layer">
+        <div class="bar"></div>
+        <div class="layer-head">
+          <h2>③ 业务逻辑层 · <code>src/lib/</code></h2>
+          <span class="tag">纯函数优先</span>
+          <span class="note">纯计算逻辑与 React 解耦，便于单测</span>
+        </div>
+        <div class="grid g4">
+          <div class="node">
+            <b>api.ts</b>
+            <small>唯一的数据访问出口<br />listRows / insertRow / updateRow / deleteRow<br /><b style="color:#c8420f">写操作返回空数组 = 被 RLS 拒绝 → 抛错</b></small>
+          </div>
+          <div class="node">
+            <b>score.ts</b>
+            <small>两段式评分的第一段<br />18 个技术关键词加权 · 画像匹配<br />PREFILTER_THRESHOLD = 45</small>
+          </div>
+          <div class="node">
+            <b>pace.ts</b>
+            <small>投递节奏守则<br />parseWindow / paceStatus / staleApplications<br />全部纯函数，now 可注入便于测试</small>
+          </div>
+          <div class="node">
+            <b>ai.ts</b>
+            <small>evaluateJD / generateGreeting / 押题 / 复盘<br />System Prompt 内嵌 GREETING_RULES 约束</small>
+          </div>
+          <div class="node">
+            <b>conversation.ts</b>
+            <small>沟通流水写入 + 阶段联动<br />一次点击 = 一条流水 + 推进 stage<br />next_action 与跟进日同步更新</small>
+          </div>
+          <div class="node">
+            <b>constants.ts</b>
+            <small>阶段 / 渠道 / 七维 / 画像模板<br />GREETING_RULES 话术硬约束</small>
+          </div>
+          <div class="node">
+            <b>format.ts</b>
+            <small>todayISO / fmtDate / fmtDateTime<br />日期格式化统一入口，组件内不手写</small>
+          </div>
+          <div class="node">
+            <b>hooks.ts · toast.ts</b>
+            <small>useSession 会话恢复<br />统一提示样式</small>
+          </div>
+        </div>
+      </section>
+
+      <div class="arrow">▼ SDK · POST · JWT</div>
+
+      <!-- 4. 云服务 -->
+      <section class="layer">
+        <div class="bar"></div>
+        <div class="layer-head">
+          <h2>④ 云服务（WorkBuddy Cloud）</h2>
+          <span class="tag">无自建服务器</span>
+          <span class="note">publishableKey 可公开 · 隔离靠 RLS 不靠藏 key</span>
+        </div>
+        <div class="grid g4">
+          <div class="node violet">
+            <b>Auth</b>
+            <small>邮箱验证码（登录即注册）/ 邮箱密码 / 找回密码<br />服务端校验 Origin → 仅正式发布域可登录<br /><b style="color:#6b47c9">手机号短信与微信登录只有小程序端开放，网页端不提供</b></small>
+          </div>
+          <div class="node green">
+            <b>Database</b>
+            <small>PostgREST 风格<br />10 张表 · 全部开启 RLS<br />SQL 时间戳 / 数组类型</small>
+          </div>
+          <div class="node amber">
+            <b>LLM</b>
+            <small>免密钥调用<br />不配任何 API Key<br />流式返回</small>
+          </div>
+          <div class="node">
+            <b>发布托管</b>
+            <small>构建产物直接托管<br />HTTPS 域名<br />npm start 读 $PORT</small>
+          </div>
+        </div>
+      </section>
+
+      <div class="arrow">▼ 数据落库</div>
+
+      <!-- 5. 数据模型 -->
+      <section class="layer">
+        <div class="bar"></div>
+        <div class="layer-head">
+          <h2>⑤ 数据模型 · 10 张表</h2>
+          <span class="tag">owner_id TEXT NOT NULL DEFAULT auth.uid()</span>
+          <span class="note">前端永不传 owner_id</span>
+        </div>
+        <div class="two">
+          <div>
+            <table>
+              <thead>
+                <tr>
+                  <th>表</th>
+                  <th>用途</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="mono">jobs</td>
+                  <td>岗位池：目标岗位、JD 与匹配度</td>
+                </tr>
+                <tr>
+                  <td class="mono">applications</td>
+                  <td>投递记录：阶段流转看板</td>
+                </tr>
+                <tr>
+                  <td class="mono">messages</td>
+                  <td>沟通流水：招呼、回复、约面与结果</td>
+                </tr>
+                <tr>
+                  <td class="mono">interviews</td>
+                  <td>面试与笔试：日程、轮次、问题与复盘</td>
+                </tr>
+                <tr>
+                  <td class="mono">offers</td>
+                  <td>Offer 对比：待遇与七维评分</td>
+                </tr>
+                <tr>
+                  <td class="mono">resumes</td>
+                  <td>简历库：多版本与使用次数</td>
+                </tr>
+                <tr>
+                  <td class="mono">tasks</td>
+                  <td>待办与提醒</td>
+                </tr>
+                <tr>
+                  <td class="mono">ai_reports</td>
+                  <td>AI 评估留档与话术</td>
+                </tr>
+                <tr>
+                  <td class="mono">knowledge</td>
+                  <td>个人知识库：八股 / 面经 / 话术</td>
+                </tr>
+                <tr>
+                  <td class="mono">profile</td>
+                  <td>画像、目标条件与节奏配置（每用户一行）</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div>
+            <pre><span class="c">-- 每张表同一套三件套，10 张表 × 1 条 ALL 策略</span>
+<span class="k">ALTER TABLE</span> public.messages
+  <span class="k">ADD COLUMN IF NOT EXISTS</span> owner_id <span class="k">TEXT NOT NULL</span>
+  <span class="k">DEFAULT</span> auth.uid();
+
+<span class="k">GRANT</span> SELECT, INSERT, UPDATE, DELETE
+  <span class="k">ON</span> public.messages <span class="k">TO</span> authenticated, anon;
+
+<span class="k">DROP POLICY IF EXISTS</span> messages_own <span class="k">ON</span> public.messages;
+<span class="k">CREATE POLICY</span> messages_own <span class="k">ON</span> public.messages
+  <span class="k">FOR ALL</span>
+  <span class="k">USING</span> (owner_id = auth.uid())
+  <span class="k">WITH CHECK</span> (owner_id = auth.uid());
+</pre>
+            <div class="legend">
+              <b>USING</b> 管「能读哪些行」，<b>WITH CHECK</b> 管「能写成哪些行」。<br />
+              只写 USING 的话，仍可 INSERT 一条归属别人的记录。两段都必须写。
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="arrow">▼ 业务流程</div>
+
+      <!-- 6. 主流程 -->
+      <section class="layer">
+        <div class="bar"></div>
+        <div class="layer-head">
+          <h2>⑥ 核心业务流程</h2>
+          <span class="tag">一条线管到底</span>
+        </div>
+        <div class="flow">
+          <div class="step s1">
+            <em>STEP 1</em>
+            <b>岗位池</b>
+            <i>粘贴 JD → 本地规则打预筛分 → 勾选批量送 AI 七维深评 → 匹配度 ≥ 55 的转入投递</i>
+          </div>
+          <div class="step s2">
+            <em>STEP 2</em>
+            <b>投递看板</b>
+            <i>五列看板拖拽改阶段 · 复制打招呼话术 → 过 6 条自检清单 → 登记发送</i>
+          </div>
+          <div class="step s3">
+            <em>STEP 3</em>
+            <b>沟通台账</b>
+            <i>会话时间线记录每次往来 · 阶段与下一步日期自动联动 · 节奏卡控发送频率</i>
+          </div>
+          <div class="step s4">
+            <em>STEP 4</em>
+            <b>面试跟进</b>
+            <i>日程 / 轮次 / 结果登记 · AI 押题 · 当晚写复盘由 AI 整理成结构化清单</i>
+          </div>
+          <div class="step s5">
+            <em>STEP 5</em>
+            <b>Offer 对比</b>
+            <i>七维评分排序 → 看清自己在乎成长、钱还是通勤</i>
+          </div>
+        </div>
+        <div class="legend">
+          横切关注点：<b>超期未回复（≥7 天）</b>在看板卡片标红并在总览集中提醒；<b>提醒日历</b>汇总岗位截止、面试笔试、跟进与自建待办。
+        </div>
+      </section>
+
+      <footer>
+        本图由项目作者手绘（单文件 HTML，无外部资源），随代码一起版本管理，架构变更时同步更新。<br />
+        完整说明见 <code>README.md</code>，新表接入步骤见 <code>docs/CONFIGURATION.md</code>，AI 协作边界见 <code>AGENTS.md</code>。
+      </footer>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,124 @@
+<view class="page">
+  <view class="stat-grid">
+    <view class="stat">
+      <view class="stat-value" style="color:#3b82f6">{{stats.jobs}}</view>
+      <view class="stat-label">岗位池</view>
+    </view>
+    <view class="stat">
+      <view class="stat-value" style="color:#f2542d">{{stats.applied}}</view>
+      <view class="stat-label">已投递</view>
+    </view>
+    <view class="stat">
+      <view class="stat-value" style="color:#8b5cf6">{{stats.interview}}</view>
+      <view class="stat-label">面试中</view>
+    </view>
+    <view class="stat">
+      <view class="stat-value" style="color:#12a150">{{stats.offer}}</view>
+      <view class="stat-label">Offer</view>
+    </view>
+    <view class="stat">
+      <view class="stat-value" style="color:#f59e0b">{{stats.tasks}}</view>
+      <view class="stat-label">待办</view>
+    </view>
+    <view class="stat">
+      <view class="stat-value" style="color:#9aa3af">{{stale.length}}</view>
+      <view class="stat-label">超期未回</view>
+    </view>
+  </view>
+
+  <!-- 今日投递节奏 -->
+  <view wx:if="{{pace}}" class="card">
+    <view class="card-head">
+      <view class="card-title">今日投递节奏</view>
+      <view class="spacer"></view>
+      <view class="badge {{pace.allowed ? 'badge-ok' : 'badge-warn'}}">{{pace.allowed ? '现在可以发' : '先缓一缓'}}</view>
+    </view>
+
+    <view class="row">
+      <view class="mono" style="font-size:56rpx; font-weight:600; line-height:1;">{{pace.sentToday}}</view>
+      <view class="muted" style="margin-left:10rpx;">/ {{pace.limit}} 条</view>
+      <view class="spacer"></view>
+      <view class="small muted">剩余 {{pace.remaining}} 条</view>
+    </view>
+
+    <view class="bar mt-s">
+      <view class="bar-fill" style="width:{{pace.percent}}%; background:{{pace.allowed ? 'linear-gradient(100deg,#12a150,#3fbf74)' : 'linear-gradient(100deg,#f59e0b,#ffc247)'}}"></view>
+    </view>
+
+    <view class="row mt-m">
+      <view style="flex:1">
+        <view class="small muted">时间窗</view>
+        <view class="cell-main">{{pace.window}}</view>
+      </view>
+      <view style="flex:1">
+        <view class="small muted">距上次发送</view>
+        <view class="cell-main">{{pace.minutesSinceLast === null ? '暂无记录' : pace.minutesSinceLast + ' 分钟前'}}</view>
+      </view>
+      <view style="flex:1">
+        <view class="small muted">最小间隔</view>
+        <view class="cell-main">{{pace.minIntervalMin}} 分钟</view>
+      </view>
+    </view>
+
+    <view wx:if="{{pace.reasons.length}}" class="hint mt-m">
+      <view wx:for="{{pace.reasons}}" wx:key="*this">· {{item}}</view>
+    </view>
+    <view wx:else class="cell-sub mt-m">节奏正常。发送前的自检清单在登记招呼时会自动弹出来。</view>
+  </view>
+
+  <!-- 超期未回复 -->
+  <view class="card">
+    <view class="card-head">
+      <view class="card-title">超期未回复</view>
+      <view class="spacer"></view>
+      <view class="small muted">≥ 7 天</view>
+    </view>
+
+    <view wx:if="{{!stale.length}}" class="empty">没有超过 7 天没动静的投递。</view>
+
+    <view wx:for="{{stale}}" wx:key="id" class="item {{index === stale.length - 1 ? 'item-last' : ''}}" data-id="{{item.id}}" bindtap="openConversation">
+      <view class="row-top">
+        <view class="badge {{item.urgent ? 'badge-danger' : 'badge-warn'}}">{{item.days}} 天</view>
+        <view style="flex:1; margin-left:16rpx;">
+          <view class="cell-main">{{item.company}}</view>
+          <view class="cell-sub">{{item.title}} · 最后沟通 {{item.lastAt}}</view>
+        </view>
+      </view>
+    </view>
+
+    <button wx:if="{{stale.length}}" class="btn btn-ghost mt-m" bindtap="goPipeline">去投递看板处理</button>
+  </view>
+
+  <!-- 待办 -->
+  <view class="card">
+    <view class="card-head">
+      <view class="card-title">待办清单</view>
+      <view class="spacer"></view>
+      <view class="small muted">{{stats.tasks}} 条未完成</view>
+    </view>
+
+    <view wx:if="{{!todos.length}}" class="empty">暂无未完成待办。</view>
+
+    <view wx:for="{{todos}}" wx:key="id" class="item {{index === todos.length - 1 ? 'item-last' : ''}}">
+      <view class="row-top">
+        <view style="flex:1">
+          <view class="cell-main">{{item.title}}</view>
+          <view class="cell-sub">{{item.kind}} · {{item.due}} · {{item.left}}{{item.company ? ' · ' + item.company : ''}}</view>
+        </view>
+        <view class="badge {{item.urgent ? 'badge-danger' : 'badge'}}" data-id="{{item.id}}" catchtap="markDone">完成</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 空态引导 -->
+  <view wx:if="{{!loading && stats.jobs === 0}}" class="hint">
+    还没有岗位。先去「岗位池」粘一条 JD，本地匹配度会立刻算出来；需要更细的判断再用 AI 评估。
+  </view>
+
+  <view wx:if="{{hasProfile === false}}" class="hint mt-m">
+    还没填画像。去「我的」补上技能、期望城市和目标方向 —— 匹配度与 AI 打招呼都依赖它。
+    <view class="accent mt-s" bindtap="goSettings">立即填写 →</view>
+  </view>
+
+  <view class="safe-bottom"></view>
+</view>

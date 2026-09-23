@@ -1,0 +1,45 @@
+.search-bar {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  margin-bottom: 22rpx;
+}
+
+.score-box {
+  text-align: center;
+  min-width: 110rpx;
+}
+
+.score-val {
+  font-size: 40rpx;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.score-none {
+  color: #c4cad3;
+}
+
+.score-high {
+  color: #12a150;
+}
+
+.score-mid {
+  color: #f59e0b;
+}
+
+.score-low {
+  color: #9aa3af;
+}
+
+.score-cap {
+  font-size: 21rpx;
+  color: #a8b0bd;
+  margin-top: 4rpx;
+}
+
+.big-score {
+  font-size: 88rpx;
+  font-weight: 600;
+  line-height: 1;
+}

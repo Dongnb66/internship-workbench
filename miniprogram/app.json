@@ -1,0 +1,34 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/jobs/jobs",
+    "pages/pipeline/pipeline",
+    "pages/ai/ai",
+    "pages/me/me",
+    "pages/login/login",
+    "pages/conversation/conversation"
+  ],
+  "window": {
+    "backgroundTextStyle": "light",
+    "navigationBarBackgroundColor": "#f2542d",
+    "navigationBarTitleText": "实习工作台",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#f5f6f8"
+  },
+  "tabBar": {
+    "color": "#8b93a2",
+    "selectedColor": "#f2542d",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "black",
+    "list": [
+      { "pagePath": "pages/index/index", "text": "总览" },
+      { "pagePath": "pages/jobs/jobs", "text": "岗位池" },
+      { "pagePath": "pages/pipeline/pipeline", "text": "投递" },
+      { "pagePath": "pages/ai/ai", "text": "AI 评估" },
+      { "pagePath": "pages/me/me", "text": "我的" }
+    ]
+  },
+  "lazyCodeLoading": "requiredComponents",
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

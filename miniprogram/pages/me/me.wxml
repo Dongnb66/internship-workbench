@@ -1,0 +1,157 @@
+<view class="page">
+  <!-- 账号 -->
+  <view class="card">
+    <view class="row">
+      <view style="flex:1; min-width:0;">
+        <view class="cell-main">{{identity}}</view>
+        <view class="cell-sub">{{loginWay}}</view>
+      </view>
+      <view class="badge badge-ok">已登录</view>
+    </view>
+    <view class="divider"></view>
+    <view class="row wrap" style="gap:16rpx;">
+      <view wx:for="{{counts}}" wx:key="key" class="mini-stat">
+        <view class="mini-val">{{item.count}}</view>
+        <view class="mini-cap">{{item.label}}</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 求职意向 -->
+  <view class="card">
+    <view class="card-head">
+      <view class="card-title">求职意向</view>
+      <view class="spacer"></view>
+      <view class="badge badge-accent" bindtap="fillTemplate">填入我的模板</view>
+    </view>
+
+    <view class="field">
+      <view class="field-label">期望城市（顿号分隔）</view>
+      <input class="input" value="{{form.expect_city}}" data-key="expect_city" bindinput="onField" placeholder="广州、深圳、远程" />
+    </view>
+    <view class="field">
+      <view class="field-label">期望岗位类型（顿号分隔）</view>
+      <input class="input" value="{{form.expect_type}}" data-key="expect_type" bindinput="onField" placeholder="实习、日常实习" />
+    </view>
+    <view class="field">
+      <view class="field-label">期望日薪</view>
+      <input class="input" type="number" value="{{form.expect_daily}}" data-key="expect_daily" bindinput="onField" placeholder="如：180" />
+    </view>
+    <view class="field">
+      <view class="field-label">可实习时长</view>
+      <input class="input" value="{{form.available_days}}" data-key="available_days" bindinput="onField" placeholder="如：每周 5 天，可连续 6 个月" />
+    </view>
+  </view>
+
+  <!-- 技能与事实（AI 评估的输入） -->
+  <view class="card">
+    <view class="card-head">
+      <view class="card-title">技能与事实</view>
+    </view>
+
+    <view class="field">
+      <view class="field-label">技能（顿号分隔）</view>
+      <textarea class="textarea" style="min-height:140rpx" value="{{form.skills}}" data-key="skills" bindinput="onField" placeholder="Python、FastAPI、LangGraph、React…"></textarea>
+      <view class="field-hint">只写真的会用的。本地预筛分靠这份清单命中 JD 关键词，写了不会的反而会误导评估。</view>
+    </view>
+
+    <view class="field">
+      <view class="field-label">目标方向（顿号分隔）</view>
+      <input class="input" value="{{form.directions}}" data-key="directions" bindinput="onField" placeholder="AI Agent 应用、LLM 工程、Python 后端" />
+    </view>
+
+    <view class="field">
+      <view class="field-label">一句话自我介绍</view>
+      <textarea class="textarea" style="min-height:160rpx" value="{{form.self_intro}}" data-key="self_intro" bindinput="onField" placeholder="届数 + 专业 + 做过的项目与可验证的数字"></textarea>
+    </view>
+
+    <view class="field">
+      <view class="field-label">项目与事实（AI 评估的核心依据）</view>
+      <textarea class="textarea" style="min-height:220rpx" value="{{form.resume_summary}}" data-key="resume_summary" bindinput="onField" placeholder="项目名、技术栈、可 clone 验证的数字"></textarea>
+      <view class="field-hint">AI 只会从这里挑「对得上的亮点」，所以这里没写的东西它不会替你编。数字口径必须与简历一致。</view>
+    </view>
+  </view>
+
+  <!-- 联系方式 -->
+  <view class="card">
+    <view class="card-head">
+      <view class="card-title">联系方式</view>
+    </view>
+    <view class="field">
+      <view class="field-label">称呼 / 姓名</view>
+      <input class="input" value="{{form.full_name}}" data-key="full_name" bindinput="onField" />
+    </view>
+    <view class="row gap-m">
+      <view class="field" style="flex:1">
+        <view class="field-label">年级</view>
+        <input class="input" value="{{form.grade}}" data-key="grade" bindinput="onField" />
+      </view>
+      <view class="field" style="flex:1">
+        <view class="field-label">毕业年份</view>
+        <input class="input" value="{{form.grad_year}}" data-key="grad_year" bindinput="onField" />
+      </view>
+    </view>
+    <view class="field">
+      <view class="field-label">专业</view>
+      <input class="input" value="{{form.major}}" data-key="major" bindinput="onField" />
+    </view>
+    <view class="field">
+      <view class="field-label">手机号</view>
+      <input class="input" type="number" value="{{form.phone}}" data-key="phone" bindinput="onField" />
+    </view>
+    <view class="field">
+      <view class="field-label">常用邮箱</view>
+      <input class="input" value="{{form.contact_email}}" data-key="contact_email" bindinput="onField" />
+    </view>
+    <view class="field">
+      <view class="field-label">GitHub</view>
+      <input class="input" value="{{form.github}}" data-key="github" bindinput="onField" />
+    </view>
+    <view class="field">
+      <view class="field-label">作品集</view>
+      <input class="input" value="{{form.portfolio}}" data-key="portfolio" bindinput="onField" />
+    </view>
+    <view class="field">
+      <view class="field-label">学校（仅本地留存，不会出现在打招呼里）</view>
+      <input class="input" value="{{form.school}}" data-key="school" bindinput="onField" />
+      <view class="field-hint">打招呼纪律第一条：开场只写「届数 + 专业 + 姓名」，不出现校名。这一栏是给你自己备忘用的。</view>
+    </view>
+  </view>
+
+  <!-- 投递节奏守则 -->
+  <view class="card">
+    <view class="card-head">
+      <view class="card-title">投递节奏守则</view>
+      <view class="spacer"></view>
+      <view class="badge" bindtap="resetPace">恢复默认</view>
+    </view>
+    <view class="row gap-m">
+      <view class="field" style="flex:1">
+        <view class="field-label">每日上限</view>
+        <input class="input" type="number" value="{{form.daily_greet_limit}}" data-key="daily_greet_limit" bindinput="onField" placeholder="8" />
+      </view>
+      <view class="field" style="flex:1">
+        <view class="field-label">最小间隔（分钟）</view>
+        <input class="input" type="number" value="{{form.min_interval_min}}" data-key="min_interval_min" bindinput="onField" placeholder="30" />
+      </view>
+    </view>
+    <view class="field">
+      <view class="field-label">发送时间窗</view>
+      <input class="input" value="{{form.greet_window}}" data-key="greet_window" bindinput="onField" placeholder="09:00-21:00" />
+      <view class="field-hint">格式 HH:MM-HH:MM。超出时间窗、触达上限或没到冷却时间，登记打招呼时会被挡下来。</view>
+    </view>
+
+    <view class="divider"></view>
+
+    <view class="field-label">发送前自检清单</view>
+    <view wx:for="{{checklist}}" wx:key="*this" class="cell-sub">· {{item}}</view>
+  </view>
+
+  <button class="btn btn-primary" bindtap="save" disabled="{{busy}}">{{busy ? '保存中…' : '保存全部设置'}}</button>
+  <view wx:if="{{savedAt}}" class="field-hint" style="text-align:center">上次保存：{{savedAt}}</view>
+
+  <view class="divider"></view>
+  <button class="btn btn-danger" bindtap="signOut">退出登录</button>
+
+  <view class="safe-bottom"></view>
+</view>

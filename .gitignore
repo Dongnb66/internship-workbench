@@ -1,0 +1,51 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# 测试覆盖率产物
+coverage
+
+# 导出的个人数据备份（含手机号等个人信息，不入库）
+applykit.json
+*备份*.json
+*backup*.json
+
+# 构建缓存
+*.tsbuildinfo
+.vite
+
+# 微信小程序：开发者工具「构建 npm」的产物，由 npm install + 构建重新生成
+miniprogram/miniprogram_npm
+miniprogram/project.private.config.json
+
+# 本地抓取器
+crawler/node_modules
+# 浏览器档案，含你自己账号的登录态，绝不能入库。
+# 用 --profile 换目录时会产生 .profile2/.profile3…，所以用通配。
+crawler/.profile*
+# 抓取产出与去重历史（含岗位数据）
+crawler/output
+# ⚠️ 上面三行原来把说明写在行尾（`crawler/.profile*   # 浏览器档案…`）。
+# git 不支持行尾注释 —— 整行会被当成一个字面路径 pattern，等于没忽略，
+# `git add .` 会把 324MB 的浏览器档案（含 cookie）一起提交。注释必须独立成行。
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

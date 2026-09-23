@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "实习工作台 · 浏览器助手",
+  "version": "0.3.0",
+  "description": "采集当前页面上的岗位列表导入工作台岗位池，以及把网申填写包一键填进各类网申表单。只读当前页面、不发网络请求，数据只存在本机浏览器。",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "岗位采集 / 网申填表"
+  },
+  "permissions": ["activeTab", "scripting", "storage"]
+}

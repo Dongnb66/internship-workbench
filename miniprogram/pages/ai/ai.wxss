@@ -1,0 +1,17 @@
+.big-score {
+  font-size: 88rpx;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.score-high {
+  color: #12a150;
+}
+
+.score-mid {
+  color: #f59e0b;
+}
+
+.score-low {
+  color: #9aa3af;
+}

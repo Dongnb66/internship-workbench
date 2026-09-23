@@ -1,0 +1,43 @@
+.login-wrap {
+  padding: 90rpx 40rpx 60rpx;
+}
+
+.login-brand {
+  display: flex;
+  align-items: center;
+  margin-bottom: 26rpx;
+}
+
+.login-logo {
+  width: 88rpx;
+  height: 88rpx;
+  border-radius: 22rpx;
+  background: linear-gradient(120deg, #f2542d, #ff8a3d);
+  color: #ffffff;
+  font-size: 40rpx;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 20rpx;
+}
+
+.login-title {
+  font-size: 36rpx;
+  font-weight: 600;
+  margin-bottom: 6rpx;
+}
+
+.login-sub {
+  font-size: 26rpx;
+  color: #8b93a2;
+  line-height: 1.7;
+  margin-bottom: 40rpx;
+}
+
+.login-foot {
+  margin-top: 40rpx;
+  font-size: 23rpx;
+  color: #a8b0bd;
+  line-height: 1.75;
+}

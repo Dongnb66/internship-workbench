@@ -1,0 +1,16 @@
+.mini-stat {
+  width: calc((100% - 64rpx) / 5);
+  text-align: center;
+}
+
+.mini-val {
+  font-size: 34rpx;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.mini-cap {
+  font-size: 21rpx;
+  color: #8b93a2;
+  margin-top: 6rpx;
+}

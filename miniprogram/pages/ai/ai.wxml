@@ -1,0 +1,97 @@
+<view class="page">
+  <view class="card">
+    <view class="card-head">
+      <view class="card-title">JD 智能评估</view>
+      <view class="spacer"></view>
+      <view wx:if="{{profile}}" class="badge badge-ok">画像已载入</view>
+      <view wx:else class="badge badge-warn">未填画像</view>
+    </view>
+
+    <view class="row gap-m mb-m">
+      <input class="input" style="flex:1" value="{{company}}" bindinput="onCompany" placeholder="公司" />
+      <input class="input" style="flex:1" value="{{title}}" bindinput="onTitle" placeholder="岗位" />
+    </view>
+
+    <textarea class="textarea" value="{{jd}}" bindinput="onJd" maxlength="-1"
+      placeholder="把 JD 原文整段粘进来。评分、亮点、缺口和打招呼话术都基于它。"></textarea>
+    <view class="field-hint">输入时先跑本地规则打分（零网络、零额度）。预筛不通过会提醒你直接跳过，省下 AI 额度。</view>
+  </view>
+
+  <view wx:if="{{prefilter}}" class="hint {{prefilter.pass ? 'hint-ok' : 'hint-error'}} mb-m">
+    <view class="strong">{{prefilter.reason}}</view>
+    <view wx:if="{{prefilter.hitsText}}" class="small mt-s">命中：{{prefilter.hitsText}}</view>
+    <view wx:if="{{prefilter.missingText}}" class="small mt-s">JD 里有、画像里没有：{{prefilter.missingText}}</view>
+  </view>
+
+  <button class="btn btn-primary" bindtap="runEval" disabled="{{busy}}">{{busy ? '模型评估中…' : '开始 AI 深度评估'}}</button>
+  <view wx:if="{{!profile}}" class="field-hint">还没填画像，评估只能看到 JD 本身。先去「我的」补上技能与目标方向，结果会准很多。</view>
+
+  <view wx:if="{{error}}" class="hint hint-error mt-m">{{error}}</view>
+
+  <view wx:if="{{result}}" class="card mt-m">
+    <view class="row">
+      <view class="big-score {{result.score >= 75 ? 'score-high' : (result.score >= 55 ? 'score-mid' : 'score-low')}}">{{result.score}}</view>
+      <view style="flex:1; margin-left:24rpx;">
+        <view class="cell-main">{{result.verdict}}</view>
+        <view class="cell-sub">满分 100。75 以上值得优先投，55 以下建议先补短板。</view>
+      </view>
+    </view>
+
+    <view class="divider"></view>
+
+    <view wx:for="{{dims}}" wx:key="name" class="dim-row">
+      <view class="dim-name">{{item.name}}</view>
+      <view class="dim-bar"><view class="dim-fill" style="width:{{item.value * 10}}%"></view></view>
+      <view class="dim-num">{{item.value}}</view>
+    </view>
+
+    <view wx:if="{{result.highlights.length}}" class="mt-m">
+      <view class="field-label">对得上的亮点</view>
+      <view wx:for="{{result.highlights}}" wx:key="*this" class="cell-sub">· {{item}}</view>
+    </view>
+
+    <view wx:if="{{result.gaps.length}}" class="mt-m">
+      <view class="field-label">缺口（面试大概率会被问）</view>
+      <view wx:for="{{result.gaps}}" wx:key="*this" class="cell-sub">· {{item}}</view>
+    </view>
+
+    <view wx:if="{{result.greeting}}" class="mt-m">
+      <view class="field-label">打招呼话术</view>
+      <view class="hint">{{result.greeting}}</view>
+      <view class="field-hint">发之前读一遍，改成你自己的语气。模板腔 HR 一眼就认出来。</view>
+    </view>
+
+    <view class="divider"></view>
+
+    <view class="row wrap gap-s">
+      <button wx:if="{{result.greeting}}" class="btn btn-sm" bindtap="copyGreeting">复制话术</button>
+      <button class="btn btn-sm" bindtap="saveResult">{{saved ? '已留档' : '留档到评估历史'}}</button>
+      <button class="btn btn-sm btn-primary" bindtap="addToJobs">加入岗位池</button>
+    </view>
+  </view>
+
+  <view class="card mt-m">
+    <view class="card-head">
+      <view class="card-title">评估历史</view>
+      <view class="spacer"></view>
+      <view class="small muted">最近 {{recent.length}} 条</view>
+    </view>
+    <view wx:if="{{!recent.length}}" class="empty" style="padding:30rpx 0">
+      还没有留档。评估完点「留档到评估历史」，下次同类岗位可以直接翻出上次的话术。
+    </view>
+    <view wx:for="{{recent}}" wx:key="id" class="item {{index === recent.length - 1 ? 'item-last' : ''}}">
+      <view class="row-top">
+        <view style="flex:1; min-width:0;">
+          <view class="cell-main">{{item.company}}</view>
+          <view class="cell-sub">{{item.title || '未填岗位'}} · {{item.verdict}}</view>
+        </view>
+        <view class="badge badge-accent">{{item.score}}</view>
+      </view>
+      <view wx:if="{{item.greeting}}" class="mt-s">
+        <view class="small muted" bindtap="useRecent" data-id="{{item.id}}">点此复制这条话术</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="safe-bottom"></view>
+</view>

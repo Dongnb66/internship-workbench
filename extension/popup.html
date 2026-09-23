@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        width: 340px;
+        margin: 0;
+        padding: 14px;
+        font-family: -apple-system, 'Segoe UI', 'Microsoft YaHei', system-ui, sans-serif;
+        font-size: 13px;
+        color: #1d2129;
+        background: #fff;
+      }
+      h1 { font-size: 14px; margin: 0 0 2px; }
+      .sub { color: #8b93a1; font-size: 11px; margin-bottom: 12px; }
+      button {
+        border: 1px solid #d9dde5; background: #fff; border-radius: 8px;
+        padding: 6px 11px; font-size: 12px; cursor: pointer; font-family: inherit;
+      }
+      button:hover { border-color: #f2542d; color: #f2542d; }
+      button.primary {
+        background: linear-gradient(135deg, #f2542d, #ff7a45);
+        border-color: transparent; color: #fff; font-weight: 600; width: 100%;
+        padding: 9px; font-size: 13px;
+      }
+      button.primary:hover { filter: brightness(1.05); color: #fff; }
+      .row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+      textarea {
+        width: 100%; min-height: 70px; border: 1px solid #d9dde5; border-radius: 8px;
+        padding: 8px; font-family: ui-monospace, Consolas, monospace; font-size: 11px;
+        resize: vertical; outline: none;
+      }
+      .kit { border: 1px solid #eceef2; border-radius: 9px; padding: 8px 10px; background: #fafbfc; max-height: 150px; overflow: auto; }
+      .kit div { display: flex; gap: 8px; padding: 2px 0; font-size: 11px; }
+      .kit b { color: #6b7280; font-weight: 400; width: 92px; flex: 0 0 92px; }
+      .kit span { flex: 1; word-break: break-all; }
+      .status { margin-top: 10px; font-size: 11px; color: #6b7280; line-height: 1.6; min-height: 16px; }
+      .status.ok { color: #12a150; }
+      .status.err { color: #e8443a; }
+      .empty { color: #9aa3af; font-size: 12px; padding: 6px 2px; }
+      .collect {
+        border: 1px solid #ffe2d3; background: #fffaf5;
+        border-radius: 9px; padding: 10px; margin-bottom: 12px;
+      }
+      .divider { height: 1px; background: #eceef2; margin: 12px 0; }
+    </style>
+  </head>
+  <body>
+    <h1>实习工作台 · 浏览器助手</h1>
+    <div class="sub">采集当前页面岗位 / 网申一键填表 · 数据只在你的浏览器与本机之间流动</div>
+
+    <div class="collect">
+      <div class="row" style="margin-bottom: 8px">
+        <button id="collectBtn" class="primary" style="width: auto; flex: 1; padding: 8px">采集本页岗位</button>
+        <button id="collectJsonBtn" style="display: none">复制 JSON</button>
+      </div>
+      <div id="collectStatus" class="status" style="margin-top: 0">
+        在招聘网站的结果列表页点一下，它会把当前这一屏的岗位读出来。只读你屏幕上已经显示的内容，不翻页、不调接口、不绕验证码。
+      </div>
+    </div>
+
+    <div class="row">
+      <button id="importBtn">导入 applykit.json</button>
+      <button id="clearBtn">清空本机数据</button>
+      <input id="file" type="file" accept=".json,application/json" style="display: none" />
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="sub" style="margin-bottom: 6px">网申填写包（来源：工作台 → 网申填写包 → 导出插件数据）</div>
+
+    <textarea id="paste" placeholder="也可以直接把导出 JSON 的内容粘贴到这里，然后点下方「解析并保存」"></textarea>
+    <div class="row" style="margin-top: 8px">
+      <button id="parseBtn">解析并保存</button>
+      <button id="fillBtn">重新读取本机数据</button>
+    </div>
+
+    <div id="kitBox" class="kit"></div>
+    <button id="goBtn" class="primary" style="margin-top: 10px">一键填充当前页面</button>
+    <div id="status" class="status"></div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

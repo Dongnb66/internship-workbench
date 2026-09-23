@@ -1,0 +1,27 @@
+.stage-tabs {
+  white-space: nowrap;
+  margin-bottom: 22rpx;
+}
+
+.stage-tabs .chip {
+  display: inline-block;
+  margin-right: 12rpx;
+}
+
+.stage-pill {
+  color: #ffffff;
+  font-size: 22rpx;
+  padding: 6rpx 16rpx;
+  border-radius: 8rpx;
+  white-space: nowrap;
+}
+
+.stale-line {
+  margin-top: 14rpx;
+  font-size: 24rpx;
+  color: #f59e0b;
+}
+
+.stale-urgent {
+  color: #d92d20;
+}

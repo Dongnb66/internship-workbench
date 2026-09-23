@@ -1,0 +1,16 @@
+{
+  "name": "internship-workbench-crawler",
+  "private": true,
+  "version": "0.7.1",
+  "type": "module",
+  "description": "本地岗位抓取器：在你自己的机器上驱动浏览器，把招聘页上已经渲染出来的岗位批量结构化，产出可直接导入实习工作台的 JSON。",
+  "scripts": {
+    "sites": "node run.mjs --list-sites",
+    "login": "node login.mjs",
+    "crawl": "node run.mjs",
+    "selftest": "node selftest.mjs"
+  },
+  "dependencies": {
+    "playwright-core": "^1.63.0"
+  }
+}

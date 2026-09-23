@@ -1,0 +1,96 @@
+<view class="page">
+  <view wx:if="{{app}}" class="card">
+    <view class="row-top">
+      <view style="flex:1">
+        <view class="cell-main">{{app.company}} · {{app.title}}</view>
+        <view class="cell-sub">当前阶段 {{app.stageLabel}}{{app.nextAction ? ' · 下一步：' + app.nextAction : ''}}</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="card-head">
+      <view class="card-title">快捷记录</view>
+      <view class="spacer"></view>
+      <view class="small muted">今日已登记 {{paceInfo.sentToday}}/{{paceInfo.limit}}</view>
+    </view>
+    <view class="chips">
+      <view
+        wx:for="{{quickActions}}"
+        wx:key="status"
+        class="chip"
+        data-status="{{item.status}}"
+        data-direction="{{item.direction}}"
+        bindtap="tapAction"
+      >{{item.label}}</view>
+    </view>
+  </view>
+
+  <!-- 发送前自检 -->
+  <view wx:if="{{gate}}" class="card gate-card">
+    <view class="card-head">
+      <view class="card-title">发送前自检</view>
+    </view>
+    <view class="cell-sub" style="margin-top:0">每条都过一遍再点确认。这不是仪式，是让你在按发送键之前停三秒。</view>
+    <view wx:for="{{checks}}" wx:key="index" class="check-row" data-index="{{index}}" bindtap="toggleCheck">
+      <view class="checkbox {{item ? 'checkbox-on' : ''}}">{{item ? '✓' : ''}}</view>
+      <view class="check-text">{{greetChecklist[index]}}</view>
+    </view>
+
+    <view wx:if="{{!paceInfo.allowed}}" class="hint hint-error mt-m">
+      节奏提示：{{paceInfo.reasonText}}。如果消息已经发出去了，就如实登记。
+    </view>
+
+    <view class="row mt-m" style="gap:16rpx">
+      <button class="btn btn-ghost" style="flex:1" bindtap="cancelGate">取消</button>
+      <button class="btn btn-primary {{allChecked ? '' : 'btn-disabled'}}" style="flex:2" bindtap="confirmGate" disabled="{{busy || !allChecked}}">
+        {{busy ? '登记中…' : '确认已发出并登记'}}
+      </button>
+    </view>
+  </view>
+
+  <!-- 这次沟通的内容 -->
+  <view class="card">
+    <view class="field">
+      <view class="field-label">这次沟通的内容 / 对方原话（可选）</view>
+      <textarea class="textarea" style="min-height:140rpx" value="{{content}}" bindinput="onContent" placeholder="如：HR 说简历已收到，本周内安排笔试" />
+    </view>
+    <view class="row gap-s">
+      <picker mode="date" value="{{followAt}}" bindchange="onFollowAt" style="flex:1">
+        <view class="picker-value">{{followAt || '下次跟进日期（默认按节奏）'}}</view>
+      </picker>
+    </view>
+    <view class="field mt-s">
+      <input class="input" value="{{notes}}" bindinput="onNotes" placeholder="备注" />
+    </view>
+  </view>
+
+  <!-- 时间线 -->
+  <view class="card">
+    <view class="card-head">
+      <view class="card-title">时间线</view>
+      <view class="spacer"></view>
+      <view class="small muted">{{timeline.length}} 条</view>
+    </view>
+
+    <view wx:if="{{!timeline.length}}" class="empty">还没有沟通记录。发出第一条招呼后点上面的「已发打招呼」。</view>
+
+    <view wx:for="{{timeline}}" wx:key="id" class="item {{index === timeline.length - 1 ? 'item-last' : ''}}">
+      <view class="row">
+        <view class="{{item.cls}}">{{item.label}}</view>
+        <view class="spacer"></view>
+        <view class="small muted">{{item.when}}</view>
+      </view>
+      <view class="cell-sub">{{item.who}}{{item.channel ? ' · ' + item.channel : ''}}</view>
+      <view wx:if="{{item.content}}" class="cell-main" style="margin-top:10rpx; font-weight:400">{{item.content}}</view>
+      <view wx:if="{{item.notes}}" class="cell-sub">备注：{{item.notes}}</view>
+      <view wx:if="{{item.followAt}}" class="cell-sub">计划跟进：{{item.followAt}}</view>
+    </view>
+  </view>
+
+  <view class="hint">
+    这里只做「你自己登记」的沟通台账：小程序不登录招聘平台、不自动发消息、不抓取你的平台会话。记录下来的价值在于——超过跟进窗口仍未回复的岗位，总览页会自动挑出来提醒你换渠道。
+  </view>
+
+  <view class="safe-bottom"></view>
+</view>

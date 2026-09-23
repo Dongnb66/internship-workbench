@@ -1,0 +1,19 @@
+{
+  "miniprogramRoot": "./",
+  "compileType": "miniprogram",
+  "appid": "touristappid",
+  "projectname": "internship-workbench-mp",
+  "description": "实习管理工作台小程序端",
+  "setting": {
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "minified": true,
+    "urlCheck": false,
+    "coverView": true,
+    "nodeModules": false,
+    "packNpmManually": false,
+    "ignoreDevUnusedFiles": false
+  },
+  "condition": {}
+}

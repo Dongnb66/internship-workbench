@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>Python 实习 - 招聘搜索（本地模拟页）</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 0; background: #f5f6f8; }
+      .top { padding: 14px; background: #fff; border-bottom: 1px solid #e8eaef; }
+      .list { padding: 12px; display: grid; gap: 10px; }
+      .job-card { background: #fff; border: 1px solid #e8eaef; border-radius: 10px; padding: 12px; }
+      .job-card .name { font-weight: 600; font-size: 15px; margin-bottom: 6px; }
+      .job-card .name a { color: #1d2129; text-decoration: none; }
+      .job-card .salary { color: #f2542d; font-weight: 600; margin-bottom: 6px; }
+      .job-card .meta { color: #6b7280; font-size: 12px; margin-bottom: 8px; }
+      .job-card .corp { color: #3b82f6; font-size: 12px; }
+      .job-card .tags { margin-top: 6px; color: #9aa3af; font-size: 12px; }
+      .job-card .go { display: inline-block; margin-top: 8px; font-size: 12px; color: #f2542d; }
+      .pager { padding: 12px; text-align: center; color: #9aa3af; }
+      pre { white-space: pre-wrap; word-break: break-all; font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <div class="top"><b>Python 实习</b> · 共 6 个岗位</div>
+    <div class="list" id="list"></div>
+    <div class="pager">上一页 1 2 3 下一页</div>
+
+    <script>
+      // 结构刻意模仿「列表页：重复卡片 + 卡片内链接 + 标题/薪资/城市/公司/标签」的常见排布，
+      // 用来验证 collector.js 的重复结构检测，而不是验证某个具体站点的类名。
+      const JOBS = [
+        ['AI Agent 应用开发实习生', '200-300元/天', '广州·天河区', '3天/周', '本科', '示例·星野智能科技', ['Python', 'FastAPI', 'LangGraph']],
+        ['Python 后端开发实习生', '180-250元/天', '深圳·南山区', '5天/周', '本科', '示例·云图数据有限公司', ['Python', 'MySQL', 'Docker']],
+        ['数据工程实习生', '150-200元/天', '远程', '4天/周', '本科', '示例·拓维教育科技', ['Python', 'SQL', 'pandas']],
+        ['算法实习生（LLM 方向）', '250-400元/天', '北京·海淀区', '5天/周', '硕士', '示例·智源研究院', ['PyTorch', 'LLM', 'RAG']],
+        ['前端开发实习生', '150-220元/天', '广州·海珠区', '4天/周', '本科', '示例·矩石网络科技', ['React', 'TypeScript']],
+        ['测试开发实习生', '面议', '杭州·余杭区', '3天/周', '本科', '示例·明渡信息技术', ['Python', 'pytest']],
+      ]
+      const list = document.getElementById('list')
+      JOBS.forEach((j, i) => {
+        const [title, salary, city, days, edu, corp, tags] = j
+        const card = document.createElement('div')
+        card.className = 'job-card'
+        card.innerHTML = `
+          <div class="name"><a href="https://example.com/job_detail/${1000 + i}.html">${title}</a></div>
+          <div class="salary">${salary}</div>
+          <div class="meta">${city} · ${days} · ${edu}</div>
+          <div class="corp">${corp}</div>
+          <div class="tags">${tags.join(' · ')}</div>
+          <div class="go">立即沟通</div>`
+        list.appendChild(card)
+      })
+    </script>
+
+    <script src="../collector.js"></script>
+    <script>
+      // 把采集结果写进 DOM，便于用 --dump-dom 读取。
+      // 加 ?format=text 只看文本形态（默认看 JSON）。
+      const out = document.createElement('pre')
+      out.id = 'iwb-out'
+      try {
+        const r = window.__iwbCollectJobs()
+        const asText = location.search.includes('format=text')
+        out.textContent = asText
+          ? r.text
+          : 'COUNT=' + r.count + '\n' + JSON.stringify(r.jobs, null, 1)
+      } catch (e) {
+        out.textContent = 'ERROR ' + e.message
+      }
+      document.body.appendChild(out)
+    </script>
+  </body>
+</html>

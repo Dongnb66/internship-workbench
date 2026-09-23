@@ -1,0 +1,9 @@
+{
+  "name": "internship-workbench-miniprogram",
+  "version": "1.0.0",
+  "private": true,
+  "description": "实习管理工作台 · 微信小程序端（共用 WorkBuddy 云服务后端）",
+  "dependencies": {
+    "@tencent-ai/workbuddy-cloud-sdk": "dev"
+  }
+}
