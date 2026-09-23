@@ -1,74 +1,54 @@
 # 岗位广场建表 · 待执行清单
 
-> ## 结论：**差最后一步 —— 需要你在弹窗里点「确认」**
+> ## 最新状态（2026-09-23 20:22）：**云服务已开通，只差执行工具**
 >
-> 已重新核实（2026-09-23 20:10，WorkBuddy 5.6.2），上一次的判断**有一处是错的，已更正**：
+> ### ✅ 第 1 层已完成：云服务已开通
 >
-> ### ✅ 更正：云服务工具是**存在的**，上次搜错了字符串
->
-> 上次我搜 `app.asar` 用的是 `workbuddy_cloudservice`（无下划线）→ 命中 0 次，因此断定
-> 「工具缺件」。**这是误判。** 正确标识是 `workbuddy_cloud_service`（有下划线），实际命中 **23 次**。
->
-> 调用 `workbuddy_cloud_service` 的 `inspect` 成功返回，证据如下：
+> 2026-09-23 20:21，`workbuddy_cloud_service` 的 `activate` 成功：
 > ```
-> {"activated": false, "count": 2,
->  "applications": [
->    {"appName": "实习工作台",     "applicationId": "wbapp_cj7U3jJ6RwPG2f4tfo273L"},
->    {"appName": "实习工作台小程序", "applicationId": "wbapp_5gjbFMxN0NBYiysW0uwtgh"}]}
+> {"activated": true, "appName": "实习工作台",
+>  "applicationId": "wbapp_cj7U3jJ6RwPG2f4tfo273L",
+>  "billingStatus": "normal", "provisionStatus": "assigned",
+>  "publicConfig": {"endpoint": "https://internship-workbench-47024.app.workbuddy.host",
+>                   "publishableKey": "wbpk_cj7U3jJ6RwPG2f4tfo273L_..."}}
 > ```
-> 也就是说：**应用早就注册好了**（`实习工作台`，绑定在这个项目目录上），只是
-> `activated: false` —— 环境还没绑定/开通。
+> 这两个值与 `src/cloud.ts` 里**早已写好**的配置一致 —— 前端侧不需要再改任何东西。
 >
-> ### ⛔ 仍然卡住的那一环：`activate` 的确认弹窗被关闭了
+> ### ⛔ 唯一还缺的：执行 SQL 的工具没挂载
 >
-> 我在 20:10 调了 `activate`（`applicationMode: "reuse"`，指向 `wbapp_cj7U3jJ6RwPG2f4tfo273L`），
-> 返回：
-> ```
-> {"activated": false, "cancelled": true, "useLocalImplementation": true,
->  "message": "Cloud service confirmation was dismissed; continue with a local implementation."}
-> ```
-> **这不是报错，是一个选择** —— 开通云服务会真实占用配额，所以必须由你在 WorkBuddy 弹出的
-> 确认框里点同意，我不能替你点，也不能绕过去。**这一步只能你来做。**
->
-> ### ⛔ 另一环：数据库管理工具在这台机器上没挂载
->
-> 云服务的生命周期工具（inspect / activate）在，但**执行 SQL 的工具不在**。实测：
 > ```
 > workbuddy_cloudservice_db_exec_sql → "Tool is not available in the current environment or configuration."
 > ```
-> 即使开通成功，也要等 `workbuddy_cloudservice_db_*` 这几个工具挂上，我才能建表。
+> 云服务生命周期工具（inspect / activate）可用，但**数据库管理工具（`db_exec_sql` /
+> `db_list_tables` / `db_describe_table` / `db_list_rls`）在本构建里没有挂载**。
 >
-> ### 界面上的数据库面板也确认没有 SQL 执行区
+> 官方文档（`cloud-service/references/database/management.md`）写得很明确：schema 操作
+> **只能走这些 MCP 工具** —— *"All of this runs through the built-in MCP tools — never through a
+> front-end SDK, never through a shell script, never by hitting a provider console directly."*
 >
-> 它是**只读查看器**（2026-09-23 19:10 核实，官方文案原文未变）：
-> - `database.permissions.readOnly`：「RLS policies are read-only in this release.」
-> - `database.functions.readOnly`：「Execution and editing are not available in this release.」
-> - `database.row.unavailable`：「The row-create API is not available yet」
-> - `workspace.capabilityUnavailable.description`：「该模块的管理接口尚未就绪。」
+> 所以这不是我偷懒或走错路：**没有替代通道**，工具一出我就能建表。
 >
-> 面板入口在（**设置 → 数据管理 → 已发布的应用 → 点那朵云图标**），但只能选表看数据、
-> 加筛选、导出 CSV。
+> ### 上次的更正（保留备查）
+>
+> 上一轮我判定「云服务工具不存在」是**错的** —— 我 `grep` 时用了 `workbuddy_cloudservice`
+> （无下划线）→ 0 次，正确标识是 `workbuddy_cloud_**service**`（有下划线）→ 23 次。
+> **教训：一个标识符搜不到不等于不存在，要试命名变体，更要直接调用（报错信息比 grep 可信）。**
 >
 > ---
 >
-> ## 所以「表为什么还不建」的准确答案
->
-> 三层，缺一不可，目前卡在第 1 层：
+> ## 「表为什么还不建」的准确答案
 >
 > | # | 条件 | 状态 |
 > | --- | --- | --- |
-> | 1 | 开通云服务（需要你在弹窗点确认） | ❌ **未开通**（`activated: false`，弹窗被关闭） |
-> | 2 | 数据库管理工具挂载（`workbuddy_cloudservice_db_exec_sql`） | ❌ 未挂载（本构建缺件） |
-> | 3 | 建表语句（19 条） | ✅ 已就绪，就在本文件下面 |
+> | 1 | 开通云服务 | ✅ **已完成**（2026-09-23 20:21） |
+> | 2 | 数据库管理工具挂载 | ❌ **本构建缺件**（唯一阻塞项） |
+> | 3 | 19 条建表语句 | ✅ 已就绪，就在本文件下面 |
 >
-> **第 3 层完全就绪，第 1、2 层都不在我能操作的范围内。** 上次说「没有任何地方可以执行」
-> 不够准确 —— 准确说法是：**开通要你点确认，执行工具还没挂上，两件事都得等。**
->
-> 代码侧已 100% 就绪，表一建好广场立刻有 10 条岗位。
+> **只剩第 2 层，且它不在我能操作的范围内。** 工具一挂上，我立刻执行下面 19 条。
 
 ---
 
-## 语句清单（备查 · 等上面两环就绪后由助手执行）
+## 语句清单（备查 · 等工具挂载后由助手执行）
 
 **执行规则：一次一条，`mode: "migrate"`。** 工具不接受多语句。
 
@@ -212,11 +192,12 @@ SELECT company, title, city, job_type, posted_at FROM jobs_public ORDER BY poste
 
 ---
 
-## 如果有一天能执行了
+## 什么信号出现时，说明可以建表了
 
-判断标准很简单，**两个条件都满足**：
-1. 云服务已开通（`workbuddy_cloud_service` 的 `inspect` 返回 `activated: true`）；
-2. 助手能调通 `workbuddy_cloudservice_db_exec_sql`。
+条件 1（云服务已开通）**已在 2026-09-23 20:21 满足**。现在只剩条件 2：
 
-两者齐了就告诉我，我会一次性把表建好并灌数据（19 条语句）。只满足第 1 条不够 ——
-执行工具没挂上一样建不了。
+> 助手能调通 `workbuddy_cloudservice_db_exec_sql`（不再返回
+> `"not available in the current environment or configuration"`）。
+
+这个信号一出现，告诉我一声，我会一次性执行下面 19 条语句并灌入 10 条种子岗位。
+**不需要你手工做任何事** —— 我不会让你去啃 SQL 或找什么执行窗口。

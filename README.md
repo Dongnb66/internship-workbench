@@ -10,6 +10,8 @@
 
 一个面向在校生的实习 / 校招求职工作台：**岗位池 → 投递看板 → 沟通台账 → 面试跟进 → Offer 对比**，全流程一条线管到底。
 
+**线上地址：<https://internship-workbench-47024.app.workbuddy.host/>**
+
 Web 端（React + TypeScript + Vite）+ 微信小程序端（原生，共用同一套云后端）+ 云服务后端（数据库 / 认证 / 大模型），外加一个 Chrome 扩展做岗位采集与网申表单自动填充。
 完整架构图见 [`docs/architecture.html`](docs/architecture.html)。
 

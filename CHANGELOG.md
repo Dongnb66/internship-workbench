@@ -2,6 +2,33 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 与 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.7.2] - 2026-09-23
+
+这一版做三件事：**开通云服务并发布线上、初始化 git 仓库、更正上一轮关于云服务工具的错误结论。**
+
+线上地址：<https://internship-workbench-47024.app.workbuddy.host/>
+
+### Added
+- **云服务已开通**（`applicationId: wbapp_cj7U3jJ6RwPG2f4tfo273L`，`billingStatus: normal`，`provisionStatus: assigned`）。返回的 `publicConfig` 与 `src/cloud.ts` 里早已写好的 `endpoint` / `publishableKey` **完全一致**，所以前端侧未改任何代码。
+- **首次 git 提交**：132 个文件 / 20902 行。此前项目目录从未 `git init`，0.7.x 的所有改动都没有版本记录。
+
+### Fixed
+- **`.gitignore` 的行尾注释导致忽略规则整体失效**（这个 bug 很危险）。原文是：
+  ```
+  crawler/.profile*       # 浏览器档案，含你自己账号的登录态，绝不能入库
+  crawler/output          # 抓取产出与去重历史（含岗位数据）
+  ```
+  git 不支持行尾注释 —— 整行会被当成**一个字面路径 pattern**，于是这两条规则**等于不存在**。实测 `git check-ignore` 认不出它们，`git add .` 会把 **crawler/.profile（324MB，含登录 cookie）** 一起提交。已把注释独立成行，并在文件里留下说明防止再犯。修复后待入库文件从 1037 降到 132。
+
+### 更正
+- **上一版说「云服务工具在当前构建缺件」是错的。** 当时的依据是 `grep app.asar` 搜 `workbuddy_cloudservice`（无下划线）→ 0 次。正确标识是 `workbuddy_cloud_**service**`（**有下划线**），实际命中 23 次；调用 `inspect` / `activate` 均正常返回。
+  - **唯一真的缺的是执行 SQL 的工具**：`workbuddy_cloudservice_db_exec_sql` 实测返回 `"Tool is not available in the current environment or configuration."`，且官方文档明确 schema 操作**只能走这些 MCP 工具**（*never through a front-end SDK, never through a shell script*），没有替代通道。
+  - 教训写进了 skill：**一个标识符搜不到不等于不存在；报错信息比 grep 命中数可信，下结论前要试命名变体。**
+
+### 说明
+- 线上发布的是**工作台 Web 版**（根目录的 Vite + React 项目）。项目里同时存在 `miniprogram/` 微信小程序，发布工具会因它优先判定为小程序项目而不产出分享链接；本次通过临时移出该目录让 Web 项目被正确识别，发布后已还原（`git status` 干净）。
+- `jobs_public` 建表仍差最后一步（执行工具未挂载），语句就绪在 `db/PASTE-HERE.md`。
+
 ## [0.7.1] - 2026-09-23
 
 这一版只做一件事：**把公司名录这半补厚，并修掉接入新站点时暴露的三个真 bug。**
