@@ -437,8 +437,8 @@ async function writeOutput(results, opts) {
     const base = opts.out
       ? opts.out.endsWith('.json')
         ? opts.out.slice(0, -5)
-        : path.join(opts.out, `${safeFileName(result.siteId)}-${stampText}`)
-      : path.join(OUT_DIR, `${safeFileName(result.siteId)}-${stampText}`)
+        : path.join(opts.out, `${safeFileName(result.kw ? `${result.siteId}__${result.kw}` : result.siteId)}-${stampText}`)
+      : path.join(OUT_DIR, `${safeFileName(result.kw ? `${result.siteId}__${result.kw}` : result.siteId)}-${stampText}`)
     await mkdir(path.dirname(base), { recursive: true })
     await writeFile(`${base}.json`, JSON.stringify(payload, null, 2), 'utf8')
     await writeFile(`${base}.txt`, payload.text, 'utf8')
@@ -536,6 +536,9 @@ async function main() {
           ...result,
           siteId: target.site.id,
           channel: target.site.channel,
+          // kw 进文件名：同一站点多关键词时输出文件名若只含 siteId+时间戳（精确到分钟），
+          // 后一个关键词会把前一个的产出覆盖掉（0.7.6 实际踩中：腾讯后端 10 条被前端 10 条盖没）
+          kw: target.kw,
           pageUrl: urlForPage(target, opts, 1),
           pageTitle: target.site.name,
         })
