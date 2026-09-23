@@ -2,14 +2,65 @@ import { cloud } from '../cloud'
 import { DIMS, GREETING_RULES } from './constants'
 import type { Profile } from '../types'
 
-let cachedModel: string | null = null
+/**
+ * 用户自选模型的 localStorage 键。
+ *
+ * 为什么放 localStorage 而不是 profile 表：这是**设备级偏好**（同一账号在不同
+ * 设备上可能想用不同模型），而且模型目录是平台级的、跟账号数据无关。
+ */
+const MODEL_CHOICE_KEY = 'wb_model_choice'
 
+let cachedModel: string | null = null
+let cachedModels: Array<{ id: string; name: string; provider?: string }> | null = null
+
+export interface UsableModel {
+  id: string
+  name: string
+  provider?: string
+}
+
+/** 可选模型目录（供设置页下拉框用）。列表进程内缓存，选模型后手动刷新即可。 */
+export async function listUsableModels(): Promise<UsableModel[]> {
+  if (cachedModels) return cachedModels
+  const models = await cloud.llm.models.list()
+  cachedModels = (models ?? [])
+    .filter((m: any) => m?.disabled !== true && m?.enabled !== false)
+    .map((m: any) => ({ id: String(m.id), name: String(m.name || m.id), provider: m.provider ? String(m.provider) : undefined }))
+  return cachedModels
+}
+
+export function getModelChoice(): string | null {
+  try {
+    return localStorage.getItem(MODEL_CHOICE_KEY)
+  } catch {
+    return null
+  }
+}
+
+/** 保存/清除用户的模型选择；清除后回退到目录默认（usable[0]） */
+export function setModelChoice(id: string | null): void {
+  try {
+    if (id) localStorage.setItem(MODEL_CHOICE_KEY, id)
+    else localStorage.removeItem(MODEL_CHOICE_KEY)
+  } catch {
+    // localStorage 不可用（隐私模式等）：本次会话内仍可通过 pickModel 兜底
+  }
+  cachedModel = null
+}
+
+/**
+ * 决定本次调用用哪个模型：
+ * 1. 用户在设置页选过的模型，且它仍在可用目录里 → 用它；
+ * 2. 否则回退到目录第一个可用模型（旧行为，保证永远有模型可调）。
+ * 所选模型被平台下架/禁用时不报错，静默回退——评估失败比换模型更糟。
+ */
 export async function pickModel(): Promise<string | null> {
   if (cachedModel) return cachedModel
-  const models = await cloud.llm.models.list()
-  const usable = (models ?? []).filter((m: any) => m?.disabled !== true && m?.enabled !== false)
-  if (!usable.length) return null
-  cachedModel = usable[0].id as string
+  const models = await listUsableModels()
+  if (!models.length) return null
+  const choice = getModelChoice()
+  const chosen = choice ? models.find((m) => m.id === choice) : null
+  cachedModel = (chosen ?? models[0]).id
   return cachedModel
 }
 
@@ -143,4 +194,82 @@ export async function generateApplyAnswers(company: string, title: string, jd: s
 ${GREETING_RULES}`,
     user: `【候选人画像】\n${profileBrief(profile)}\n\n【公司岗位】${company || '（未填）'} · ${title || '（未填）'}\n\n【JD】\n${jd.slice(0, 6000) || '（未提供 JD）'}`,
   })
+}
+
+// ---------------------------------------------------------------- 简历分析
+
+export interface ResumeAnalysis {
+  summary: string
+  education: string[]
+  skills: string[]
+  projects: string[]
+  defense: string[]
+  risks: string[]
+  suggestions: string[]
+}
+
+const RESUME_ANALYSIS_SYSTEM = `你是中国互联网公司的资深技术面试官，正在审阅一份大学生实习/校招简历的纯文本。输出必须诚实、具体、可执行，不夸奖套话，不虚构简历里没有的内容。
+只输出一个 JSON 对象，不要输出任何解释文字或 Markdown 代码块，结构如下：
+{
+  "summary": "综合印象，2-3 句：这份简历过初筛的概率与最强的一张牌",
+  "education": ["学历与教育背景逐条点评：学校/专业/届数/排名呈现得怎么样，1-3 条"],
+  "skills": ["工程与横向技能逐条点评：技术栈深度、测试/工程化意识、协作工具、表达方式，2-5 条"],
+  "projects": ["项目逐个拆解：这个项目证明了什么能力、数字是否经得起追问、写法哪里可以更硬，1-5 条"],
+  "defense": ["面试防守关键词：面试官看到这份简历最可能追问什么，每条给出「关键词 + 他会怎么问 + 你要准备的证据」"],
+  "risks": ["可能被质疑或扣分的点：表述含糊、口径对不上、常识性错误等，没有就空数组"],
+  "suggestions": ["具体优化建议：改哪句话、补哪个数字、删哪段，按优先级排，2-5 条"]
+}
+规则：
+- 所有条目必须引用简历原文里的具体事实（项目名、数字、技术词），不要泛泛而谈。
+- 语气中性直接，像给朋友改简历，不做人身评价。
+- 简历信息太少时如实说「信息量不足，无法判断 X」，不要硬编。`
+
+function asStringArray(value: unknown, max = 8): string[] {
+  if (!Array.isArray(value)) return []
+  return value
+    .map((v) => String(v ?? '').trim())
+    .filter(Boolean)
+    .slice(0, max)
+}
+
+/** 解析模型输出的简历分析 JSON；字段缺失一律回退为空数组/空串，不让脏输出炸页面 */
+export function parseResumeAnalysis(raw: string): ResumeAnalysis {
+  let parsed: any = {}
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    // 模型偶尔会包一层 ```json 代码块或前后缀话，截取第一个 { 到最后一个 } 再试一次
+    const start = raw.indexOf('{')
+    const end = raw.lastIndexOf('}')
+    if (start !== -1 && end > start) {
+      try {
+        parsed = JSON.parse(raw.slice(start, end + 1))
+      } catch {
+        parsed = {}
+      }
+    }
+  }
+  return {
+    summary: String(parsed?.summary ?? '').trim(),
+    education: asStringArray(parsed?.education),
+    skills: asStringArray(parsed?.skills),
+    projects: asStringArray(parsed?.projects),
+    defense: asStringArray(parsed?.defense, 10),
+    risks: asStringArray(parsed?.risks),
+    suggestions: asStringArray(parsed?.suggestions),
+  }
+}
+
+/**
+ * AI 简历分析：输入简历纯文本（附件提取或手动粘贴），产出结构化诊断。
+ * 目标岗位可选——给了就把分析往那个方向收紧（如「后端实习」会重点关注服务端深度）。
+ */
+export async function analyzeResume(text: string, targetRole?: string | null, onDelta?: (t: string) => void): Promise<ResumeAnalysis> {
+  const raw = await streamChat({
+    system: RESUME_ANALYSIS_SYSTEM,
+    user: `【目标岗位】${targetRole?.trim() || '（未指定，按通用软件研发实习评估）'}\n\n【简历全文】\n${text.slice(0, 12000)}`,
+    json: true,
+    onDelta,
+  })
+  return parseResumeAnalysis(raw)
 }

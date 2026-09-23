@@ -1,12 +1,22 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { errText } from '../cloud'
 import { Empty, Field, Modal, Stat } from '../components/ui'
+import { analyzeResume, parseResumeAnalysis, type ResumeAnalysis } from '../lib/ai'
 import { deleteRow, insertRow, listRows, updateRow } from '../lib/api'
 import { RESUME_DIRECTIONS } from '../lib/constants'
 import { fmtDate } from '../lib/format'
+import { extractResumeText, resumeKindOf } from '../lib/resumeFile'
+import { removeResumeFile, signResumeUrl, uploadResumeFile } from '../lib/storage'
 import { notifyErr, notifyOk } from '../lib/toast'
 import type { Row } from '../types'
 import type { PageProps } from './Overview'
+
+/** 渲染层用于判断已存 analysis 的形状是否可展示（老数据/脏数据不炸页面） */
+function toAnalysis(value: unknown): ResumeAnalysis | null {
+  if (!value || typeof value !== 'object') return null
+  const a = parseResumeAnalysis(JSON.stringify(value))
+  return a.summary || a.skills.length || a.projects.length || a.defense.length ? a : null
+}
 
 export default function Resumes({ onChanged, go }: PageProps) {
   const [rows, setRows] = useState<Row[]>([])
@@ -15,6 +25,12 @@ export default function Resumes({ onChanged, go }: PageProps) {
   const [editing, setEditing] = useState<Row | 'new' | null>(null)
   const [form, setForm] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [analyzingRow, setAnalyzingRow] = useState<Row | null>(null)
+  const [analyzing, setAnalyzing] = useState(false)
+  const [analysisRaw, setAnalysisRaw] = useState('')
+  const [analysis, setAnalysis] = useState<ResumeAnalysis | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -34,7 +50,7 @@ export default function Resumes({ onChanged, go }: PageProps) {
   }, [load])
 
   function openNew() {
-    setForm({ name: '', version: 'v1', direction: 'AI Agent 方向', target_role: '', file_url: '', highlights: '', projects: '', notes: '', is_default: 'false' })
+    setForm({ name: '', version: 'v1', direction: 'AI Agent 方向', target_role: '', file_url: '', file_path: '', file_name: '', content_text: '', highlights: '', projects: '', notes: '', is_default: 'false' })
     setEditing('new')
   }
 
@@ -45,6 +61,9 @@ export default function Resumes({ onChanged, go }: PageProps) {
       direction: row.direction ?? '',
       target_role: row.target_role ?? '',
       file_url: row.file_url ?? '',
+      file_path: row.file_path ?? '',
+      file_name: row.file_name ?? '',
+      content_text: row.content_text ?? '',
       highlights: row.highlights ?? '',
       projects: row.projects ?? '',
       notes: row.notes ?? '',
@@ -66,6 +85,9 @@ export default function Resumes({ onChanged, go }: PageProps) {
         direction: form.direction || null,
         target_role: form.target_role || null,
         file_url: form.file_url || null,
+        file_path: form.file_path || null,
+        file_name: form.file_name || null,
+        content_text: form.content_text || null,
         highlights: form.highlights || null,
         projects: form.projects || null,
         notes: form.notes || null,
@@ -112,12 +134,74 @@ export default function Resumes({ onChanged, go }: PageProps) {
   async function remove(row: Row) {
     if (!window.confirm(`删除简历版本「${row.name} ${row.version ?? ''}」？已有投递记录里的简历名不会受影响。`)) return
     try {
+      // 附件清理是尽力而为：行删除才是主操作，存储侧失败不影响本次删除
+      if (row.file_path) void removeResumeFile(String(row.file_path))
       await deleteRow('resumes', row.id)
       notifyOk('已删除')
       setEditing(null)
       await load()
     } catch (error) {
       notifyErr(errText(error))
+    }
+  }
+
+  /** 上传附件：先本地提取文本（失败则什么都不传），再传存储，最后回填表单 */
+  async function onPickFile(file: File) {
+    setUploading(true)
+    try {
+      const text = await extractResumeText(file)
+      const up = await uploadResumeFile(file)
+      setForm((f) => ({ ...f, file_path: up.path, file_url: up.url, file_name: up.fileName, content_text: text }))
+      notifyOk(`附件已上传，提取到 ${text.length} 字简历文本（可在下方核对）`)
+    } catch (error) {
+      notifyErr(errText(error))
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  /** 打开附件：优先用已存的签名链接；过期/缺失时按永久路径重新签一个 */
+  async function openAttachment(row: Row) {
+    try {
+      let url = row.file_url ?? ''
+      if (!url && row.file_path) url = await signResumeUrl(String(row.file_path))
+      if (!url) {
+        notifyErr('没有可用的文件链接：请重新上传附件')
+        return
+      }
+      window.open(url, '_blank', 'noreferrer')
+    } catch (error) {
+      notifyErr(errText(error))
+    }
+  }
+
+  function openAnalyze(row: Row) {
+    setAnalyzingRow(row)
+    setAnalysis(toAnalysis(row.analysis))
+    setAnalysisRaw('')
+  }
+
+  async function runAnalysis() {
+    const row = analyzingRow
+    if (!row) return
+    const text = String(row.content_text ?? '').trim()
+    if (!text) {
+      notifyErr('这份简历还没有文本内容：先在编辑里上传附件或粘贴简历全文，再分析')
+      return
+    }
+    setAnalyzing(true)
+    setAnalysisRaw('')
+    try {
+      const result = await analyzeResume(text, row.target_role, (t) => setAnalysisRaw((p) => p + t))
+      setAnalysis(result)
+      await updateRow('resumes', row.id, { analysis: result })
+      notifyOk('分析完成，结果已保存到这份简历')
+      await load()
+    } catch (error) {
+      notifyErr(errText(error))
+    } finally {
+      setAnalyzing(false)
     }
   }
 
@@ -140,7 +224,7 @@ export default function Resumes({ onChanged, go }: PageProps) {
         <div className="card-head">
           <h3>简历库</h3>
           <span className="spacer" />
-          <span className="small muted">文件本身放网盘 / 本地，这里登记版本用途与使用情况</span>
+          <span className="small muted">支持上传 PDF / docx 附件，AI 可基于简历原文做分析</span>
           <button className="btn primary" onClick={openNew}>
             + 新增版本
           </button>
@@ -170,7 +254,11 @@ export default function Resumes({ onChanged, go }: PageProps) {
                       <div className="cell-main">
                         {row.name} <span className="badge">{row.version ?? 'v1'}</span>
                       </div>
-                      <div className="cell-sub">更新于 {fmtDate(row.created_at)}</div>
+                      <div className="cell-sub">
+                        更新于 {fmtDate(row.created_at)}
+                        {row.file_name ? ` · 📎 ${row.file_name}` : ''}
+                        {row.content_text ? '' : ' · 无文本（AI 分析不可用）'}
+                      </div>
                     </td>
                     <td className="small">{row.direction ?? '—'}</td>
                     <td className="small">{row.target_role ?? '—'}</td>
@@ -184,11 +272,18 @@ export default function Resumes({ onChanged, go }: PageProps) {
                         <button className="linkish" onClick={() => openEdit(row)}>
                           编辑
                         </button>
-                        {row.file_url ? (
+                        {row.file_path ? (
+                          <button className="linkish" onClick={() => void openAttachment(row)}>
+                            打开附件
+                          </button>
+                        ) : row.file_url ? (
                           <a className="linkish" href={row.file_url} target="_blank" rel="noreferrer">
                             打开文件
                           </a>
                         ) : null}
+                        <button className="linkish" onClick={() => openAnalyze(row)}>
+                          {toAnalysis(row.analysis) ? '查看分析' : 'AI 分析'}
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -252,10 +347,42 @@ export default function Resumes({ onChanged, go }: PageProps) {
                 <option value="true">是</option>
               </select>
             </Field>
-            <Field label="文件链接">
+            <Field label="文件链接" hint="外部网盘/在线简历链接；上传附件后会自动生成本应用的短链">
               <input className="input" value={form.file_url ?? ''} onChange={(e) => setForm({ ...form, file_url: e.target.value })} placeholder="https:// 网盘 / 在线简历" />
             </Field>
           </div>
+          <Field label="附件（PDF / docx / txt / md，≤10MB）" hint="上传后自动提取纯文本供 AI 分析；重复上传会覆盖之前的附件">
+            <div className="row">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.docx,.txt,.md,.markdown"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const f = e.target.files?.[0]
+                  if (f) void onPickFile(f)
+                }}
+              />
+              <button className="btn" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+                {uploading ? '上传并提取中…' : form.file_path ? '重新上传附件' : '上传附件'}
+              </button>
+              {form.file_name ? <span className="small">📎 {form.file_name}</span> : <span className="small muted">尚未上传</span>}
+            </div>
+          </Field>
+          <Field label="简历全文（AI 分析的原料）" hint="上传附件会自动填充；也可以直接把简历文字粘贴到这里">
+            <textarea
+              className="textarea"
+              style={{ minHeight: 140 }}
+              value={form.content_text ?? ''}
+              onChange={(e) => setForm({ ...form, content_text: e.target.value })}
+              placeholder="粘贴简历全文，或上传 PDF/docx 自动提取"
+            />
+          </Field>
+          {form.content_text ? (
+            <div className="small muted" style={{ marginTop: -8, marginBottom: 8 }}>
+              当前文本 {form.content_text.length} 字{resumeKindOf(form.file_name ?? '') === 'pdf' ? ' · 来源：PDF 提取' : ''}
+            </div>
+          ) : null}
           <Field label="亮点摘要" hint="这一版主打的 3 条能力，投递时对照 JD 快速确认">
             <textarea className="textarea" value={form.highlights ?? ''} onChange={(e) => setForm({ ...form, highlights: e.target.value })} />
           </Field>
@@ -265,6 +392,71 @@ export default function Resumes({ onChanged, go }: PageProps) {
           <Field label="备注">
             <textarea className="textarea" value={form.notes ?? ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
           </Field>
+        </Modal>
+      ) : null}
+
+      {analyzingRow ? (
+        <Modal
+          wide
+          title={`AI 简历分析 · ${(analyzingRow as Row).name}`}
+          onClose={() => {
+            if (analyzing) return // 分析中不允许误关弹层丢结果
+            setAnalyzingRow(null)
+          }}
+          footer={
+            <>
+              <span className="small muted">
+                {(analyzingRow as Row).content_text ? `${String((analyzingRow as Row).content_text).length} 字简历文本` : '⚠ 这份简历还没有文本，先去编辑里上传附件或粘贴全文'}
+              </span>
+              <span className="spacer" />
+              <button className="btn" onClick={() => setAnalyzingRow(null)} disabled={analyzing}>
+                关闭
+              </button>
+              <button className="btn primary" onClick={() => void runAnalysis()} disabled={analyzing}>
+                {analyzing ? '分析中…' : analysis ? '重新分析' : '开始分析'}
+              </button>
+            </>
+          }
+        >
+          <div className="hint mb16">
+            以面试官视角拆解这份简历：学历、技能、项目、面试防守关键词与优化建议。分析只基于简历文本本身，结果自动保存到这份简历。
+          </div>
+          {analyzing && !analysisRaw ? <div className="muted">模型思考中…</div> : null}
+          {analyzing && analysisRaw && !analysis ? (
+            <pre className="md" style={{ whiteSpace: 'pre-wrap', fontSize: 12, maxHeight: 320, overflow: 'auto' }}>{analysisRaw}</pre>
+          ) : null}
+          {analysis ? (
+            <div className="grid" style={{ gap: 12 }}>
+              {analysis.summary ? (
+                <div className="card" style={{ padding: '10px 12px' }}>
+                  <strong>综合印象</strong>
+                  <div className="md" style={{ fontSize: 13 }}>{analysis.summary}</div>
+                </div>
+              ) : null}
+              {[
+                ['🎓 学历与教育背景', analysis.education],
+                ['🛠 工程与横向技能', analysis.skills],
+                ['📦 项目拆解', analysis.projects],
+                ['🛡 面试防守关键词', analysis.defense],
+                ['⚠ 可能被质疑的点', analysis.risks],
+                ['✏️ 优化建议（按优先级）', analysis.suggestions],
+              ]
+                .filter(([, items]) => (items as string[]).length > 0)
+                .map(([label, items]) => (
+                  <div key={label as string}>
+                    <div className="mb8" style={{ fontWeight: 600 }}>{label as string}</div>
+                    <ul className="md" style={{ fontSize: 13, paddingLeft: 20, margin: 0 }}>
+                      {(items as string[]).map((item, i) => (
+                        <li key={i} style={{ marginBottom: 4 }}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              {!analysis.summary && !analysis.skills.length && !analysis.projects.length && !analysis.defense.length ? (
+                <div className="muted">分析结果为空：模型没有返回有效内容，请重新分析。</div>
+              ) : null}
+            </div>
+          ) : null}
         </Modal>
       ) : null}
     </div>

@@ -21,7 +21,7 @@
  *   别因为解析器报错就去「修」这几条语句 —— 它们是对的。
  */
 
-import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdirSync, rmSync, readdirSync, existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -86,6 +86,7 @@ function splitStatements(sql) {
 
 const sources = [
   { file: join(here, 'migrations', '001_jobs_public.sql'), phase: 'schema' },
+  { file: join(here, 'migrations', '002_resume_attachment.sql'), phase: 'schema' },
   { file: join(here, 'seed.sql'), phase: 'seed' },
 ]
 
@@ -117,7 +118,14 @@ if (checkOnly) {
   process.exit(0)
 }
 
-rmSync(execDir, { recursive: true, force: true })
+// 只清「本脚本生成的」编号文件 + manifest，**不能整体删目录**——
+// db/exec/singles/ 里是手工拆分并提交过的种子语句（21c2c93），整体 rmSync
+// 会把它们静默带走（0.7.6 实际踩过：跑一次 split-exec，singles/ 六个文件全没）。
+for (const name of readdirSync(execDir)) {
+  if (/^\d{3}_\w+\.sql$/.test(name) || name === 'manifest.json') {
+    rmSync(join(execDir, name), { force: true })
+  }
+}
 mkdirSync(execDir, { recursive: true })
 
 const manifest = []

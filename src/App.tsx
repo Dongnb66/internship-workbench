@@ -6,6 +6,7 @@ import type { Profile } from './types'
 import AiLab from './pages/AiLab'
 import ApplyKit from './pages/ApplyKit'
 import CalendarPage from './pages/CalendarPage'
+import Crawler from './pages/Crawler'
 import Interviews from './pages/Interviews'
 import Jobs from './pages/Jobs'
 import JobsSquare from './pages/JobsSquare'
@@ -24,6 +25,7 @@ const NAV = [
       { key: 'overview', label: '总览', icon: '📊' },
       { key: 'square', label: '岗位广场', icon: '🏛' },
       { key: 'jobs', label: '岗位池', icon: '🎯' },
+      { key: 'crawler', label: '抓取任务', icon: '🕸' },
       { key: 'pipeline', label: '投递看板', icon: '🗂' },
       { key: 'interviews', label: '面试跟进', icon: '🎤' },
       { key: 'offers', label: 'Offer 对比', icon: '🏆' },
@@ -49,6 +51,7 @@ const TITLES: Record<string, string> = {
   overview: '总览',
   square: '岗位广场',
   jobs: '岗位池',
+  crawler: '抓取任务',
   pipeline: '投递看板',
   interviews: '面试跟进',
   offers: 'Offer 对比',
@@ -173,6 +176,7 @@ export default function App() {
           {page === 'overview' ? <Overview {...pageProps} /> : null}
           {page === 'square' ? <JobsSquare {...pageProps} /> : null}
           {page === 'jobs' ? <Jobs {...pageProps} /> : null}
+          {page === 'crawler' ? <Crawler {...pageProps} /> : null}
           {page === 'pipeline' ? <Pipeline {...pageProps} /> : null}
           {page === 'interviews' ? <Interviews {...pageProps} /> : null}
           {page === 'offers' ? <Offers {...pageProps} /> : null}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { cloud, errText } from '../cloud'
 import { Field, Modal } from '../components/ui'
+import { getModelChoice, listUsableModels, pickModel, setModelChoice, type UsableModel } from '../lib/ai'
 import { listRows, saveProfile } from '../lib/api'
 import { PROFILE_TEMPLATE } from '../lib/constants'
 import { healthSummary, profileHealth } from '../lib/healthCheck'
@@ -47,6 +48,28 @@ export default function Settings({ profile, onChanged }: PageProps) {
   const [pw, setPw] = useState({ oldPassword: '', newPassword: '' })
   const [exporting, setExporting] = useState(false)
   const [resumeCount, setResumeCount] = useState(0)
+  const [models, setModels] = useState<UsableModel[]>([])
+  const [modelsErr, setModelsErr] = useState('')
+  const [chosen, setChosen] = useState('')
+  const [effective, setEffective] = useState('')
+  const [savingModel, setSavingModel] = useState(false)
+
+  useEffect(() => {
+    // 模型目录：拉取失败不阻塞主表单（AI 页仍会用默认模型兜底）
+    listUsableModels()
+      .then((list) => {
+        setModels(list)
+        setChosen(getModelChoice() ?? '')
+      })
+      .catch((error) => setModelsErr(errText(error)))
+  }, [])
+
+  useEffect(() => {
+    // 显示「当前生效」的实际落点：可能因所选模型被禁用而回退到默认
+    pickModel()
+      .then((m) => setEffective(m ?? ''))
+      .catch(() => setEffective(''))
+  }, [models, chosen])
 
   useEffect(() => {
     // 体检需要知道简历库有几份；失败不影响主表单（按 0 处理，体检会提示去录简历）
@@ -159,6 +182,20 @@ export default function Settings({ profile, onChanged }: PageProps) {
       min_interval_min: '30',
     })
     notifyOk('已填入模板，请补手机号与邮箱后保存（数字口径需与简历一致）')
+  }
+
+  async function saveModel() {
+    setSavingModel(true)
+    try {
+      setModelChoice(chosen || null)
+      const eff = await pickModel()
+      setEffective(eff ?? '')
+      notifyOk(eff ? `已切换：AI 调用将使用 ${eff}` : '未找到可用模型，AI 功能暂不可用')
+    } catch (error) {
+      notifyErr(errText(error))
+    } finally {
+      setSavingModel(false)
+    }
   }
 
   async function changePassword() {
@@ -307,6 +344,42 @@ export default function Settings({ profile, onChanged }: PageProps) {
                 </div>
               </div>
             ))}
+          </div>
+        </section>
+
+        <section className="card">
+          <div className="card-head">
+            <h3>AI 模型</h3>
+            <span className="spacer" />
+            <span className="badge">{effective ? `当前生效：${effective}` : '未就绪'}</span>
+          </div>
+          <div className="card-body">
+            <div className="hint mb16">
+              JD 评估、打招呼话术、面试题、简历分析都走这里选的模型。不选就用平台默认模型；
+              所选模型被平台禁用时会自动回退到默认，不会报错中断。
+            </div>
+            {modelsErr ? (
+              <div className="small" style={{ color: '#d97706' }}>模型目录加载失败：{modelsErr}（不影响其他功能）</div>
+            ) : models.length === 0 ? (
+              <div className="small muted">模型目录加载中…</div>
+            ) : (
+              <>
+                <Field label="模型" hint={`共 ${models.length} 个可用模型；选择只存在本设备`}>
+                  <select className="select" value={chosen} onChange={(e) => setChosen(e.target.value)}>
+                    <option value="">（使用平台默认）</option>
+                    {models.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                        {m.provider ? ` · ${m.provider}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <button className="btn primary mt8" onClick={saveModel} disabled={savingModel}>
+                  {savingModel ? '保存中…' : '保存模型选择'}
+                </button>
+              </>
+            )}
           </div>
         </section>
 

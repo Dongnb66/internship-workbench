@@ -104,6 +104,14 @@ export interface Resume extends Row {
   direction?: string | null
   target_role?: string | null
   file_url?: string | null
+  /** 附件在应用存储里的永久路径（0.7.6 起上传附件时写入） */
+  file_path?: string | null
+  /** 上传时的原始文件名（展示用） */
+  file_name?: string | null
+  /** 从附件提取的纯文本（AI 分析的原料，也可手动粘贴维护） */
+  content_text?: string | null
+  /** 最近一次 AI 简历分析的结构化结果（src/lib/ai.ts 的 ResumeAnalysis） */
+  analysis?: Record<string, unknown> | null
   highlights?: string | null
   projects?: string | null
   used_count?: number | null

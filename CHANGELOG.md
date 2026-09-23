@@ -2,6 +2,32 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 与 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.7.6] - 2026-09-24
+
+对标 recruitops-agent 的三个能力缺口，各落一个**能落地**的版本：模型配置、简历附件 + AI 分析、抓取任务生成器。全部遵循既有边界——服务端不跑爬虫、不绕任何平台风控。
+
+### Added
+
+- **AI 模型选择**（`Settings.tsx` + `ai.ts`）。设置页新增「AI 模型」卡：从 `cloud.llm.models.list()` 模型目录里挑，选择存 localStorage（设备级偏好，不进 profile 表）；`pickModel()` 优先用所选模型，所选模型被平台禁用时静默回退目录默认——评估失败比换模型更糟。显示「当前生效」的实际落点。
+- **简历附件上传 + AI 简历分析**（`Resumes.tsx` + 新 `resumeFile.ts` / `storage.ts` + `ai.ts`）。
+  - 编辑简历可上传 PDF / docx / txt / md 附件（≤10MB），存入应用存储 `users/<uid>/resumes/`；`file_url` 存 7 天签名链接（过期按 `file_path` 续签），`file_path` 为永久路径，删除简历行时尽力清理附件。
+  - PDF 用 pdfjs-dist（动态 import + worker 按 URL 加载，主包不背 1MB 级依赖）、docx 用 mammoth，提取的全文落在新增的 `content_text` 列，可手动修正；纯图片 PDF 会明确报「没提取到文字」，不出乱码。`.doc` 老格式直接拒绝并提示转存。
+  - 新增 `analyzeResume()`：面试官视角输出结构化 JSON（综合印象 / 学历 / 工程与横向技能 / 项目拆解 / **面试防守关键词** / 风险点 / 按优先级的优化建议），结果存 `resumes.analysis`（jsonb），列表里「查看分析」随时复看；解析对脏输出全兜底（代码块包裹、字段缺失、非数组一律救回）。
+  - DB：`db/migrations/002_resume_attachment.sql`，`resumes` 新增 `file_path` / `file_name` / `content_text` / `analysis` 四列（全部 `IF NOT EXISTS`，幂等）。
+- **抓取任务生成器**（新页面 `Crawler.tsx` + `crawlSites.ts` / `crawlTask.ts`）。对标「对话式启动全量爬取」的诚实版本：工作台是静态站没有常驻进程，真正的抓取仍跑在用户本机（`crawler/run.mjs`），页面负责把「选站点 + 填关键词」翻译成一条可直接粘贴的命令。
+  - 27 个站点全部可选，按实测状态标注（live / 未验证 / offline 置灰）与登录要求（🔒 = 先 `node login.mjs`）；Moka / 飞书 / 北森 / 通用四类无入口地址的站点单独成组、填具体地址走 `--url`。
+  - 站点元信息与 `crawler/sites.mjs` 之间是**全量同步契约测试**（id / name / needsLogin / kwSearch / urlOnly / verified 六个字段直接 import 抓取器源值比对）——写测试时就咬出「华为的 listUrl 没有 `{kw}` 模板，我登记成了关键词搜索型」的登记错误。
+  - 命令生成与抓取器行为严格对齐：默认参数不产生噪音（`--pages 2` / `--limit 60` / `--mode all` 不出现在命令里），关键词只对 🔍 站点（腾讯/字节/实习僧/BOSS）生效并在 UI 说明，产出 JSON 回「岗位池 → 批量导入」入库。
+
+### Fixed
+
+- **`db/split-exec.mjs` 整体清空 `db/exec/`（实际踩中）**。脚本用 `rmSync` 删掉整个 exec 目录再重建，把之前手工拆分并提交过的 `db/exec/singles/` 六个种子语句文件静默带走（跑一次 split-exec 才发现 git 显示 6 个 D）。修法：只清理本脚本生成的编号文件与 manifest，不再动目录里的其他内容；singles 从 git 恢复。
+
+### Tests
+
+- 234 → **253**：站点同步契约（4）+ 命令生成（7）+ `parseResumeAnalysis` / `resumeKindOf` / 提取入口校验（8）。
+- `pdfjs-dist` / `mammoth` 为新依赖（动态 import，按需加载）。
+
 ## [0.7.5] - 2026-09-23
 
 ### Fixed

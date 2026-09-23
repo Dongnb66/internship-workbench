@@ -1,4 +1,4 @@
--- 011_seed.sql · seed · 来源 seed.sql
+-- 015_seed.sql · seed · 来源 seed.sql
 -- 执行方式：单条语句，一次一个请求（不要多条拼接）
 
 INSERT INTO jobs_public (company, title, city, job_type, industry, education, salary, source, url, jd_text, tags, deadline, posted_at) VALUES

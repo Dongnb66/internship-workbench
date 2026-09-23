@@ -1,7 +1,7 @@
 {
   "name": "internship-workbench",
   "private": true,
-  "version": "0.7.5",
+  "version": "0.7.6",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
@@ -16,6 +16,8 @@
   },
   "dependencies": {
     "@tencent-ai/workbuddy-cloud-sdk": "^0.1.2-dev.1b37f73.202609222026",
+    "mammoth": "^1.12.3",
+    "pdfjs-dist": "^6.3.289",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
