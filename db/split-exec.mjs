@@ -87,6 +87,7 @@ function splitStatements(sql) {
 const sources = [
   { file: join(here, 'migrations', '001_jobs_public.sql'), phase: 'schema' },
   { file: join(here, 'migrations', '002_resume_attachment.sql'), phase: 'schema' },
+  { file: join(here, 'migrations', '003_square_ingest.sql'), phase: 'schema' },
   { file: join(here, 'seed.sql'), phase: 'seed' },
 ]
 
@@ -106,7 +107,10 @@ if (!entries.length) {
 }
 
 // 自检：拆出来的语句不能再含分号结尾以外的裸分号（说明切分有误）
+// 含 $$ 块的语句（CREATE FUNCTION 等）跳过此检查——块内的分号是合法的，
+// splitStatements 本身已保证块完整性（0.7.6 踩过：jobs_public_ingest 函数体全被误报）
 for (const [i, e] of entries.entries()) {
+  if (/\$[A-Za-z_]*\$/.test(e.sql)) continue
   if (e.sql.includes(';\n') || /;\s*.+/.test(e.sql)) {
     console.error(`✗ 第 ${i + 1} 条疑似没切干净：\n${e.sql.slice(0, 200)}`)
     process.exit(1)
