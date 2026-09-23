@@ -83,7 +83,12 @@ export default function Login() {
     try {
       const res = await cloud.auth.signInWithPassword({ email, password })
       if (res.error) {
-        setError('邮箱或密码不正确')
+        // 不能一刀切「邮箱或密码不正确」：早期验证码注册的账号从未设置过密码
+        //（0.3.1 之前登录页没有设密码字段），signInWithPassword 必然失败——
+        // 真实原因被掩盖后，用户只会反复试密码，最后误以为只能被"重置"。
+        setError(
+          `登录失败：${errText(res.error)}。若该邮箱从未设置过密码（早期用验证码注册的账号），请切到「找回密码」设置一个，或直接用「验证码登录」。`,
+        )
         return
       }
     } catch (e) {
@@ -222,14 +227,17 @@ export default function Login() {
         ) : null}
 
         {needPasswordField ? (
-          <Field label="登录密码" hint="首次使用请设置（至少 6 位）；已有密码的账号可留空，用验证码直接登录">
+          <Field
+            label="登录密码"
+            hint="首次使用请设置（至少 6 位）。注意：已有账号用验证码登录时，这里填的密码不会生效（认证服务会忽略）——老账号补设密码请用「找回密码」"
+          >
             <input
               className="input"
               type="password"
               autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="至少 6 位"
+              placeholder="至少 6 位（仅首次注册时生效）"
             />
           </Field>
         ) : null}
