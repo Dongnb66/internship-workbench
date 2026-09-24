@@ -12,7 +12,10 @@ import { cloud } from '../cloud'
  */
 
 const RESUME_PREFIX = 'resumes'
-const SIGNED_URL_TTL = 7 * 24 * 3600
+/** 签名链接有效期：平台运行时限制 1-3600 秒（服务端报错口径），取上限 1 小时。
+ *  SDK 里的 MAX_SIGNED_URL_TTL_SECONDS 常量（=60）已过时，以运行时报错为准。
+ *  短链过期没关系：「打开附件」总是按 file_path 现签。 */
+const SIGNED_URL_TTL = 3600
 
 /** 存储路径里的文件名只保留安全字符，其余替换为下划线 */
 function safeName(name: string): string {
@@ -30,7 +33,7 @@ export async function currentUserId(): Promise<string> {
 export interface UploadedResumeFile {
   /** 存储路径（永久，入库 resumes.file_path） */
   path: string
-  /** 7 天有效的签名链接（入库 resumes.file_url，供直接打开） */
+  /** 签名链接（入库 resumes.file_url，供直接打开；短时会过期，过期就按 path 重签） */
   url: string
   /** 归一化后的文件名 */
   fileName: string
@@ -45,20 +48,28 @@ export async function uploadResumeFile(file: File): Promise<UploadedResumeFile> 
     upsert: false,
   })
   if (up.error) throw new Error(up.error.message || '附件上传失败')
-  const signed = await cloud.storage.createSignedUrl(path, SIGNED_URL_TTL)
-  if (signed.error) {
-    // 上传成功但签链失败：附件已在库里，不回滚——用户可稍后重试签链
-    console.warn('签名链接生成失败（附件已上传）：', signed.error.message)
-    return { path, url: '', fileName }
+  // 签链失败绝不中断上传——附件已在存储里，文本提取也已完成，
+  // 「打开附件」随时可以按 path 重签（实测 SDK 对非法 TTL 会直接抛异常而非返回 error）
+  let url = ''
+  try {
+    const signed = await cloud.storage.createSignedUrl(path, SIGNED_URL_TTL)
+    url = signed.error ? '' : signed.data.signedUrl
+  } catch (error) {
+    console.warn('签名链接生成失败（附件已上传，不影响）：', error)
   }
-  return { path, url: signed.data.signedUrl, fileName }
+  return { path, url, fileName }
 }
 
-/** 按永久路径重新签一个短链（「打开文件」403 时的续签入口） */
+/** 按永久路径重新签一个短链（「打开附件」的现签入口） */
 export async function signResumeUrl(path: string): Promise<string> {
-  const signed = await cloud.storage.createSignedUrl(path, SIGNED_URL_TTL)
-  if (signed.error) throw new Error(signed.error.message || '生成访问链接失败')
-  return signed.data.signedUrl
+  try {
+    const signed = await cloud.storage.createSignedUrl(path, SIGNED_URL_TTL)
+    if (signed.error) throw new Error(signed.error.message || '生成访问链接失败')
+    return signed.data.signedUrl
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error)
+    throw new Error(msg.includes('3600') ? '生成访问链接失败' : `生成访问链接失败：${msg}`)
+  }
 }
 
 /** 删除简历行时顺手清理附件；失败只警告不入错误流程（行删除是主操作） */

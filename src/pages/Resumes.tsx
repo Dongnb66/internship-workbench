@@ -161,11 +161,13 @@ export default function Resumes({ onChanged, go }: PageProps) {
     }
   }
 
-  /** 打开附件：优先用已存的签名链接；过期/缺失时按永久路径重新签一个 */
+  /** 打开附件：有永久路径就现签（签名链接只有 1 小时，存的 file_url 大概率已过期）；
+   *  仅网盘外链（无 file_path）才直接用 file_url */
   async function openAttachment(row: Row) {
     try {
-      let url = row.file_url ?? ''
-      if (!url && row.file_path) url = await signResumeUrl(String(row.file_path))
+      let url = ''
+      if (row.file_path) url = await signResumeUrl(String(row.file_path))
+      if (!url && row.file_url) url = String(row.file_url)
       if (!url) {
         notifyErr('没有可用的文件链接：请重新上传附件')
         return
