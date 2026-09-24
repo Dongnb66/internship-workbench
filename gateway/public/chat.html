@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>实习工作台 · 本地抓取助手</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #f6f7f9; color: #1f2329; font-size: 14px;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 20px 16px 60px; }
+  header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  header .logo { width: 34px; height: 34px; border-radius: 8px; background: #f2542d; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; }
+  header h1 { font-size: 16px; margin: 0; }
+  header .sub { color: #8a919f; font-size: 12px; }
+  .card { background: #fff; border: 1px solid #e5e8eb; border-radius: 12px; padding: 16px; margin-bottom: 14px; }
+  #chat { display: flex; flex-direction: column; gap: 10px; min-height: 200px; }
+  .msg { max-width: 92%; padding: 9px 12px; border-radius: 10px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
+  .msg.user { align-self: flex-end; background: #f2542d; color: #fff; border-bottom-right-radius: 3px; }
+  .msg.bot { align-self: flex-start; background: #f1f3f5; border-bottom-left-radius: 3px; }
+  .msg.bot.small { font-size: 12px; color: #5c6470; }
+  .plan { align-self: flex-start; max-width: 96%; background: #fff8f5; border: 1px solid #f7c8b8; border-radius: 10px; padding: 12px; }
+  .plan h4 { margin: 0 0 8px; font-size: 13px; }
+  .plan .row { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+  .chip { border: 1px solid #d9dee3; border-radius: 999px; padding: 3px 10px; background: #fff; cursor: pointer; font-size: 12px; }
+  .chip.on { background: #f2542d; border-color: #f2542d; color: #fff; }
+  .chip.warn { opacity: .6; }
+  .plan input[type=text], .plan input[type=number] { border: 1px solid #d9dee3; border-radius: 8px; padding: 6px 9px; font-size: 13px; }
+  .btn { border: 1px solid #d9dee3; background: #fff; border-radius: 8px; padding: 7px 14px; cursor: pointer; font-size: 13px; }
+  .btn.primary { background: #f2542d; border-color: #f2542d; color: #fff; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .jobs { max-height: 260px; overflow: auto; border: 1px solid #eceff1; border-radius: 8px; margin: 8px 0; }
+  .jobs table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .jobs th, .jobs td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #f1f3f5; }
+  .log { max-height: 140px; overflow: auto; background: #10141a; color: #9fd3a8; border-radius: 8px; padding: 8px 10px; font: 12px/1.5 Consolas, monospace; white-space: pre-wrap; margin: 8px 0; }
+  .inputbar { display: flex; gap: 8px; margin-top: 12px; }
+  .inputbar input { flex: 1; border: 1px solid #d9dee3; border-radius: 10px; padding: 10px 12px; font-size: 14px; }
+  .hint { color: #8a919f; font-size: 12px; line-height: 1.6; }
+  .hidden { display: none !important; }
+  label.f { display: block; margin: 8px 0 4px; font-size: 12px; color: #5c6470; }
+  label.f input { width: 100%; border: 1px solid #d9dee3; border-radius: 8px; padding: 9px 10px; font-size: 14px; }
+  .err { color: #c0392b; font-size: 12px; margin-top: 6px; }
+  .ok { color: #1e8e3e; font-size: 12px; margin-top: 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">实</div>
+    <div>
+      <h1>本地抓取助手</h1>
+      <div class="sub">跑在本机 · 对话说抓取 · 结果直推岗位广场 · <span id="who"></span></div>
+    </div>
+  </header>
+
+  <!-- 登录卡：localhost 与发布域的会话不共享，这里登一次 -->
+  <div class="card" id="loginCard">
+    <strong>先登录（与工作台同一个账号）</strong>
+    <label class="f">邮箱<input id="email" type="email" placeholder="你注册工作台用的邮箱" /></label>
+    <label class="f">密码<input id="password" type="password" placeholder="账号密码" /></label>
+    <div style="margin-top:10px"><button class="btn primary" id="loginBtn">登录</button></div>
+    <div id="loginErr" class="err"></div>
+    <div class="hint" style="margin-top:8px">凭证只存在本浏览器；抓取、推送广场都使用你自己的登录态与配额。</div>
+  </div>
+
+  <div class="card hidden" id="chatCard">
+    <div id="chat"></div>
+    <div class="inputbar">
+      <input id="input" placeholder="例：抓一下 BOSS 和实习僧的后端实习，每个站抓 2 页" />
+      <button class="btn primary" id="sendBtn">发送</button>
+    </div>
+    <div class="hint" style="margin-top:8px">
+      抓取用你本机的浏览器与登录态（需要登录的站点先跑过 node login.mjs）；推送广场走你的账号配额（每人每日 200 条）。
+    </div>
+  </div>
+</div>
+
+<script src="/vendor/cloud-sdk.global.js"></script>
+<script>
+(function () {
+  'use strict'
+  // 云端调用走网关的 /cloud-proxy 反向代理（server.mjs）：页面从哪个端口加载就用哪个端口。
+  // 代理把 Origin/Host 改写为发布域——publishableKey 与登录态不变，只是让平台正确识别应用归属。
+  // 与 src/cloud.ts 同一个 endpoint/publishableKey：改动时两处同步。
+  var CLOUD = WorkBuddyCloud.createWorkBuddyCloud({
+    endpoint: location.origin + '/cloud-proxy',
+    publishableKey: 'wbpk_cj7U3jJ6RwPG2f4tfo273L_UxTAZ930zrqU2smny12XL5ty3aX2bgBe',
+  })
+  var db = CLOUD.database
+  var $ = function (id) { return document.getElementById(id) }
+
+  var state = { sites: [], plan: null, taskId: null, jobs: null, busy: false, uid: null }
+
+  function msg(text, cls) {
+    var div = document.createElement('div')
+    div.className = 'msg ' + (cls || 'bot')
+    div.textContent = text
+    $('chat').appendChild(div)
+    window.scrollTo(0, document.body.scrollHeight)
+    return div
+  }
+  function errText(e) {
+    if (!e) return '未知错误'
+    if (typeof e === 'string') return e
+    return (e.error && e.error.message) || e.message || '请求失败，请重试'
+  }
+
+  // ---------------- 登录 ----------------
+  $('loginBtn').onclick = function () {
+    $('loginErr').textContent = ''
+    CLOUD.auth.signInWithPassword({ email: $('email').value.trim(), password: $('password').value })
+      .then(function (res) {
+        if (res.error) { $('loginErr').textContent = errText(res.error); return }
+        onSignedIn()
+      })
+      .catch(function (e) { $('loginErr').textContent = errText(e) })
+  }
+
+  function onSignedIn() {
+    CLOUD.auth.getUser().then(function (res) {
+      var email = (res.data && (res.data.email || res.data.id)) || '已登录'
+      $('who').textContent = email
+    })
+    $('loginCard').classList.add('hidden')
+    $('chatCard').classList.remove('hidden')
+    msg('你好！我是跑在你电脑上的抓取助手。告诉我要抓哪个站的什么岗位就行，比如「抓一下 BOSS 和实习僧的后端实习，各 2 页」。抓完后你可以把结果一键推到岗位广场。')
+    fetch('/api/sites').then(function (r) { return r.json() }).then(function (d) { state.sites = d.sites || [] })
+  }
+
+  // ---------------- LLM 意图解析（json 模式，流式） ----------------
+  // 模型选择：与主站 ai.ts 相同口径（可用目录第一个；无可用模型时报错）
+  var cachedModel = null
+  function pickModel() {
+    if (cachedModel) return Promise.resolve(cachedModel)
+    return CLOUD.llm.models.list().then(function (models) {
+      var usable = (models || []).filter(function (m) { return m && m.disabled !== true && m.enabled !== false })
+      if (!usable.length) throw new Error('当前没有可用模型')
+      cachedModel = usable[0].id
+      return cachedModel
+    })
+  }
+
+  function chat(system, user, onDelta) {
+    return pickModel().then(function (model) {
+      return CLOUD.llm.chat.completions.create({
+        model: model,
+        messages: [ { role: 'system', content: system }, { role: 'user', content: user } ],
+        stream: true,
+        stream_options: { include_usage: true },
+      }).then(function (stream) {
+        var p = Promise.resolve()
+        return new Promise(function (resolve, reject) {
+          var text = ''
+          var iter = function () {
+            try { return stream[Symbol.asyncIterator]() } catch (e) { reject(e); return null }
+          }
+          var it = iter()
+          if (!it) return
+          function step() {
+            it.next().then(function (r) {
+              if (r.done) { resolve(text); return }
+              var delta = r.value && r.value.choices && r.value.choices[0] && r.value.choices[0].delta
+              if (delta && delta.content) { text += delta.content; if (onDelta) onDelta(text) }
+              step()
+            }).catch(reject)
+          }
+          step()
+        })
+      })
+    })
+  }
+
+  function parseJsonLoose(raw) {
+    try { return JSON.parse(raw) } catch (e) {}
+    var s = raw.indexOf('{'), e2 = raw.lastIndexOf('}')
+    if (s !== -1 && e2 > s) { try { return JSON.parse(raw.slice(s, e2 + 1)) } catch (e3) {} }
+    return null
+  }
+
+  // ---------------- 计划确认卡 ----------------
+  function renderPlan(plan) {
+    state.plan = plan
+    var box = document.createElement('div')
+    box.className = 'plan'
+    var h = document.createElement('h4'); h.textContent = '抓取计划（点站点可改，改完点开始）'; box.appendChild(h)
+    var row1 = document.createElement('div'); row1.className = 'row'
+    var selected = {}
+    ;(plan.sites || []).forEach(function (id) { selected[id] = true })
+    state.sites.forEach(function (s) {
+      var c = document.createElement('button')
+      c.className = 'chip' + (selected[s.id] ? ' on' : '') + (s.verified === 'offline' ? ' warn' : '')
+      c.textContent = s.name + (s.needsLogin ? ' 🔒' : '')
+      c.title = s.needsLogin ? '需要先 node login.mjs --site ' + s.id + ' 登录' : ''
+      c.onclick = function () { selected[s.id] = !selected[s.id]; c.classList.toggle('on', !!selected[s.id]) }
+      row1.appendChild(c)
+    })
+    box.appendChild(row1)
+    var row2 = document.createElement('div'); row2.className = 'row'
+    var kw = document.createElement('input'); kw.type = 'text'; kw.value = plan.keyword || ''; kw.placeholder = '岗位关键词'; kw.style.width = '140px'
+    var pg = document.createElement('input'); pg.type = 'number'; pg.value = plan.pages || 1; pg.min = 1; pg.max = 20; pg.style.width = '70px'; pg.title = '页数'
+    row2.appendChild(kw); row2.appendChild(pg)
+    box.appendChild(row2)
+
+    var row3 = document.createElement('div'); row3.className = 'row'
+    var go = document.createElement('button'); go.className = 'btn primary'; go.textContent = '开始抓取'
+    var logBox = document.createElement('div'); logBox.className = 'log hidden'
+    var resultBox = document.createElement('div')
+
+    go.onclick = function () {
+      var sites = state.sites.filter(function (s) { return selected[s.id] }).map(function (s) { return s.id })
+      if (!sites.length && !(plan.urls && plan.urls.length)) { msg('至少选一个站点再开始', 'bot small'); return }
+      go.disabled = true; state.busy = true
+      logBox.classList.remove('hidden'); logBox.textContent = '启动中…'
+      fetch('/api/crawl', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sites: sites, urls: plan.urls || [], keyword: kw.value.trim(), pages: Number(pg.value) || 1, mode: plan.mode || 'all' }),
+      })
+        .then(function (r) { return r.json() })
+        .then(function (d) {
+          if (d.error) { msg('启动失败：' + d.error, 'bot small'); go.disabled = false; state.busy = false; return }
+          poll(d.taskId, logBox, function (payload) {
+            state.busy = false
+            if (payload.status === 'error') {
+              msg('抓取进程出错了，最后几行日志在上面。常见原因：站点需要登录（🔒）、站点改版。', 'bot small')
+              return
+            }
+            state.jobs = payload.jobs || []
+            renderJobs(resultBox, state.jobs)
+            msg('抓完了：' + state.jobs.length + ' 条岗位。看看下面的列表，没问题就推送到岗位广场。')
+          })
+        })
+        .catch(function (e) { msg('网关请求失败：' + errText(e) + '（网关还开着吗？）', 'bot small'); go.disabled = false; state.busy = false })
+    }
+    row3.appendChild(go)
+    box.appendChild(row3)
+    box.appendChild(logBox)
+    box.appendChild(resultBox)
+    $('chat').appendChild(box)
+    window.scrollTo(0, document.body.scrollHeight)
+  }
+
+  function poll(taskId, logBox, onDone) {
+    fetch('/api/tasks/' + taskId)
+      .then(function (r) { return r.json() })
+      .then(function (p) {
+        logBox.textContent = (p.log || []).join('\n') || '…'
+        logBox.scrollTop = logBox.scrollHeight
+        if (p.status === 'running') { setTimeout(function () { poll(taskId, logBox, onDone) }, 1500); return }
+        onDone(p)
+      })
+      .catch(function () { setTimeout(function () { poll(taskId, logBox, onDone) }, 2500) })
+  }
+
+  // ---------------- 结果预览与推送 ----------------
+  function renderJobs(box, jobs) {
+    box.innerHTML = ''
+    var head = document.createElement('div')
+    head.className = 'hint'; head.textContent = '抓到 ' + jobs.length + ' 条（已按 公司+岗位名 去重；推送时会再次与广场去重）'
+    box.appendChild(head)
+    if (!jobs.length) return
+    var wrapDiv = document.createElement('div'); wrapDiv.className = 'jobs'
+    var table = document.createElement('table')
+    table.innerHTML = '<thead><tr><th>公司</th><th>岗位</th><th>城市</th></tr></thead>'
+    var tbody = document.createElement('tbody')
+    jobs.slice(0, 200).forEach(function (j) {
+      var tr = document.createElement('tr')
+      var td1 = document.createElement('td'); td1.textContent = j.company
+      var td2 = document.createElement('td'); td2.textContent = j.title
+      var td3 = document.createElement('td'); td3.textContent = j.city || '—'
+      tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3)
+      tbody.appendChild(tr)
+    })
+    table.appendChild(tbody); wrapDiv.appendChild(table); box.appendChild(wrapDiv)
+
+    var push = document.createElement('button')
+    push.className = 'btn primary'; push.textContent = '推送到岗位广场'
+    push.onclick = function () {
+      push.disabled = true; push.textContent = '推送中…'
+      db.rpc('jobs_public_ingest', { p_jobs: JSON.parse(JSON.stringify(jobs)), p_source: '本地抓取' })
+        .then(function (res) {
+          if (res.error) { msg('推送失败：' + errText(res.error), 'bot small'); push.disabled = false; push.textContent = '推送到岗位广场'; return }
+          var d = res.data
+          var line = typeof d === 'string' ? d : JSON.stringify(d)
+          var parsed = typeof d === 'string' ? parseJsonLoose(d) : d
+          msg('推送完成：新增 ' + (parsed && parsed.inserted != null ? parsed.inserted : line) + ' 条'
+            + (parsed && parsed.skipped_duplicate ? '，重复跳过 ' + parsed.skipped_duplicate + ' 条' : '')
+            + (parsed && parsed.rejected ? '，拒绝 ' + parsed.rejected + ' 条' : '')
+            + '。打开工作台「岗位广场」刷新即可看到。')
+          push.textContent = '已推送'
+        })
+        .catch(function (e) { msg('推送失败：' + errText(e), 'bot small'); push.disabled = false; push.textContent = '推送到岗位广场' })
+    }
+    box.appendChild(push)
+  }
+
+  // ---------------- 发送入口 ----------------
+  function send() {
+    var text = $('input').value.trim()
+    if (!text || state.busy) return
+    $('input').value = ''
+    msg(text, 'user')
+    state.busy = true
+    var think = msg('解析你的需求…', 'bot small')
+    var siteLines = state.sites.map(function (s) { return s.id + '（' + s.name + '）' }).join('\n')
+    var system = '你是实习工作台的抓取意图解析器。把用户的话解析成抓取计划，只输出一个 JSON 对象，不要任何解释文字或代码块：\n'
+      + '{"reply":"给用户的一句话（20字内）","sites":["站点id，可多个"],"keyword":"岗位关键词，没说就空串","pages":1,"mode":"all"}\n'
+      + '可用站点 id：\n' + siteLines + '\n'
+      + '规则：只能用上面列出的站点 id；「实习僧」=shixiseng，「牛客」=nowcoder，「BOSS」=boss；没说页数给 1；提到只要实习用 mode=intern，只要校招用 campus；你只解析意图，不执行。'
+    chat(system, text, function (t) { think.textContent = t.slice(-60) })
+      .then(function (raw) {
+        var plan = parseJsonLoose(raw)
+        if (!plan || !plan.sites) {
+          think.textContent = '没解析出抓取计划，换个说法试试（要说清站点和岗位关键词）。模型原话：' + raw.slice(0, 200)
+          state.busy = false
+          return
+        }
+        think.remove()
+        msg(plan.reply || '计划如下：')
+        renderPlan(plan)
+        state.busy = false
+      })
+      .catch(function (e) { think.textContent = '解析失败：' + errText(e); state.busy = false })
+  }
+  $('sendBtn').onclick = send
+  $('input').addEventListener('keydown', function (e) { if (e.key === 'Enter') send() })
+
+  // 已有会话自动恢复
+  CLOUD.auth.getSession().then(function (res) {
+    if (!res.error && res.data && res.data.user) onSignedIn()
+  })
+})()
+</script>
+</body>
+</html>

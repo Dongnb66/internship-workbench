@@ -370,7 +370,7 @@ async function crawlTarget({ context, target, opts, log }) {
     updated_at: new Date().toISOString(),
   })
 
-  return { label, ok: true, jobs, errors, filtered: screened.filtered, dup: deduped.dup }
+  return { label, ok: true, jobs, errors, filtered: screened.filtered, dup: deduped.dup, read: screened.kept.length }
 }
 
 /** 逐个打开岗位详情页，把列表页那点摘要换成完整 JD */
@@ -563,6 +563,14 @@ async function main() {
   }
   log(`合计 ${total} 条`)
   for (const file of written) log(`已写出：${path.relative(process.cwd(), file.base)}.json（${file.count} 条）`)
+
+  // 「读到了岗位但全部与去重历史重复」是正常结果（例如一天内第二次跑同一站点），
+  // 不是失败——退出码必须是 0，否则对话层/脚本会把正常结果当进程出错（0.7.6 实测踩中）。
+  const allDuplicates = !total && results.some((r) => r.ok && (r.read ?? 0) > 0)
+  if (allDuplicates) {
+    log('\n本次没有新增岗位：读到的岗位都与去重历史重复。想强制重出可以删掉 output/.seen-*.json 或加 --purge。')
+    return 0
+  }
 
   if (!total) {
     log('\n一条都没抓到。常见原因：')

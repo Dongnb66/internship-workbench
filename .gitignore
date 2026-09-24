@@ -49,3 +49,6 @@ crawler/output
 *.njsproj
 *.sln
 *.sw?
+
+# 本地 agent 网关的抓取产出
+gateway/out/
