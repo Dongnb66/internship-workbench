@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { errText } from '../cloud'
 import { Empty, Field, Modal, Stat } from '../components/ui'
-import { analyzeResume, parseResumeAnalysis, type ResumeAnalysis } from '../lib/ai'
+import { analyzeResume, draftResumeFields, parseResumeAnalysis, type ResumeAnalysis } from '../lib/ai'
 import { deleteRow, insertRow, listRows, updateRow } from '../lib/api'
 import { RESUME_DIRECTIONS } from '../lib/constants'
 import { fmtDate } from '../lib/format'
@@ -145,7 +145,7 @@ export default function Resumes({ onChanged, go }: PageProps) {
     }
   }
 
-  /** 上传附件：先本地提取文本（失败则什么都不传），再传存储，最后回填表单 */
+  /** 上传附件：先本地提取文本（失败则什么都不传），再传存储，最后 AI 提炼字段草稿回填 */
   async function onPickFile(file: File) {
     setUploading(true)
     try {
@@ -153,6 +153,23 @@ export default function Resumes({ onChanged, go }: PageProps) {
       const up = await uploadResumeFile(file)
       setForm((f) => ({ ...f, file_path: up.path, file_url: up.url, file_name: up.fileName, content_text: text }))
       notifyOk(`附件已上传，提取到 ${text.length} 字简历文本（可在下方核对）`)
+
+      // 字段为空时让 AI 提炼「亮点/项目/备注」草稿；失败静默降级（留空手填），不阻塞保存
+      if (!form.highlights?.trim() || !form.projects?.trim()) {
+        setUploading(true)
+        try {
+          const draft = await draftResumeFields(text)
+          setForm((f) => ({
+            ...f,
+            highlights: f.highlights?.trim() ? f.highlights : draft.highlights,
+            projects: f.projects?.trim() ? f.projects : draft.projects,
+            notes: f.notes?.trim() ? f.notes : draft.notes,
+          }))
+          if (draft.highlights || draft.projects) notifyOk('已按简历原文提炼出亮点/项目/备注草稿，请核对修改后保存')
+        } catch (error) {
+          console.warn('字段草稿提炼失败（可手动填写）：', error)
+        }
+      }
     } catch (error) {
       notifyErr(errText(error))
     } finally {
@@ -366,7 +383,7 @@ export default function Resumes({ onChanged, go }: PageProps) {
                 }}
               />
               <button className="btn" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-                {uploading ? '上传并提取中…' : form.file_path ? '重新上传附件' : '上传附件'}
+                {uploading ? '上传 + 提取 + AI 提炼中…（约 10 秒）' : form.file_path ? '重新上传附件' : '上传附件'}
               </button>
               {form.file_name ? <span className="small">📎 {form.file_name}</span> : <span className="small muted">尚未上传</span>}
             </div>

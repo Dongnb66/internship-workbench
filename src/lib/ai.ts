@@ -273,3 +273,46 @@ export async function analyzeResume(text: string, targetRole?: string | null, on
   })
   return parseResumeAnalysis(raw)
 }
+
+export interface ResumeFieldDraft {
+  highlights: string
+  projects: string
+  notes: string
+}
+
+/**
+ * 上传附件后自动提炼「亮点摘要 / 项目与数字 / 备注」三个表单字段。
+ * 与 analyzeResume（面试官诊断）不同：这里只做**简历自身的字段草稿**，让用户保存前改。
+ * 只引用原文事实，原文信息不足就给空串——宁可留白也不编。
+ */
+export async function draftResumeFields(text: string): Promise<ResumeFieldDraft> {
+  const raw = await streamChat({
+    system: `你在把一份简历全文提炼成求职管理系统的三个字段草稿。只输出一个 JSON 对象，不要解释文字或代码块：
+{"highlights":"这一版主打的 3 条能力，每条一行，必须引用简历里真实的项目名与数字","projects":"项目与数字：每行一个「项目名：一句话说明 + 关键数字」，全部来自简历原文","notes":"备注：目标方向 / 可实习时间 / 其他值得记住的信息；简历里没有就给空字符串"}
+规则：
+- 只使用简历原文里真实存在的事实，一个字都不虚构。
+- 语言精炼口语，不排比堆砌，不写「精通/熟练掌握」这类空词。
+- 原文信息不足的字段就给空字符串，不要硬编。`,
+    user: text.slice(0, 12000),
+    json: true,
+  })
+  let parsed: any = {}
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    const start = raw.indexOf('{')
+    const end = raw.lastIndexOf('}')
+    if (start !== -1 && end > start) {
+      try {
+        parsed = JSON.parse(raw.slice(start, end + 1))
+      } catch {
+        parsed = {}
+      }
+    }
+  }
+  return {
+    highlights: String(parsed?.highlights ?? '').trim(),
+    projects: String(parsed?.projects ?? '').trim(),
+    notes: String(parsed?.notes ?? '').trim(),
+  }
+}
