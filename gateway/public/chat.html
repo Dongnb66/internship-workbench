@@ -56,14 +56,26 @@
     </div>
   </header>
 
-  <!-- 登录卡：localhost 与发布域的会话不共享，这里登一次 -->
+  <!-- 登录卡：localhost 与发布域的会话不共享，这里登一次。
+       支持验证码登录：早期用验证码注册的账号（如主账号）没有密码，密码登录必失败 -->
   <div class="card" id="loginCard">
     <strong>先登录（与工作台同一个账号）</strong>
     <label class="f">邮箱<input id="email" type="email" placeholder="你注册工作台用的邮箱" /></label>
     <label class="f">密码<input id="password" type="password" placeholder="账号密码" /></label>
-    <div style="margin-top:10px"><button class="btn primary" id="loginBtn">登录</button></div>
+    <div style="margin-top:10px">
+      <button class="btn primary" id="loginBtn">密码登录</button>
+      <button class="btn" id="otpBtn">验证码登录（推荐：没设过密码的账号用这个）</button>
+    </div>
+    <div id="otpRow" class="hidden" style="margin-top:10px">
+      <label class="f">邮箱验证码<input id="code" type="text" placeholder="6 位验证码" /></label>
+      <button class="btn primary" id="codeLoginBtn">验证码登录</button>
+    </div>
     <div id="loginErr" class="err"></div>
-    <div class="hint" style="margin-top:8px">凭证只存在本浏览器；抓取、推送广场都使用你自己的登录态与配额。</div>
+    <div id="loginInfo" class="ok"></div>
+    <div class="hint" style="margin-top:8px">
+      凭证只存在本浏览器；抓取、推送广场都使用你自己的登录态与配额。
+      密码登录报 incorrect = 这个账号没设过密码，用「验证码登录」；新账号注册请去工作台主站。
+    </div>
   </div>
 
   <div class="card hidden" id="chatCard">
@@ -109,14 +121,55 @@
   }
 
   // ---------------- 登录 ----------------
+  var otpPending = null
+  function loginErr(text) { $('loginErr').textContent = text || '' }
+  function loginInfo(text) { $('loginInfo').textContent = text || '' }
+
   $('loginBtn').onclick = function () {
-    $('loginErr').textContent = ''
+    loginErr('')
     CLOUD.auth.signInWithPassword({ email: $('email').value.trim(), password: $('password').value })
       .then(function (res) {
-        if (res.error) { $('loginErr').textContent = errText(res.error); return }
+        if (res.error) {
+          // 0.7.5 同款提示：真实原因透出，老账号引导验证码登录而不是反复试密码
+          loginErr('密码登录失败：' + errText(res.error) + '。若该邮箱从未设置过密码，点「验证码登录」。')
+          return
+        }
         onSignedIn()
       })
-      .catch(function (e) { $('loginErr').textContent = errText(e) })
+      .catch(function (e) { loginErr(errText(e)) })
+  }
+
+  // 验证码登录：sendOtp 拿 verificationId + isExistingUser，verifyOtp 完成登录。
+  // 已存在的账号（isExistingUser=true）不传 password——认证服务对已有账号会忽略密码参数
+  $('otpBtn').onclick = function () {
+    loginErr(''); loginInfo('')
+    var email = $('email').value.trim()
+    if (!email) { loginErr('先填邮箱再获取验证码'); return }
+    $('otpBtn').disabled = true
+    CLOUD.auth.sendOtp({ email: email })
+      .then(function (sent) {
+        if (sent.error) { loginErr(errText(sent.error)); $('otpBtn').disabled = false; return }
+        otpPending = { email: email, verificationId: sent.data.verificationId, isExistingUser: sent.data.isExistingUser }
+        loginInfo('验证码已发送到 ' + email + '，请查收（含垃圾箱）')
+        $('otpRow').classList.remove('hidden')
+      })
+      .catch(function (e) { loginErr(errText(e)); $('otpBtn').disabled = false })
+  }
+
+  $('codeLoginBtn').onclick = function () {
+    loginErr('')
+    if (!otpPending) { loginErr('先点「验证码登录」获取验证码'); return }
+    CLOUD.auth.verifyOtp({
+      email: otpPending.email,
+      verificationId: otpPending.verificationId,
+      isExistingUser: otpPending.isExistingUser,
+      token: $('code').value.trim(),
+    })
+      .then(function (res) {
+        if (res.error) { loginErr('验证码不正确或已过期，可重新获取'); return }
+        onSignedIn()
+      })
+      .catch(function (e) { loginErr(errText(e)) })
   }
 
   function onSignedIn() {
