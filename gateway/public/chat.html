@@ -52,7 +52,7 @@
     <div class="logo">实</div>
     <div>
       <h1>本地抓取助手</h1>
-      <div class="sub">跑在本机 · 对话说抓取 · 结果直推岗位广场 · <span id="who"></span></div>
+      <div class="sub">跑在本机 · 对话说抓取 · 结果直推岗位广场 · <span id="who"></span> · <a href="https://internship-workbench-47024.app.workbuddy.host/#square" target="_blank" rel="noreferrer">打开岗位广场 ↗</a></div>
     </div>
   </header>
 
@@ -330,10 +330,22 @@
           var d = res.data
           var line = typeof d === 'string' ? d : JSON.stringify(d)
           var parsed = typeof d === 'string' ? parseJsonLoose(d) : d
-          msg('推送完成：新增 ' + (parsed && parsed.inserted != null ? parsed.inserted : line) + ' 条'
+          var summary = '推送完成：新增 ' + (parsed && parsed.inserted != null ? parsed.inserted : line) + ' 条'
             + (parsed && parsed.skipped_duplicate ? '，重复跳过 ' + parsed.skipped_duplicate + ' 条' : '')
             + (parsed && parsed.rejected ? '，拒绝 ' + parsed.rejected + ' 条' : '')
-            + '。打开工作台「岗位广场」刷新即可看到。')
+          // 推送成功后给可点击的广场入口（用户实测反馈：到不了岗位广场）
+          var doneMsg = document.createElement('div')
+          doneMsg.className = 'msg bot'
+          doneMsg.appendChild(document.createTextNode(summary + '。'))
+          var link = document.createElement('a')
+          link.href = 'https://internship-workbench-47024.app.workbuddy.host/#square'
+          link.target = '_blank'
+          link.rel = 'noreferrer'
+          link.textContent = '点这里打开岗位广场 ↗'
+          doneMsg.appendChild(document.createElement('br'))
+          doneMsg.appendChild(link)
+          $('chat').appendChild(doneMsg)
+          window.scrollTo(0, document.body.scrollHeight)
           push.textContent = '已推送'
         })
         .catch(function (e) { msg('推送失败：' + errText(e), 'bot small'); push.disabled = false; push.textContent = '推送到岗位广场' })

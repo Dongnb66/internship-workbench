@@ -1,22 +1,3 @@
--- 003_square_ingest.sql · 岗位广场推送通道（0.7.6+，路线 A 本地 agent 网关的灌库出口）
---
--- 背景：jobs_public 对所有用户只读（RLS 只有 SELECT 策略），广场数据只能由
--- 服务端灌入。0.7.6 之前是「真人跑抓取 → 手工执行 SQL」；本地 agent 网关上线后，
--- 前端带着登录态调用本函数即可推送，无需任何服务端密钥。
---
--- 安全模型（SECURITY DEFINER 唯一写入口）：
--- - EXECUTE 仅 authenticated（REVOKE FROM PUBLIC 后 GRANT）
--- - 函数内 auth.uid() 取当前用户，未登录直接异常
--- - 每人每日 200 条配额（ingested_by 计数），防误操作/滥用刷爆公共库
--- - 与 db/build-seed.mjs 同口径的挡板：空值/竖线标签行公司名一律拒绝
--- - (company, title) 已存在则跳过（幂等，重复推送安全）
--- - 字段长度清洗（company≤60 / title≤120 / jd≤8000）
---
--- 调用：SELECT * FROM jobs_public_ingest('[{"company":..,"title":..}]'::jsonb, '官网投递')
--- 返回：{"inserted": n, "skipped_duplicate": n, "rejected": n, "reasons": [...]}
-
-ALTER TABLE jobs_public ADD COLUMN IF NOT EXISTS ingested_by text;
-
 CREATE OR REPLACE FUNCTION public.jobs_public_ingest(p_jobs jsonb, p_source text)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -57,9 +38,9 @@ BEGIN
       v_reasons := v_reasons || ('缺公司名或岗位名: ' || left(coalesce(v_title, '(空)'), 40));
       CONTINUE;
     END IF;
-    IF position('|' in v_company) > 0 OR position(E'\uFF5C' in v_company) > 0 THEN
+    IF position('|' in v_company) > 0 OR position(E'\uFF5C' in v_company) > 0 OR position('/' in v_company) > 0 THEN
       v_rejected := v_rejected + 1;
-      v_reasons := v_reasons || ('公司名像标签行: ' || left(v_company, 40));
+      v_reasons := v_reasons || ('公司名像标签行（含竖线/斜杠）: ' || left(v_company, 40));
       CONTINUE;
     END IF;
 
@@ -96,9 +77,3 @@ BEGIN
   );
 END;
 $fn$;
-
-REVOKE EXECUTE ON FUNCTION public.jobs_public_ingest(jsonb, text) FROM PUBLIC;
-
-GRANT EXECUTE ON FUNCTION public.jobs_public_ingest(jsonb, text) TO authenticated;
-
-COMMENT ON FUNCTION public.jobs_public_ingest(jsonb, text) IS '岗位广场推送通道：SECURITY DEFINER 唯一写入口，内置配额/挡板/去重，仅 authenticated 可调';
