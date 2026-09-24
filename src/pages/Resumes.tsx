@@ -154,20 +154,24 @@ export default function Resumes({ onChanged, go }: PageProps) {
       setForm((f) => ({ ...f, file_path: up.path, file_url: up.url, file_name: up.fileName, content_text: text }))
       notifyOk(`附件已上传，提取到 ${text.length} 字简历文本（可在下方核对）`)
 
-      // 字段为空时让 AI 提炼「亮点/项目/备注」草稿；失败静默降级（留空手填），不阻塞保存
+      // 字段为空时让 AI 提炼「亮点/项目/备注」草稿；失败可见提示（不静默，留空手填）
       if (!form.highlights?.trim() || !form.projects?.trim()) {
-        setUploading(true)
+        notifyOk('正在 AI 提炼亮点/项目/备注草稿…')
         try {
           const draft = await draftResumeFields(text)
-          setForm((f) => ({
-            ...f,
-            highlights: f.highlights?.trim() ? f.highlights : draft.highlights,
-            projects: f.projects?.trim() ? f.projects : draft.projects,
-            notes: f.notes?.trim() ? f.notes : draft.notes,
-          }))
-          if (draft.highlights || draft.projects) notifyOk('已按简历原文提炼出亮点/项目/备注草稿，请核对修改后保存')
+          if (!draft.highlights && !draft.projects && !draft.notes) {
+            notifyErr('AI 没提炼出内容（模型返回为空）——三个栏位留空了，请手动填写')
+          } else {
+            setForm((f) => ({
+              ...f,
+              highlights: f.highlights?.trim() ? f.highlights : draft.highlights,
+              projects: f.projects?.trim() ? f.projects : draft.projects,
+              notes: f.notes?.trim() ? f.notes : draft.notes,
+            }))
+            notifyOk('已按简历原文提炼出亮点/项目/备注草稿，请核对修改后保存')
+          }
         } catch (error) {
-          console.warn('字段草稿提炼失败（可手动填写）：', error)
+          notifyErr('AI 提炼失败：' + errText(error) + ' —— 栏位留空了，可手动填写后再保存')
         }
       }
     } catch (error) {
