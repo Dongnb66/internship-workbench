@@ -196,34 +196,25 @@
     })
   }
 
-  function chat(system, user, onDelta) {
-    return pickModel().then(function (model) {
-      return CLOUD.llm.chat.completions.create({
-        model: model,
-        messages: [ { role: 'system', content: system }, { role: 'user', content: user } ],
-        stream: true,
-        stream_options: { include_usage: true },
-      }).then(function (stream) {
-        var p = Promise.resolve()
-        return new Promise(function (resolve, reject) {
-          var text = ''
-          var iter = function () {
-            try { return stream[Symbol.asyncIterator]() } catch (e) { reject(e); return null }
-          }
-          var it = iter()
-          if (!it) return
-          function step() {
-            it.next().then(function (r) {
-              if (r.done) { resolve(text); return }
-              var delta = r.value && r.value.choices && r.value.choices[0] && r.value.choices[0].delta
-              if (delta && delta.content) { text += delta.content; if (onDelta) onDelta(text) }
-              step()
-            }).catch(reject)
-          }
-          step()
-        })
-      })
+  // 流式对话：与主站 ai.ts 同构——create() 返回的不一定是 Promise，
+  // 必须 await 后用 for await 消费（对同步/异步可迭代都成立）；不能用 .then 链
+  async function chat(system, user, onDelta) {
+    var model = await pickModel()
+    var stream = await CLOUD.llm.chat.completions.create({
+      model: model,
+      messages: [ { role: 'system', content: system }, { role: 'user', content: user } ],
+      stream: true,
+      stream_options: { include_usage: true },
     })
+    var text = ''
+    for await (var chunk of stream) {
+      var delta = chunk && chunk.choices && chunk.choices[0] && chunk.choices[0].delta
+      if (delta && delta.content) {
+        text += delta.content
+        if (onDelta) onDelta(text)
+      }
+    }
+    return text
   }
 
   function parseJsonLoose(raw) {
