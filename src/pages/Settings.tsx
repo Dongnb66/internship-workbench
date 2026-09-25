@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { cloud, errText } from '../cloud'
 import { Field, Modal } from '../components/ui'
-import { getModelChoice, listUsableModels, pickModel, setModelChoice, type UsableModel } from '../lib/ai'
+import { getModelChoice, getTokenStats, listUsableModels, pickModel, setModelChoice, type TokenStats, type UsableModel } from '../lib/ai'
 import { listRows, saveProfile } from '../lib/api'
 import { PROFILE_TEMPLATE } from '../lib/constants'
 import { healthSummary, profileHealth } from '../lib/healthCheck'
@@ -53,6 +53,12 @@ export default function Settings({ profile, onChanged }: PageProps) {
   const [chosen, setChosen] = useState('')
   const [effective, setEffective] = useState('')
   const [savingModel, setSavingModel] = useState(false)
+  // 会话内累计消耗：进出设置页时刷新，让「花的是谁的额度」这件事可见
+  const [stats, setStats] = useState<TokenStats>({ calls: 0, prompt: 0, completion: 0, total: 0 })
+
+  useEffect(() => {
+    setStats(getTokenStats())
+  }, [])
 
   useEffect(() => {
     // 模型目录：拉取失败不阻塞主表单（AI 页仍会用默认模型兜底）
@@ -197,6 +203,9 @@ export default function Settings({ profile, onChanged }: PageProps) {
       setSavingModel(false)
     }
   }
+
+  /** 下拉里选中（或实际生效）的那条目录记录：用来显示它的计费信息 */
+  const chosenModel = models.find((m) => m.id === (chosen || effective))
 
   async function changePassword() {
     if (pw.newPassword.length < 6) {
@@ -355,8 +364,8 @@ export default function Settings({ profile, onChanged }: PageProps) {
           </div>
           <div className="card-body">
             <div className="hint mb16">
-              JD 评估、打招呼话术、面试题、简历分析都走这里选的模型。不选就用平台默认模型；
-              所选模型被平台禁用时会自动回退到默认，不会报错中断。
+              JD 评估、打招呼话术、面试题、简历分析、上传后的字段提炼都走这里选的模型。不选就用平台默认模型；
+              所选模型被平台禁用时会自动回退到默认，不会报错中断。这个选择只存在本设备（换设备要重选）。
             </div>
             {modelsErr ? (
               <div className="small" style={{ color: '#d97706' }}>模型目录加载失败：{modelsErr}（不影响其他功能）</div>
@@ -364,20 +373,39 @@ export default function Settings({ profile, onChanged }: PageProps) {
               <div className="small muted">模型目录加载中…</div>
             ) : (
               <>
-                <Field label="模型" hint={`共 ${models.length} 个可用模型；选择只存在本设备`}>
+                <Field label="模型" hint={`共 ${models.length} 个可用模型可选`}>
                   <select className="select" value={chosen} onChange={(e) => setChosen(e.target.value)}>
                     <option value="">（使用平台默认）</option>
                     {models.map((m) => (
                       <option key={m.id} value={m.id}>
                         {m.name}
                         {m.provider ? ` · ${m.provider}` : ''}
+                        {m.reasoning ? ' · 思考型（更慢）' : ''}
                       </option>
                     ))}
                   </select>
                 </Field>
+                <div className="small muted mt8">
+                  计费：
+                  {chosenModel?.credits
+                    ? `${chosenModel.name} — ${chosenModel.credits}`
+                    : chosenModel
+                      ? `${chosenModel.name} — 平台未下发该模型的计费信息`
+                      : '未选择具体模型，按平台默认计价'}
+                  {chosenModel?.reasoning ? ' · 思考型模型会先推理再出字，本次调用耗时明显更长' : ''}
+                </div>
                 <button className="btn primary mt8" onClick={saveModel} disabled={savingModel}>
                   {savingModel ? '保存中…' : '保存模型选择'}
                 </button>
+                <div className="hint mt16">
+                  <strong>额度归谁</strong>：AI 调用由本应用的云服务端代你发起，前端只带应用标识、走应用发布域，
+                  所以这里<strong>不需要你填任何 API Key</strong>，也不消耗你个人的模型密钥。
+                  消耗计入<strong>本应用的云服务额度</strong>；额度用尽时接口会返回 429，此时换模型也不管用，
+                  要等额度恢复或额度加量。
+                </div>
+                <div className="small muted mt8">
+                  本次会话（当前标签页，关闭即归零）：已调用 {stats.calls} 次 · 输入 {stats.prompt} tokens · 输出 {stats.completion} tokens
+                </div>
               </>
             )}
           </div>

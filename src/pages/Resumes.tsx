@@ -30,6 +30,8 @@ export default function Resumes({ onChanged, go }: PageProps) {
   const [analyzingRow, setAnalyzingRow] = useState<Row | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
   const [analysisRaw, setAnalysisRaw] = useState('')
+  /** 思考型模型已产出的推理字数：只为在等首字时证明「它在动」，内容本身不展示 */
+  const [reasoningChars, setReasoningChars] = useState(0)
   const [analysis, setAnalysis] = useState<ResumeAnalysis | null>(null)
 
   const load = useCallback(async () => {
@@ -215,8 +217,15 @@ export default function Resumes({ onChanged, go }: PageProps) {
     }
     setAnalyzing(true)
     setAnalysisRaw('')
+    setReasoningChars(0)
     try {
-      const result = await analyzeResume(text, row.target_role, (t) => setAnalysisRaw((p) => p + t))
+      const result = await analyzeResume(
+        text,
+        row.target_role,
+        (t) => setAnalysisRaw((p) => p + t),
+        // 思考型模型的推理增量：只用来证明「它在动」，不进正文
+        (t) => setReasoningChars((n) => n + t.length),
+      )
       setAnalysis(result)
       await updateRow('resumes', row.id, { analysis: result })
       notifyOk('分析完成，结果已保存到这份简历')
@@ -444,7 +453,14 @@ export default function Resumes({ onChanged, go }: PageProps) {
           <div className="hint mb16">
             以面试官视角拆解这份简历：学历、技能、项目、面试防守关键词与优化建议。分析只基于简历文本本身，结果自动保存到这份简历。
           </div>
-          {analyzing && !analysisRaw ? <div className="muted">模型思考中…</div> : null}
+          {analyzing && !analysisRaw ? (
+            <div className="muted">
+              模型思考中…
+              {reasoningChars > 0
+                ? `（已推理 ${reasoningChars} 字，思考型模型通常要 1–3 分钟，出字后就是结论）`
+                : '（请求已发出，等首字：普通模型 20–60 秒，思考型 1–3 分钟）'}
+            </div>
+          ) : null}
           {analyzing && analysisRaw && !analysis ? (
             <pre className="md" style={{ whiteSpace: 'pre-wrap', fontSize: 12, maxHeight: 320, overflow: 'auto' }}>{analysisRaw}</pre>
           ) : null}

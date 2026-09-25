@@ -11,12 +11,16 @@ import type { Profile } from '../types'
 const MODEL_CHOICE_KEY = 'wb_model_choice'
 
 let cachedModel: string | null = null
-let cachedModels: Array<{ id: string; name: string; provider?: string }> | null = null
+let cachedModels: UsableModel[] | null = null
 
 export interface UsableModel {
   id: string
   name: string
   provider?: string
+  /** 平台下发的计费展示文案，如「2 credits/1K tokens」；目录没给就是未知 */
+  credits?: string
+  /** 思考型模型：先吐 reasoning_content（不出正文）再出结果，选它要有等更久的预期 */
+  reasoning: boolean
 }
 
 /** 可选模型目录（供设置页下拉框用）。列表进程内缓存，选模型后手动刷新即可。 */
@@ -25,7 +29,13 @@ export async function listUsableModels(): Promise<UsableModel[]> {
   const models = await cloud.llm.models.list()
   cachedModels = (models ?? [])
     .filter((m: any) => m?.disabled !== true && m?.enabled !== false)
-    .map((m: any) => ({ id: String(m.id), name: String(m.name || m.id), provider: m.provider ? String(m.provider) : undefined }))
+    .map((m: any) => ({
+      id: String(m.id),
+      name: String(m.name || m.id),
+      provider: m.provider ? String(m.provider) : undefined,
+      credits: m.credits ? String(m.credits) : undefined,
+      reasoning: m.supportsReasoning === true || m.onlyReasoning === true,
+    }))
   return cachedModels
 }
 
@@ -70,6 +80,60 @@ export interface StreamOptions {
   json?: boolean
   signal?: AbortSignal
   onDelta?: (text: string) => void
+  /**
+   * 思考型模型的推理增量（reasoning_content）。
+   * 只用于「它还在动」的进度提示，绝不混进正文——推理内容不是给用户看的结论。
+   */
+  onReasoning?: (text: string) => void
+}
+
+/**
+ * 本次浏览器会话累计的模型消耗（sessionStorage，随标签页关闭归零）。
+ *
+ * 为什么要有它：应用**不需要用户自备 API Key**，调用走本应用的云服务额度，
+ * 用户因此完全看不见消耗。把 token 数摆在设置页，让「花的是谁的额度」这件事可见。
+ */
+export interface TokenStats {
+  calls: number
+  prompt: number
+  completion: number
+  total: number
+}
+
+const STATS_KEY = 'wb_token_stats'
+
+function readStats(): TokenStats {
+  try {
+    const raw = sessionStorage.getItem(STATS_KEY)
+    const parsed = raw ? JSON.parse(raw) : null
+    return {
+      calls: Number(parsed?.calls ?? 0),
+      prompt: Number(parsed?.prompt ?? 0),
+      completion: Number(parsed?.completion ?? 0),
+      total: Number(parsed?.total ?? 0),
+    }
+  } catch {
+    return { calls: 0, prompt: 0, completion: 0, total: 0 }
+  }
+}
+
+export function getTokenStats(): TokenStats {
+  return readStats()
+}
+
+function recordUsage(u: any): void {
+  try {
+    const prev = readStats()
+    const next: TokenStats = {
+      calls: prev.calls + 1,
+      prompt: prev.prompt + Number(u?.prompt_tokens ?? 0),
+      completion: prev.completion + Number(u?.completion_tokens ?? 0),
+      total: prev.total + Number(u?.total_tokens ?? 0),
+    }
+    sessionStorage.setItem(STATS_KEY, JSON.stringify(next))
+  } catch {
+    // 隐私模式等：统计不可用不影响调用
+  }
 }
 
 /** 唯一的模型调用入口：只支持流式，逐帧累积文本 */
@@ -78,6 +142,8 @@ export async function streamChat(opts: StreamOptions): Promise<string> {
   if (!model) throw new Error('当前没有可用模型，请稍后重试')
 
   let text = ''
+  // 末帧才带 usage；逐帧记「最后一次」，循环结束后统一入账，避免重复计数
+  let lastUsage: any = null
   const stream = await cloud.llm.chat.completions.create({
     model,
     messages: [
@@ -92,11 +158,15 @@ export async function streamChat(opts: StreamOptions): Promise<string> {
 
   for await (const chunk of stream as any) {
     const delta = chunk?.choices?.[0]?.delta
+    if (delta?.reasoning_content) opts.onReasoning?.(delta.reasoning_content)
     if (delta?.content) {
       text += delta.content
       opts.onDelta?.(delta.content)
     }
+    if (chunk?.usage) lastUsage = chunk.usage
   }
+  // 即使网关没回 usage 也要计入调用次数——「调了几次/花了多少」里次数是确定的事实
+  recordUsage(lastUsage)
   return text
 }
 
@@ -263,13 +333,20 @@ export function parseResumeAnalysis(raw: string): ResumeAnalysis {
 /**
  * AI 简历分析：输入简历纯文本（附件提取或手动粘贴），产出结构化诊断。
  * 目标岗位可选——给了就把分析往那个方向收紧（如「后端实习」会重点关注服务端深度）。
+ * onReasoning 只在思考型模型上有意义：让调用方知道「它在推理、没卡住」。
  */
-export async function analyzeResume(text: string, targetRole?: string | null, onDelta?: (t: string) => void): Promise<ResumeAnalysis> {
+export async function analyzeResume(
+  text: string,
+  targetRole?: string | null,
+  onDelta?: (t: string) => void,
+  onReasoning?: (t: string) => void,
+): Promise<ResumeAnalysis> {
   const raw = await streamChat({
     system: RESUME_ANALYSIS_SYSTEM,
     user: `【目标岗位】${targetRole?.trim() || '（未指定，按通用软件研发实习评估）'}\n\n【简历全文】\n${text.slice(0, 12000)}`,
     json: true,
     onDelta,
+    onReasoning,
   })
   return parseResumeAnalysis(raw)
 }
