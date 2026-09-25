@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { errText } from '../cloud'
 import { Empty, Field, Modal, Stat } from '../components/ui'
 import { generateInterviewPrep, summarizeReflection } from '../lib/ai'
+import { applicationOptions } from '../lib/interviews'
 import { deleteRow, insertRow, listRows, updateRow } from '../lib/api'
 import { fmtDateTime, todayISO } from '../lib/format'
 import { notifyErr, notifyOk } from '../lib/toast'
@@ -16,6 +17,7 @@ const RESULT_LABEL: Record<string, { text: string; cls: string }> = {
 
 export default function Interviews({ profile, onChanged }: PageProps) {
   const [rows, setRows] = useState<Row[]>([])
+  const [apps, setApps] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'pending' | 'done' | 'all'>('pending')
   const [editing, setEditing] = useState<Row | 'new' | null>(null)
@@ -52,9 +54,20 @@ export default function Interviews({ profile, onChanged }: PageProps) {
     return true
   })
 
+  /** 打开表单时把投递列表带上：关联投递后，「AI 面试准备」才能沿 id 自动带入 JD / 简历 / 历史复盘 */
+  async function loadApplications() {
+    if (apps.length) return
+    try {
+      setApps(await listRows('applications', { limit: 500 }))
+    } catch (error) {
+      notifyErr(`投递列表加载失败：${errText(error)}`)
+    }
+  }
+
   function openNew() {
-    setForm({ company: '', title: '', round_name: '一面', kind: '面试', scheduled_at: '', mode: '线上', place: '', questions: '', reflection: '', result: 'pending' })
+    setForm({ company: '', title: '', round_name: '一面', kind: '面试', scheduled_at: '', mode: '线上', place: '', questions: '', reflection: '', result: 'pending', application_id: '' })
     setEditing('new')
+    void loadApplications()
   }
 
   function openEdit(row: Row) {
@@ -69,8 +82,10 @@ export default function Interviews({ profile, onChanged }: PageProps) {
       questions: row.questions ?? '',
       reflection: row.reflection ?? '',
       result: row.result ?? 'pending',
+      application_id: row.application_id ? String(row.application_id) : '',
     })
     setEditing(row)
+    void loadApplications()
   }
 
   async function save() {
@@ -91,6 +106,8 @@ export default function Interviews({ profile, onChanged }: PageProps) {
         questions: form.questions || null,
         reflection: form.reflection || null,
         result: form.result || 'pending',
+        // 关联投递：AI 面试准备沿它自动带入 JD / 所投简历 / 历史复盘
+        application_id: form.application_id ? Number(form.application_id) : null,
       }
       if (editing === 'new') {
         await insertRow('interviews', payload)
@@ -374,6 +391,19 @@ export default function Interviews({ profile, onChanged }: PageProps) {
             </Field>
             <Field label="地点 / 会议链接">
               <input className="input" value={form.place ?? ''} onChange={(e) => setForm({ ...form, place: e.target.value })} />
+            </Field>
+            <Field
+              label="关联投递"
+              hint="关联后，「AI 面试准备」会自动带入该岗位的 JD、你投的那份简历和这家公司的历史复盘"
+            >
+              <select className="select" value={form.application_id ?? ''} onChange={(e) => setForm({ ...form, application_id: e.target.value })}>
+                <option value="">不关联（AI 准备需要手动粘贴 JD）</option>
+                {applicationOptions(apps).map((o) => (
+                  <option key={o.id} value={String(o.id)}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
             </Field>
           </div>
           <Field label="被问到的问题" hint="面试完趁热记，越原始越好">
