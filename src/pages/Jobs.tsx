@@ -6,7 +6,7 @@ import { evaluateJD } from '../lib/ai'
 import { deleteRow, insertRow, listRows, updateRow } from '../lib/api'
 import { localScore, prefilterJob } from '../lib/score'
 import { SAMPLE_JOBS, isSampleRow, sampleToRow } from '../lib/samples'
-import { CHANNELS, INDUSTRIES, JOB_TYPES, PRIORITIES } from '../lib/constants'
+import { CHANNEL_CAPABILITIES, CHANNELS, INDUSTRIES, JOB_TYPES, PRIORITIES } from '../lib/constants'
 import { dateOnly, fmtDate, leftText, textToArray, todayISO } from '../lib/format'
 import { notifyErr, notifyOk } from '../lib/toast'
 import type { Row } from '../types'
@@ -463,6 +463,43 @@ export default function Jobs({ profile, onChanged, go }: PageProps) {
           ) : null}
         </div>
       </div>
+
+      <details className="card">
+        <summary className="card-head" style={{ cursor: 'pointer' }}>
+          <h3>渠道能力边界</h3>
+          <span className="small muted">投递永远是人工 —— 点开看各渠道在采集 / AI 处理 / 投递 / 回填四个环节的分工</span>
+        </summary>
+        <div className="card-body">
+          <div className="table-wrap">
+            <table className="tb">
+              <thead>
+                <tr>
+                  <th>渠道</th>
+                  <th>采集（岗位怎么进池）</th>
+                  <th>AI 处理</th>
+                  <th>投递</th>
+                  <th>回填（网申表单）</th>
+                </tr>
+              </thead>
+              <tbody>
+                {CHANNEL_CAPABILITIES.map((c) => (
+                  <tr key={c.channel}>
+                    <td className="cell-main">{c.channel}</td>
+                    <td>{c.collect}</td>
+                    <td>{c.ai}</td>
+                    <td>{c.apply}</td>
+                    <td>{c.backfill}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="small muted mt8">
+            「投递」一列恒为人工：本工作台不登录招聘平台、不自动发送任何消息，最终提交永远由你完成 ——
+            这是产品承诺，不是暂未实现。
+          </div>
+        </div>
+      </details>
 
       {batch.total ? (
         <div className="card">

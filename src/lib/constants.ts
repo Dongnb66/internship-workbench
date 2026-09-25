@@ -8,6 +8,40 @@ export const STAGES = [
 
 export const JOB_TYPES = ['实习', '日常实习', '暑期实习', '校招', '社招']
 export const CHANNELS = ['BOSS直聘', '实习僧', '官网投递', '内推', '牛客', '浏览器采集', '岗位广场', '其它']
+
+/**
+ * 渠道能力边界矩阵 —— 每个渠道在「采集 / AI 处理 / 投递 / 回填」四个环节上，
+ * 工具能做到什么、哪一步必须你自己动手。岗位池页渲染这张表，目的就一个：
+ * 别让用户把「能采集」推断成「也能自动投递」（docs/BENCHMARK.md 的 P0 缺口）。
+ *
+ * 两条被 channelCapability 契约测试钉死的约束：
+ * - channel 与 CHANNELS 双射：新增渠道忘了写能力行、或渠道改名后留着旧行，测试都红；
+ * - apply 恒为字面量「人工」（类型上也锁死）：不自动投递、不自动发送是产品承诺
+ *   （AGENTS.md §2.3），矩阵里出现「自动投递」即视为改坏。
+ * 单元格里不要用 ASCII 引号和方括号 —— 契约测试按引号从源码抽数组，混入会解析失败（宁红勿脏）。
+ */
+export interface ChannelCapability {
+  channel: (typeof CHANNELS)[number]
+  /** 岗位怎么进池子 */
+  collect: string
+  /** 入池后 AI 能替你做什么（与渠道无关） */
+  ai: string
+  /** 投递由谁完成 —— 恒为「人工」 */
+  apply: '人工'
+  /** 网申表单回填能力 */
+  backfill: string
+}
+
+export const CHANNEL_CAPABILITIES: ChannelCapability[] = [
+  { channel: 'BOSS直聘', collect: '浏览器扩展一键采集当前页；本地抓取器可抓，但风控重，只能慢速串行', ai: '本地预筛 + AI 深评 + 打招呼草稿，入池即可用，不挑渠道', apply: '人工', backfill: '扩展一键填充网申表单；在线简历仍要你自己维护' },
+  { channel: '实习僧', collect: '本地抓取器 + 浏览器扩展', ai: '本地预筛 + AI 深评 + 打招呼草稿，入池即可用，不挑渠道', apply: '人工', backfill: '扩展一键填充网申表单' },
+  { channel: '官网投递', collect: '本地抓取器（公司招聘板清单）+ 浏览器扩展', ai: '本地预筛 + AI 深评 + 打招呼草稿，入池即可用，不挑渠道', apply: '人工', backfill: '网申填写包 + 扩展一键填充；官网表单字段最杂，这里作用最大' },
+  { channel: '内推', collect: '没有自动采集，手工登记', ai: '本地预筛 + AI 深评 + 打招呼草稿，入池即可用，不挑渠道', apply: '人工', backfill: '内推通常没有公开表单；需要时用填写包自己填' },
+  { channel: '牛客', collect: '本地抓取器（牛客校招）+ 浏览器扩展', ai: '本地预筛 + AI 深评 + 打招呼草稿，入池即可用，不挑渠道', apply: '人工', backfill: '扩展一键填充网申表单' },
+  { channel: '浏览器采集', collect: '扩展只读「你当前打开的那一屏」，一键采集入库', ai: '本地预筛 + AI 深评 + 打招呼草稿，入池即可用，不挑渠道', apply: '人工', backfill: '扩展一键填充当前页面' },
+  { channel: '岗位广场', collect: '广场一键加入岗位池（公共库 + OfferBiu 校招源），复制的是快照、与他人无关', ai: '本地预筛 + AI 深评 + 打招呼草稿，入池即可用，不挑渠道', apply: '人工', backfill: '广场本身没有表单；投递与回填跟随你最终投递的渠道' },
+  { channel: '其它', collect: '手工录入', ai: '本地预筛 + AI 深评 + 打招呼草稿，入池即可用，不挑渠道', apply: '人工', backfill: '看具体平台；常见字段扩展一般都能填' },
+]
 export const INDUSTRIES = ['互联网', '人工智能', '金融', '游戏', '硬件/芯片', '政企/国企', '其它']
 export const PRIORITIES = ['高', '中', '低']
 export const DIMS = ['技能匹配', '经验匹配', '成长空间', '薪资结构', '工作强度', '稳定性', '通勤'] as const
