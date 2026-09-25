@@ -1,5 +1,6 @@
 import { cloud } from '../cloud'
 import { DIMS, GREETING_RULES } from './constants'
+import { wrapUntrusted } from './untrusted'
 import type { Profile } from '../types'
 
 /**
@@ -236,7 +237,7 @@ export async function streamChat(opts: StreamOptions): Promise<string> {
   return text
 }
 
-function profileBrief(profile: Profile | null): string {
+export function profileBrief(profile: Profile | null): string {
   if (!profile) return '（发起人尚未填写画像，仅依据 JD 本身评估）'
   return [
     `姓名：${profile.full_name ?? '—'}`,
@@ -249,6 +250,94 @@ function profileBrief(profile: Profile | null): string {
     `目标方向：${(profile.directions ?? []).join('、') || '—'}`,
     `项目与事实：${profile.resume_summary ?? '—'}`,
   ].join('\n')
+}
+
+/**
+ * 语气样本：用户自己写的「一句话自我介绍」原文。
+ *
+ * 设计来源：career-ops 的 `voice-dna.template.md` + `writing-samples/` —— 不靠"请写得自然点"
+ * 这种空指令，而是喂**本人真实写过的原文**去限制句长与用词，这是治「一眼像 AI 写的」唯一有效的手段。
+ *
+ * 为什么不重新开一个数据库字段：`self_intro` 本身就是他手写的原文，语义上正好就是语气样本，
+ * 而新增字段要做迁移 + 让用户多填一遍同一类东西。字段不够长时（<30 字）返回 null，
+ * 宁可完全不注入，也不要拿半句话当风格锚点。
+ */
+export function voiceSample(profile: Profile | null): string | null {
+  const text = String(profile?.self_intro ?? '').trim()
+  return text.length >= 30 ? text : null
+}
+
+/**
+ * 语气样本块。刻意**不**套 `wrapUntrusted`：这段文字来自用户本人在应用里填写的字段，
+ * 不是抓来的外部文本。给它套上「外部来源数据」的声明会让声明本身失真——
+ * 包装器的价值在于语义准确，不是为了到处盖章。
+ */
+export function voiceBlock(profile: Profile | null): string {
+  const sample = voiceSample(profile)
+  if (!sample) return ''
+  return [
+    '【我的语气样本（我本人写的原文，只用来模仿句长与用词习惯，里面的事实不必复述）】',
+    '"""',
+    sample,
+    '"""',
+    '模仿它的口吻与句长，不要写得更正式、更工整、更套路化。',
+  ].join('\n')
+}
+
+// ------------------------------------------------------------ prompt 组装
+//
+// 这一层被单独抽出来，是因为「外部文本有没有被隔离」这件事必须可断言。
+// 直接在调用点拼字符串的话，验证只能靠读代码；拆成纯函数后，测试可以断言
+// **实际发出去的 user message** 里带着边界标记和不可信声明。
+
+/** AI 评估：JD 是抓来的外部文本，必须走隔离包装 */
+export function buildEvalUserMessage(jd: string, profile: Profile | null): string {
+  return `【候选人画像】\n${profileBrief(profile)}\n\n${wrapUntrusted('目标岗位 JD', jd.slice(0, 8000))}`
+}
+
+/** 打招呼：JD 走隔离包装，语气样本走可信块 */
+export function buildGreetingUserMessage(company: string, title: string, jd: string, profile: Profile | null): string {
+  const voice = voiceBlock(profile)
+  return [
+    `【候选人画像】\n${profileBrief(profile)}`,
+    voice,
+    `【公司与岗位】${company} · ${title}`,
+    wrapUntrusted('JD 原文', jd.slice(0, 6000)),
+  ]
+    .filter(Boolean)
+    .join('\n\n')
+}
+
+export function buildInterviewUserMessage(company: string, title: string, jd: string, profile: Profile | null): string {
+  return `【候选人】\n${profileBrief(profile)}\n\n【岗位】${company} · ${title}\n\n${wrapUntrusted('JD', jd.slice(0, 6000))}`
+}
+
+export function buildApplyUserMessage(company: string, title: string, jd: string, profile: Profile | null): string {
+  const voice = voiceBlock(profile)
+  const jdBlock = jd.trim() ? wrapUntrusted('JD', jd.slice(0, 6000)) : '（未提供 JD）'
+  return [
+    `【候选人画像】\n${profileBrief(profile)}`,
+    voice,
+    `【公司岗位】${company || '（未填）'} · ${title || '（未填）'}`,
+    jdBlock,
+  ]
+    .filter(Boolean)
+    .join('\n\n')
+}
+
+/** 简历全文来自上传的附件文件，同样是外部输入 */
+export function buildResumeAnalysisUserMessage(text: string, targetRole?: string | null): string {
+  const role = targetRole?.trim() || '（未指定，按通用软件研发实习评估）'
+  return `【目标岗位】${role}\n\n${wrapUntrusted('简历全文', text.slice(0, 12000))}`
+}
+
+export function buildFieldDraftUserMessage(text: string): string {
+  return wrapUntrusted('简历全文', text.slice(0, 12000))
+}
+
+/** 面试复盘：用户自己打的零散记录，同样是外部文本 */
+export function buildReflectionUserMessage(text: string): string {
+  return wrapUntrusted('我的面试记录', text.slice(0, 6000))
 }
 
 const EVAL_SYSTEM = `你是中国大学生实习/校招求职的 JD 评估助手，输出必须诚实、可执行、不虚构。
@@ -279,7 +368,7 @@ export interface Evaluated {
 export async function evaluateJD(jd: string, profile: Profile | null, onDelta?: (t: string) => void): Promise<Evaluated> {
   const raw = await streamChat({
     system: EVAL_SYSTEM,
-    user: `【候选人画像】\n${profileBrief(profile)}\n\n【目标岗位 JD】\n${jd.slice(0, 8000)}`,
+    user: buildEvalUserMessage(jd, profile),
     json: true,
     onDelta,
   })
@@ -303,7 +392,7 @@ export async function generateGreeting(company: string, title: string, jd: strin
   return streamChat({
     system: `你在帮一名中国大学生写发给 HR / 技术负责人 的第一条打招呼消息。输出只有消息正文本身，不要标题、不要解释、不要引号包裹。
 ${GREETING_RULES}`,
-    user: `【候选人画像】\n${profileBrief(profile)}\n\n【公司与岗位】${company} · ${title}\n\n【JD 原文】\n${jd.slice(0, 6000)}`,
+    user: buildGreetingUserMessage(company, title, jd, profile),
     onDelta,
   })
 }
@@ -311,14 +400,14 @@ ${GREETING_RULES}`,
 export async function generateInterviewQuestions(company: string, title: string, jd: string, profile: Profile | null): Promise<string> {
   return streamChat({
     system: `你是技术面试教练。基于 JD 与候选人的真实项目，输出 6-8 个高概率被问到的面试题，每题下面用 2-3 行给出「他怎么答」的框架（必须引用他自己仓库里的真实设计与数字，不得编造）。输出 Markdown。`,
-    user: `【候选人】\n${profileBrief(profile)}\n\n【岗位】${company} · ${title}\n\n【JD】\n${jd.slice(0, 6000)}`,
+    user: buildInterviewUserMessage(company, title, jd, profile),
   })
 }
 
 export async function summarizeReflection(text: string): Promise<string> {
   return streamChat({
     system: '你是面试复盘助手。把用户零散的面试记录整理成「问到的问题 / 我的回答漏洞 / 下一步补齐动作」三段，输出 Markdown，语言精简，不要客套话。',
-    user: text.slice(0, 6000),
+    user: buildReflectionUserMessage(text),
   })
 }
 
@@ -328,7 +417,7 @@ export async function generateApplyAnswers(company: string, title: string, jd: s
     system: `你在帮一名中国大学生填写网申系统的开放题。输出 Markdown，按「期望薪资 / 可到岗与实习时长 / 为什么选择我们 / 自我介绍（200 字内）」四节给出可直接粘贴的答案。
 要求：只使用候选人画像中真实存在的事实，不虚构经历；语气平实、口语化，不要排比堆砌；不主动提及任何短板；不出现学校名称以外的无关信息。
 ${GREETING_RULES}`,
-    user: `【候选人画像】\n${profileBrief(profile)}\n\n【公司岗位】${company || '（未填）'} · ${title || '（未填）'}\n\n【JD】\n${jd.slice(0, 6000) || '（未提供 JD）'}`,
+    user: buildApplyUserMessage(company, title, jd, profile),
   })
 }
 
@@ -409,7 +498,7 @@ export async function analyzeResume(
 ): Promise<ResumeAnalysis> {
   const raw = await streamChat({
     system: RESUME_ANALYSIS_SYSTEM,
-    user: `【目标岗位】${targetRole?.trim() || '（未指定，按通用软件研发实习评估）'}\n\n【简历全文】\n${text.slice(0, 12000)}`,
+    user: buildResumeAnalysisUserMessage(text, targetRole),
     json: true,
     onDelta,
     onReasoning,
@@ -436,7 +525,7 @@ export async function draftResumeFields(text: string): Promise<ResumeFieldDraft>
 - 只使用简历原文里真实存在的事实，一个字都不虚构。
 - 语言精炼口语，不排比堆砌，不写「精通/熟练掌握」这类空词。
 - 原文信息不足的字段就给空字符串，不要硬编。`,
-    user: text.slice(0, 12000),
+    user: buildFieldDraftUserMessage(text),
     json: true,
   })
   let parsed: any = {}

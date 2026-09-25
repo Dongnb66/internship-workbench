@@ -69,9 +69,12 @@ export default function Jobs({ profile, onChanged, go }: PageProps) {
     total: 0,
     scored: 0,
     skipped: 0,
+    blocked: 0,
     failed: 0,
     current: '',
     failedIds: [] as number[],
+    /** 因 JD 写死硬门槛（届数/学历/证书/年限）被跳过、但用户可一键覆盖重跑的岗位 */
+    blockedIds: [] as number[],
   })
 
   const load = useCallback(async () => {
@@ -209,7 +212,7 @@ export default function Jobs({ profile, onChanged, go }: PageProps) {
    * 再对通过预筛的逐条做 AI 深评，结果结构化写回岗位池与评估历史。
    * 严格串行执行，可随时中断，失败项可一键重试。
    */
-  async function batchScore(targetIds?: number[]) {
+  async function batchScore(targetIds?: number[], ignoreBlockers = false) {
     const ids = targetIds ?? selected
     const targets = rows.filter((r) => ids.includes(r.id))
     if (!targets.length) return
@@ -220,9 +223,11 @@ export default function Jobs({ profile, onChanged, go }: PageProps) {
     setBusy(true)
     let scored = 0
     let skipped = 0
+    let blocked = 0
     let failed = 0
     const failedIds: number[] = []
-    setBatch({ running: true, index: 0, total: targets.length, scored, skipped, failed, current: '', failedIds: [] })
+    const blockedIds: number[] = []
+    setBatch({ running: true, index: 0, total: targets.length, scored, skipped, blocked, failed, current: '', failedIds: [], blockedIds: [] })
 
     try {
       for (let i = 0; i < targets.length; i += 1) {
@@ -230,8 +235,23 @@ export default function Jobs({ profile, onChanged, go }: PageProps) {
         const job = targets[i]
         setBatch((b) => ({ ...b, index: i + 1, current: `${job.company} · ${job.title}` }))
 
-        const pre = prefilterJob(job.jd_text ?? '', job.title ?? '', profile)
+        const pre = prefilterJob(job.jd_text ?? '', job.title ?? '', profile, undefined, ignoreBlockers)
         if (!pre.pass) {
+          const hard = pre.blockers.hard
+          if (hard.length && !ignoreBlockers) {
+            blocked += 1
+            blockedIds.push(job.id)
+            // 把命中的 JD 原句写进备注：用户隔几天回来看，能自己复核判定对不对
+            try {
+              await updateRow('jobs', job.id, {
+                notes: `${job.notes ? `${job.notes}\n` : ''}[硬门槛 ${todayISO()}] ${hard.map((b) => `${b.label}｜依据：${b.quote}`).join('　')}`,
+              })
+            } catch {
+              // 备注写入失败不影响后续岗位
+            }
+            setBatch((b) => ({ ...b, blocked, blockedIds: [...blockedIds] }))
+            continue
+          }
           skipped += 1
           try {
             await updateRow('jobs', job.id, {
@@ -458,19 +478,26 @@ export default function Jobs({ profile, onChanged, go }: PageProps) {
               <i style={{ width: `${batch.total ? (batch.index / batch.total) * 100 : 0}%` }} />
             </div>
             <div className="small muted mt8">
-              AI 深评 {batch.scored} · 预筛跳过 {batch.skipped} · 失败 {batch.failed}
+              AI 深评 {batch.scored} · 预筛跳过 {batch.skipped} · 硬门槛拦截 {batch.blocked} · 失败 {batch.failed}
               {batch.current ? ` · 当前：${batch.current}` : ''}
             </div>
             <div className="row mt8">
-              <span className="small muted">流程：关键词预筛 → 通过者逐条 AI 七维深评 → 分数写回岗位池，评估记录进 AI 页历史</span>
+              <span className="small muted">
+                流程：硬门槛拦截 → 关键词预筛 → 通过者逐条 AI 七维深评 → 分数写回岗位池，评估记录进 AI 页历史
+              </span>
               <span className="spacer" />
+              {!batch.running && batch.blockedIds.length ? (
+                <button className="btn sm" onClick={() => void batchScore(batch.blockedIds, true)}>
+                  仍要深评这些（{batch.blockedIds.length}）
+                </button>
+              ) : null}
               {!batch.running && batch.failedIds.length ? (
                 <button className="btn sm" onClick={() => void batchScore(batch.failedIds)}>
                   重试失败项（{batch.failedIds.length}）
                 </button>
               ) : null}
               {!batch.running ? (
-                <button className="btn sm ghost" onClick={() => setBatch({ running: false, index: 0, total: 0, scored: 0, skipped: 0, failed: 0, current: '', failedIds: [] })}>
+                <button className="btn sm ghost" onClick={() => setBatch({ running: false, index: 0, total: 0, scored: 0, skipped: 0, blocked: 0, failed: 0, current: '', failedIds: [], blockedIds: [] })}>
                   收起
                 </button>
               ) : null}

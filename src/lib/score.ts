@@ -1,4 +1,5 @@
 import type { Profile } from '../types'
+import { detectBlockers, type BlockerReport } from './blockers'
 
 export interface ScoreResult {
   score: number
@@ -66,21 +67,46 @@ export function localScore(jd: string, title: string, profile: Profile | null, w
 export interface PrefilterResult extends ScoreResult {
   pass: boolean
   reason: string
+  /** 硬门槛报告：写死的届数/学历/证书/年限等，命中即不建议投 */
+  blockers: BlockerReport
 }
 
 /**
  * 第一段：关键词预筛。目的不是判死岗位，而是把明显不相关的挡在 AI 深评之前，省 token。
  * 判定规则：本地分 >= threshold 才通过。基线 40 分意味着「一条技能/方向关键词都没命中」的 JD 会被挡下。
+ *
+ * 硬门槛（blockers.hard）优先于分数：分数再高，JD 写死「仅限 2027 届」也没有投的价值。
+ * 但它是**可覆盖**的——ignoreBlockers=true 时只按分数判，用于用户确认「我知道，但我还是要深评」。
+ * 这一点是有意留的：规则判断一定会有误报，一个不给出口的拦截器最终会被绕过或被弃用。
  */
-export function prefilterJob(jd: string, title: string, profile: Profile | null, threshold = PREFILTER_THRESHOLD): PrefilterResult {
+export function prefilterJob(
+  jd: string,
+  title: string,
+  profile: Profile | null,
+  threshold = PREFILTER_THRESHOLD,
+  ignoreBlockers = false,
+): PrefilterResult {
   const result = localScore(jd, title, profile)
+  const blockers = detectBlockers(jd, title, profile)
   if (!jd.trim()) {
-    return { ...result, pass: false, reason: '没有 JD 原文，无法评分' }
+    return { ...result, blockers, pass: false, reason: '没有 JD 原文，无法评分' }
+  }
+  if (blockers.hard.length && !ignoreBlockers) {
+    return {
+      ...result,
+      blockers,
+      pass: false,
+      reason: `${blockers.verdict}，跳过 AI 省额度（如判断有误，可单独选中后重跑并选择覆盖）`,
+    }
   }
   const pass = result.score >= threshold
+  const tail = blockers.soft.length ? `；另有 ${blockers.soft.length} 条留意项` : ''
   return {
     ...result,
+    blockers,
     pass,
-    reason: pass ? `预筛通过（本地分 ${result.score}）` : `预筛未通过（本地分 ${result.score} < ${threshold}），可直接跳过 AI 省额度`,
+    reason: pass
+      ? `预筛通过（本地分 ${result.score}）${tail}`
+      : `预筛未通过（本地分 ${result.score} < ${threshold}），可直接跳过 AI 省额度`,
   }
 }
