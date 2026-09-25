@@ -11,12 +11,15 @@ export default function ConversationDrawer({
   application,
   messages,
   profile,
+  jobUrl,
   onClose,
   onChanged,
 }: {
   application: Row
   messages: Row[]
   profile?: Profile | null
+  /** 原岗位链接（沿 application.job_id 取自岗位池）；没存就渲染补链提示 */
+  jobUrl?: string | null
   onClose: () => void
   onChanged: () => void | Promise<void>
 }) {
@@ -83,6 +86,19 @@ export default function ConversationDrawer({
         </>
       }
     >
+      {jobUrl ? (
+        <div className="row mb16" style={{ gap: 8 }}>
+          <a className="btn sm ghost" href={jobUrl} target="_blank" rel="noreferrer">
+            打开原岗位 ↗
+          </a>
+          <span className="small muted">打招呼、看 JD 都跳回招聘平台的原帖</span>
+        </div>
+      ) : (
+        <div className="small muted mb16">
+          这条投递还没存原岗位链接：去「岗位池」编辑对应岗位，把链接粘进「岗位链接」字段，这里就能一键跳回。
+        </div>
+      )}
+
       <div className="small muted">快捷记录</div>
       <div className="row wrap mt8 mb16" style={{ gap: 6 }}>
         {QUICK_ACTIONS.map((a) => (

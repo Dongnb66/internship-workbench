@@ -7,6 +7,7 @@ import { CHANNELS, STAGES } from '../lib/constants'
 import { lastContactByApplication } from '../lib/conversation'
 import { fmtDate, todayISO } from '../lib/format'
 import { REPLY_STATUS_LABEL, staleApplications } from '../lib/pace'
+import { jobUrlByApplication } from '../lib/timeline'
 import { notifyErr, notifyOk } from '../lib/toast'
 import type { Row } from '../types'
 import type { PageProps } from './Overview'
@@ -15,6 +16,7 @@ export default function Pipeline({ profile, onChanged, go }: PageProps) {
   const [rows, setRows] = useState<Row[]>([])
   const [resumes, setResumes] = useState<Row[]>([])
   const [messages, setMessages] = useState<Row[]>([])
+  const [jobs, setJobs] = useState<Row[]>([])
   const [convFor, setConvFor] = useState<Row | null>(null)
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<'kanban' | 'table'>('kanban')
@@ -28,14 +30,16 @@ export default function Pipeline({ profile, onChanged, go }: PageProps) {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [apps, rs, msgs] = await Promise.all([
+      const [apps, rs, msgs, js] = await Promise.all([
         listRows('applications', { limit: 800 }),
         listRows('resumes', { limit: 200 }),
         listRows('messages', { limit: 1000, order: 'sent_at', ascending: false }),
+        listRows('jobs', { limit: 800 }),
       ])
       setRows(apps)
       setResumes(rs)
       setMessages(msgs)
+      setJobs(js)
     } catch (error) {
       notifyErr(errText(error))
     } finally {
@@ -50,6 +54,8 @@ export default function Pipeline({ profile, onChanged, go }: PageProps) {
   const lastContact = useMemo(() => lastContactByApplication(messages), [messages])
   const stale = useMemo(() => staleApplications(rows, messages), [rows, messages])
   const staleIds = useMemo(() => new Set(stale.map((s) => Number(s.application.id))), [stale])
+  // 投递 → 原岗位链接：打招呼、约面、跟进修补都要跳回招聘平台的原帖
+  const jobUrlMap = useMemo(() => jobUrlByApplication(rows, jobs), [rows, jobs])
 
   const counts = useMemo(() => {
     const out: Record<string, number> = {}
@@ -289,6 +295,11 @@ export default function Pipeline({ profile, onChanged, go }: PageProps) {
                       <button className="btn sm ghost" onClick={() => openEdit(row)}>
                         详情
                       </button>
+                      {jobUrlMap.get(Number(row.id)) ? (
+                        <a className="btn sm ghost" href={jobUrlMap.get(Number(row.id))} target="_blank" rel="noreferrer">
+                          原岗位 ↗
+                        </a>
+                      ) : null}
                     </div>
                   </div>
                 ))}
@@ -362,6 +373,11 @@ export default function Pipeline({ profile, onChanged, go }: PageProps) {
                           <button className="linkish" onClick={() => setInterviewFor(row)}>
                             面试
                           </button>
+                          {jobUrlMap.get(Number(row.id)) ? (
+                            <a className="linkish" href={jobUrlMap.get(Number(row.id))} target="_blank" rel="noreferrer">
+                              原岗位
+                            </a>
+                          ) : null}
                         </div>
                       </td>
                     </tr>
@@ -509,6 +525,7 @@ export default function Pipeline({ profile, onChanged, go }: PageProps) {
           application={convFor}
           messages={messages}
           profile={profile}
+          jobUrl={jobUrlMap.get(Number(convFor.id)) ?? null}
           onClose={() => setConvFor(null)}
           onChanged={async () => {
             await load()

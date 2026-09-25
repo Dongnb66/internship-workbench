@@ -55,3 +55,23 @@ export function lastContactByApplication(messages: Row[]): Record<string, Row> {
   }
   return out
 }
+
+/**
+ * 投递 → 原岗位链接：沿 job_id 到岗位池取 url。
+ * 没挂 job_id、岗位不在池里、url 没存的投递都不出现在映射里——
+ * UI 据此显示「去岗位池补链接」的提示，而不是渲染一个空链接。
+ */
+export function jobUrlByApplication(applications: Row[], jobs: Row[]): Map<number, string> {
+  const urlByJob = new Map<number, string>()
+  for (const j of jobs) {
+    const url = String(j.url ?? '').trim()
+    if (j.id !== undefined && j.id !== null && url) urlByJob.set(Number(j.id), url)
+  }
+  const out = new Map<number, string>()
+  for (const a of applications) {
+    if (a.job_id === undefined || a.job_id === null) continue
+    const url = urlByJob.get(Number(a.job_id))
+    if (url) out.set(Number(a.id), url)
+  }
+  return out
+}

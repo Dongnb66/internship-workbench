@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { defaultFollowAt, lastContactByApplication, QUICK_ACTIONS, timelineFor } from '../timeline'
+import { defaultFollowAt, jobUrlByApplication, lastContactByApplication, QUICK_ACTIONS, timelineFor } from '../timeline'
 import type { Row } from '../../types'
 
 const messages: Row[] = [
@@ -84,5 +84,36 @@ describe('QUICK_ACTIONS', () => {
   it('覆盖求职闭环的关键节点', () => {
     const statuses = QUICK_ACTIONS.map((a) => a.status)
     for (const need of ['sent', 'replied', 'interview', 'rejected']) expect(statuses).toContain(need)
+  })
+})
+
+describe('jobUrlByApplication（投递 → 原岗位链接）', () => {
+  const apps: Row[] = [
+    { id: 11, job_id: 101 },
+    { id: 12, job_id: 102 },
+    { id: 13, job_id: null },
+    { id: 14, job_id: 999 },
+  ]
+  const jobs: Row[] = [
+    { id: 101, url: 'https://www.zhipin.com/job_detail/x.html' },
+    { id: 102, url: '   ' },
+    { id: 103, url: 'https://example.com/orphan' },
+  ]
+
+  it('沿 job_id 把投递映射到岗位池里存的链接', () => {
+    const map = jobUrlByApplication(apps, jobs)
+    expect(map.get(11)).toBe('https://www.zhipin.com/job_detail/x.html')
+  })
+
+  it('无 job_id、岗位缺失、url 为空的投递都不出现在映射里（UI 据此提示补链接）', () => {
+    const map = jobUrlByApplication(apps, jobs)
+    expect(map.has(12)).toBe(false)
+    expect(map.has(13)).toBe(false)
+    expect(map.has(14)).toBe(false)
+  })
+
+  it('字符串 id 与数字 id 都能匹配', () => {
+    const map = jobUrlByApplication([{ id: '21', job_id: '101' }], [{ id: 101, url: 'https://x' }])
+    expect(map.get(21)).toBe('https://x')
   })
 })
