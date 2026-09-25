@@ -4,6 +4,9 @@ import { Drawer, Empty, ScoreCell } from '../components/ui'
 import { insertRow, listPublicJobs, listRows } from '../lib/api'
 import { JOB_TYPES } from '../lib/constants'
 import { localScore } from '../lib/score'
+import { BLACKLIST_STORAGE_KEY, matchBlacklist, type BlacklistEntry } from '../lib/blacklist'
+import { flagReposts } from '../lib/reposts'
+import { dedupeKey } from '../lib/import'
 import { SQUARE_SOURCE, filterSquareJobs, inPool, poolKeySet, publicToPoolRow, squareCities } from '../lib/square'
 import { fmtDate } from '../lib/format'
 import { notifyErr, notifyOk } from '../lib/toast'
@@ -67,6 +70,41 @@ export default function JobsSquare({ profile, onChanged, go }: PageProps) {
   }, [load])
 
   const keys = useMemo(() => poolKeySet(poolRows), [poolRows])
+
+  /** 黑名单（设备级，localStorage）与僵尸重发标记：广场上直接看见「这条别碰」 */
+  const [blacklist, setBlacklist] = useState<BlacklistEntry[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(BLACKLIST_STORAGE_KEY) ?? '[]') as BlacklistEntry[]
+    } catch {
+      return []
+    }
+  })
+  const deadPool = useMemo(() => poolRows.filter((p) => ['rejected', 'archived'].includes(String(p.status))), [poolRows])
+  const repostKeys = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const f of flagReposts(publicJobs as unknown as Row[], deadPool)) {
+      map.set(dedupeKey(String(f.job.company), String(f.job.title)), f.priorStatus)
+    }
+    return map
+  }, [publicJobs, deadPool])
+
+  function jobFlags(job: { company?: string | null; title?: string | null }): BlacklistEntry[] {
+    return matchBlacklist({ company: job.company, title: job.title }, blacklist)
+  }
+
+  function addToBlacklist(job: { company?: string | null; title?: string | null }) {
+    const company = String(job.company ?? '').trim()
+    if (!company) return
+    const entry: BlacklistEntry = { type: 'company', value: company, addedAt: new Date().toISOString() }
+    const next = [...blacklist.filter((b) => !(b.type === 'company' && b.value === company)), entry]
+    setBlacklist(next)
+    try {
+      localStorage.setItem(BLACKLIST_STORAGE_KEY, JSON.stringify(next))
+      notifyOk(`已拉黑「${company}」：广场与导入会标记它的岗位`)
+    } catch {
+      notifyErr('浏览器存储不可用，拉黑未保存')
+    }
+  }
 
   const cities = useMemo(() => squareCities(publicJobs), [publicJobs])
 
@@ -369,6 +407,8 @@ export default function JobsSquare({ profile, onChanged, go }: PageProps) {
                   {shown.map((job) => {
                     const already = inPool(job, keys)
                     const score = scoreById.get(job.id) ?? 0
+                    const bl = jobFlags(job)
+                    const repost = repostKeys.get(dedupeKey(String(job.company), String(job.title)))
                     return (
                       <tr key={job.id}>
                         <td>
@@ -377,6 +417,8 @@ export default function JobsSquare({ profile, onChanged, go }: PageProps) {
                         <td>
                           <div className="cell-main">{job.company}</div>
                           <div className="cell-sub">{job.title}</div>
+                          {bl.length ? <span className="badge danger">已拉黑</span> : null}
+                          {repost ? <span className="badge warn">⚠ 僵尸重发</span> : null}
                         </td>
                         <td>{job.city ?? '—'}</td>
                         <td>
@@ -416,15 +458,21 @@ export default function JobsSquare({ profile, onChanged, go }: PageProps) {
           title={`${detail.company} · ${detail.title}`}
           onClose={() => setDetail(null)}
           footer={
-            inPool(detail, keys) ? (
-              <button className="btn" onClick={() => go('jobs')}>
-                已在岗位池，去查看
+            <>
+              <button className="btn ghost" onClick={() => addToBlacklist(detail)}>
+                拉黑这家公司
               </button>
-            ) : (
-              <button className="btn primary" onClick={() => void joinOne(detail)} disabled={busyId === detail.id}>
-                {busyId === detail.id ? '加入中…' : '加入岗位池'}
-              </button>
-            )
+              <span className="spacer" />
+              {inPool(detail, keys) ? (
+                <button className="btn" onClick={() => go('jobs')}>
+                  已在岗位池，去查看
+                </button>
+              ) : (
+                <button className="btn primary" onClick={() => void joinOne(detail)} disabled={busyId === detail.id}>
+                  {busyId === detail.id ? '加入中…' : '加入岗位池'}
+                </button>
+              )}
+            </>
           }
         >
           <div className="row wrap mb16" style={{ gap: 6 }}>

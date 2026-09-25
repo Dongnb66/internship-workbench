@@ -200,18 +200,31 @@ issue #2368 列了 10 个 mode，#2461 又追加 4 个，而那个 PR 排队期�
    「投递恒为人工」守卫（出现自动字样 → 红，点名渠道与原文）、单元格非空、
    以及「矩阵必须被某个页面真实渲染」（不许变成下一份死代码）。三处均做过「关掉就变红」自检。
 
+
+### 8. 漏斗转化 / 跟进节奏 / 关键词覆盖 / 僵尸检测 / 安全停止（2026-09-25 一批落地）
+
+**它们的来源**：漏斗与跟进节奏来自 career-ops（`stats.mjs` / `followup-cadence.mjs`）；安全停止清单来自 BossHunter 的「遇到就停」纪律；僵尸岗位检测来自 career-ops `detect-reposts` + get_jobs 的三类黑名单维度（PolyForm，只借鉴维度）；关键词覆盖来自 Resume-Matcher（Apache-2.0，唯一一个可以抄码的）。
+
+**本项目的落点**：
+1. `funnel.ts`：四层漏斗（投递→回复→面试→Offer）从沟通流水/面试记录推导，纯函数；内置评分校准（被拒均分 vs 推进均分的 gap——「低分确实该拦」的量化判据）。总览页新卡。
+2. `followup.ts`：按最后沟通状态给跟进窗口（招呼 4 天/已读·超时 2 天/回复·约面 1 天，与 `timeline.defaultFollowAt` 同源），到期给行动建议；总览页「待跟进」卡替换原「≥7 天超期」粗粒度卡。
+3. `keywordCoverage.ts`：本地抽 JD 技术词（英文词 + 中文技术词表）与画像摘要做覆盖比对，评估面板显示覆盖条与缺失清单；与 AI 的「缺口」互为印证，不耗额度。
+4. `reposts.ts` + `blacklist.ts`：僵尸重发判定**复用 import.ts 的 dedupeKey**（查重与僵尸必须认同一个「同岗位」）；黑名单三类维度存设备级 localStorage（模型选择先例），广场卡片「⚠ 僵尸重发 / 已拉黑」徽标 + 详情「拉黑这家公司」。
+5. `factGate.ts`：面试记录里「口径关键词+数字」vs 画像口径文本——面试官会 clone 仓库核对；只扫口径词、无口径宁可不报、违规带原句引用（证据原则同 blockers）。
+6. `crawler/lib/stopRules.mjs`：验证码/登录墙/风控三类显式停止规则 + run.mjs 接线（命中即停本站点）+ 契约测试——文档承诺升级为代码约束。同文件产出岗位日报 `output/daily-YYYY-MM-DD.md`（campus-radar 思路：每轮新增按站点分组）。
+7. 面试准备包存入「个人知识库 → 面试准备」（复用 knowledge 表，零迁移）；OfferCome 的能力画像暂以漏斗+校准代替，模型版溯源与回看式校准明确不做（样本不足）。
+
 ---
 
-## 二、待吸收（按「价值 ÷ 投入」排序）
+## 二、待吸收（按「价值 ÷ 投入」排序）（按「价值 ÷ 投入」排序）
 
 | 优先级 | 能力项 | 来源 | 本项目现状与计划 |
 | --- | --- | --- | --- |
-| P0 | 漏斗转化统计 | career-ops `stats.mjs` / `rejection-latency.mjs` | 有阶段历史（`timeline.ts`）但没有汇总。**下一步**：纯函数统计 + 概览页卡片 |
-| P0 | 跟进节奏 | career-ops `followup-cadence.mjs` | 有打招呼节奏（`pace.ts`），投递后无跟进提醒 |
+
 | P1 | 评分校准 | career-ops `calibrate.mjs` | 完全没有。自省型功能，最能体现工程判断力 |
 | P1 | 事实守门 | career-ops `verify-cv-facts.mjs` / `story-provenance-check.mjs` | 已有规则版体检（`healthCheck.ts`）查数字口径，缺「面试故事里的数字必须来自仓库」 |
-| P1 | 僵尸岗位检测 | career-ops `detect-reposts.mjs` / `check-liveness.mjs` | 有失效标记，缺「同岗位反复重发」检测 |
-| P1 | 安全停止清单 | BossHunter：检测到验证码/风控/登录墙/未知页面结构即停止，不尝试绕过 | 扩展与抓取器已有类似表述，但没做成**显式规则 + 测试**。值得把这条从文档承诺升级为代码约束 |
+| P1 | 评分校准（回看式） | career-ops `calibrate.mjs` | 基础版已并入漏斗卡（被拒/推进均分差）；career-ops 的回看式校准（定期自动复盘全部历史）暂不做，样本太少 |
+| P1 | 事实守门（模型版） | career-ops `verify-cv-facts.mjs` / `story-provenance-check.mjs` | 规则版已落地（`factGate.ts`：面试数字 vs 简历口径）；模型逐句溯源版暂不做，等评估量上来再说 |
 | P2 | 冻结论证集 | career-ops `evals/` + `eval-golden.mjs` | workbench 没有；主力项目 python-learning-agent 有 9 条评测，可平移同一套方法 |
 | P2 | 迭代式架构图 | BossHunter 的 GitHub Pages 交互架构图（缩放/搜索/主题切换） | 有静态 `docs/architecture.html`，够用，暂不升级 |
 | P2 | 贡献者与治理文档 | BossHunter 的 GOVERNANCE / CONTRIBUTORS / MAINTAINERS（含"作者不得自审计票"） | 个人项目暂不需要完整治理，但**「作者不得自我批准」这条原则**在 AI 协作写代码时值得借鉴到自己的评审习惯上 |

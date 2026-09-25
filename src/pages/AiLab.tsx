@@ -6,6 +6,7 @@ import { deleteRow, insertRow, listRows, updateRow } from '../lib/api'
 import { DIMS } from '../lib/constants'
 import { fmtDateTime } from '../lib/format'
 import { gapPlan } from '../lib/gapPlan'
+import { keywordCoverage } from '../lib/keywordCoverage'
 import { notifyErr, notifyOk } from '../lib/toast'
 import type { Row } from '../types'
 import type { PageProps } from './Overview'
@@ -269,6 +270,38 @@ export default function AiLab({ profile, onChanged, go }: PageProps) {
                     )
                   })}
                 </div>
+                {(() => {
+                  // JD 关键词覆盖（Resume-Matcher 思路，本地比对不耗额度）：
+                  // 缺的词是面试官会追问、该提前准备「用哪段已有能力顶上」的地方
+                  const base = [profile?.resume_summary, (profile?.skills ?? []).join(' '), profile?.self_intro]
+                    .filter(Boolean)
+                    .join('\n')
+                  const cov = keywordCoverage(jd, base)
+                  if (!cov.total) return null
+                  return (
+                    <div className="mt16">
+                      <div className="row" style={{ alignItems: 'baseline' }}>
+                        <b>JD 关键词覆盖</b>
+                        <span className="spacer" />
+                        <span className="mono">
+                          {cov.coverage}%（{cov.matched.length}/{cov.total}）
+                        </span>
+                      </div>
+                      <div className="bar mt8">
+                        <i style={{ width: `${cov.coverage}%`, background: cov.coverage >= 60 ? '#12a150' : cov.coverage >= 35 ? '#f59e0b' : '#f2542d' }} />
+                      </div>
+                      <div className="small mt8">已覆盖：{cov.matched.join('、') || '（无）'}</div>
+                      {cov.missing.length ? (
+                        <div className="small mt8" style={{ color: '#b45309' }}>
+                          缺失：{cov.missing.join('、')} —— 想投就提前准备「用哪段已有能力顶上」的说法
+                        </div>
+                      ) : (
+                        <div className="small muted mt8">JD 的技术词简历全都覆盖了。</div>
+                      )}
+                      <div className="small muted mt8">比对基准是「目标条件」里的项目摘要与技能清单，与上面 AI 的「缺口」互为印证：关键词是本地比对，缺口是模型判断。</div>
+                    </div>
+                  )
+                })()}
               </div>
             </section>
 

@@ -21,6 +21,7 @@ import path from 'node:path'
 
 import { MORE_TEXTS, NEXT_TEXTS, SITES, STRATEGIES, companyFor, detectSiteByUrl, findSite } from './sites.mjs'
 import { COLLECTOR, CRAWLER_DIR, OUT_DIR, PROFILE_DIR, launchBrowser, msgOf, politeDelay } from './lib/browser.mjs'
+import { dailyReportMd, detectStopWall } from './lib/stopRules.mjs'
 import {
   dedupeKey,
   expandTemplate,
@@ -256,6 +257,7 @@ async function crawlTarget({ context, target, opts, log }) {
   const page = await context.newPage()
   const raw = []
   const errors = []
+  let stoppedLabel = null
   let lastPage = startPage
 
   try {
@@ -275,6 +277,18 @@ async function crawlTarget({ context, target, opts, log }) {
 
       const wait = opts.wait || target.site.wait || 3000
       await settle(page, wait)
+
+      // 安全停止清单（显式规则版）：验证码 / 登录墙 / 风控拦截，命中即停当前站点。
+      // 这是「遇到就停，不尝试绕过」的代码约束版——规则本体在 lib/stopRules.mjs，契约测试钉着。
+      const wallText = `${await page.title()} ${(await page.locator('body').textContent().catch(() => '')) ?? ''}`.slice(0, 6000)
+      const wall = detectStopWall(wallText)
+      if (wall.hit) {
+        const reason = `第 ${index} 页命中安全停止清单（${wall.label}），按「遇到就停」纪律停止本站点——不重试、不绕过`
+        errors.push(reason)
+        stoppedLabel = wall.label
+        log(`  ⛔ ${wall.label}：停止本站点。换个时间/登录态再跑，或换别的站点。`)
+        break
+      }
 
       // 抓不到东西时最有用的一步：把渲染后的 HTML 存下来，直接看页面到底长什么样
       if (opts.dump) {
@@ -370,7 +384,7 @@ async function crawlTarget({ context, target, opts, log }) {
     updated_at: new Date().toISOString(),
   })
 
-  return { label, ok: true, jobs, errors, filtered: screened.filtered, dup: deduped.dup, read: screened.kept.length }
+  return { label, ok: true, jobs, errors, filtered: screened.filtered, dup: deduped.dup, read: screened.kept.length, stoppedLabel }
 }
 
 /** 逐个打开岗位详情页，把列表页那点摘要换成完整 JD */
@@ -444,6 +458,22 @@ async function writeOutput(results, opts) {
     await writeFile(`${base}.txt`, payload.text, 'utf8')
     written.push({ base, count: payload.count })
   }
+
+  // 岗位日报：本轮新增的汇总（campus-radar 思路——「今天新出了什么」比全量列表重要）
+  const dateLabel = now.toISOString().slice(0, 10)
+  const sitesForReport = results
+    .filter((r) => r.jobs?.length || r.stoppedLabel)
+    .map((r) => ({
+      label: r.label,
+      channel: r.channel,
+      count: r.jobs?.length ?? 0,
+      titles: (r.jobs ?? []).slice(0, 5).map((j) => `${j.title}${j.city ? `（${j.city}）` : ''}`),
+      stopped: r.stoppedLabel,
+    }))
+  const reportTotal = sitesForReport.reduce((sum, s) => sum + s.count, 0)
+  const dailyPath = path.join(opts.out && !opts.out.endsWith('.json') ? opts.out : OUT_DIR, `daily-${dateLabel}.md`)
+  await writeFile(dailyPath, dailyReportMd({ dateLabel, sites: sitesForReport, total: reportTotal }), 'utf8')
+  if (reportTotal) log(`  岗位日报已写：${path.relative(process.cwd(), dailyPath)}（${reportTotal} 条）`)
   return written
 }
 

@@ -5,7 +5,9 @@ import { listRows, updateRow } from '../lib/api'
 import { STAGES } from '../lib/constants'
 import { daysLeft, fmtDate, fmtDateTime, leftText, recentDays, todayISO } from '../lib/format'
 import { todayPicks } from '../lib/daily'
-import { DEFAULT_PACE, paceStatus, staleApplications } from '../lib/pace'
+import { DEFAULT_PACE, paceStatus } from '../lib/pace'
+import { calibration, funnelStats } from '../lib/funnel'
+import { followupDue } from '../lib/followup'
 import { notifyErr, notifyOk } from '../lib/toast'
 import type { Profile, Row } from '../types'
 
@@ -88,7 +90,11 @@ export default function Overview({ profile, go }: PageProps) {
     minIntervalMin: profile?.min_interval_min ?? DEFAULT_PACE.minIntervalMin,
   }
   const paceNow = paceStatus(msgs, pace)
-  const stale = staleApplications(apps, msgs, 7)
+  // 跟进节奏：按最后一条沟通的状态给窗口（招呼 4 天/已读·超时 2 天/回复 1 天），
+  // 比原先的「7 天没动静」更细——已读不回第 3 天就该动了
+  const followups = followupDue(apps, msgs, today)
+  const funnel = funnelStats(apps, msgs, ivs, offers)
+  const cal = calibration(apps, jobs)
 
   // 「今天先投哪几个」：按 截止紧急 → 优先级 → 匹配分 排，每条带依据和待确认标记
   const picks = todayPicks(jobs, apps, profile, 3)
@@ -151,6 +157,58 @@ export default function Overview({ profile, go }: PageProps) {
         </div>
       </section>
 
+      {apps.length ? (
+        <section className="card">
+          <div className="card-head">
+            <h3>漏斗转化</h3>
+            <span className="spacer" />
+            <span className="small muted">投递 → 回复 → 面试 → Offer，从沟通流水与面试记录推导</span>
+          </div>
+          <div className="card-body">
+            <div className="dim-row">
+              <span className="muted">投递</span>
+              <div className="bar">
+                <i style={{ width: '100%', background: '#3b82f6' }} />
+              </div>
+              <span className="mono" style={{ textAlign: 'right' }}>{funnel.applied}</span>
+            </div>
+            <div className="dim-row">
+              <span className="muted">有回复</span>
+              <div className="bar">
+                <i style={{ width: `${funnel.repliedRate}%`, background: '#f59e0b' }} />
+              </div>
+              <span className="mono" style={{ textAlign: 'right' }}>
+                {funnel.replied}（{funnel.repliedRate}%）
+              </span>
+            </div>
+            <div className="dim-row">
+              <span className="muted">到面试</span>
+              <div className="bar">
+                <i style={{ width: `${funnel.interviewRate}%`, background: '#8b5cf6' }} />
+              </div>
+              <span className="mono" style={{ textAlign: 'right' }}>
+                {funnel.interview}（{funnel.interviewRate}%）
+              </span>
+            </div>
+            <div className="dim-row">
+              <span className="muted">Offer</span>
+              <div className="bar">
+                <i style={{ width: `${funnel.offerRate}%`, background: '#12a150' }} />
+              </div>
+              <span className="mono" style={{ textAlign: 'right' }}>
+                {funnel.offer}（{funnel.offerRate}%）
+              </span>
+            </div>
+            <div className="small muted mt8">
+              回复后到面率 {funnel.interviewAfterReplyRate}%。
+              {cal.gap !== null
+                ? ` 评分校准：被拒的当时均分 ${cal.rejectedAvg} 分，走到后面的均分 ${cal.advancedAvg} 分，差 ${cal.gap} 分${cal.gap >= 20 ? '——预筛在起作用，低分确实该拦。' : cal.gap >= 0 ? '——差距不大，预筛阈值可以再收紧一点。' : '——被拒的反而是当时打高分的，校准一下 skill 关键词。'}`
+                : ' 评分校准要有「被拒」和「推进到后面」两种结果后才会出现。'}
+            </div>
+          </div>
+        </section>
+      ) : null}
+
       <div className="grid grid-2" style={{ alignItems: 'start' }}>
         <section className="card">
           <div className="card-head">
@@ -207,30 +265,32 @@ export default function Overview({ profile, go }: PageProps) {
 
         <section className="card">
           <div className="card-head">
-            <h3>超期未回复</h3>
+            <h3>待跟进</h3>
             <span className="spacer" />
-            <span className="small muted">≥ 7 天</span>
+            <span className="small muted">按沟通状态给节奏，不只是 7 天</span>
             <button className="btn sm ghost" onClick={() => go('pipeline')}>
               去处理
             </button>
           </div>
           <div className="card-body">
-            {stale.length === 0 ? (
-              <Empty text="没有超过 7 天没动静的投递。" />
+            {followups.length === 0 ? (
+              <Empty text="没有到期的跟进。HR 那边有动静，节奏会自动顺延。" />
             ) : (
-              stale.slice(0, 6).map((s) => (
-                <div key={s.application.id} className="row" style={{ alignItems: 'flex-start', marginBottom: 10 }}>
-                  <span className={s.days >= 14 ? 'badge danger' : 'badge warn'}>{s.days} 天</span>
+              followups.slice(0, 6).map((f) => (
+                <div key={f.application.id} className="row" style={{ alignItems: 'flex-start', marginBottom: 10 }}>
+                  <span className={f.overdueDays >= 3 ? 'badge danger' : f.overdueDays >= 1 ? 'badge warn' : 'badge info'}>
+                    {f.overdueDays === 0 ? '今天到期' : `超期 ${f.overdueDays} 天`}
+                  </span>
                   <div style={{ minWidth: 0 }}>
-                    <div className="cell-main">{s.application.company}</div>
+                    <div className="cell-main">{f.application.company}</div>
                     <div className="cell-sub">
-                      {s.application.title} · 最后沟通 {s.lastAt}
+                      {f.application.title} · {f.suggestion}
                     </div>
                   </div>
                 </div>
               ))
             )}
-            {stale.length > 6 ? <div className="small muted">还有 {stale.length - 6} 个，去投递看板看全部。</div> : null}
+            {followups.length > 6 ? <div className="small muted">还有 {followups.length - 6} 条，去投递看板看全部。</div> : null}
           </div>
         </section>
       </div>

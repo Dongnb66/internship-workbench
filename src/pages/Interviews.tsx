@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { errText } from '../cloud'
 import { Empty, Field, Modal, Stat } from '../components/ui'
 import { generateInterviewPrep, summarizeReflection } from '../lib/ai'
 import { applicationOptions } from '../lib/interviews'
+import { interviewFactGate } from '../lib/factGate'
 import { deleteRow, insertRow, listRows, updateRow } from '../lib/api'
 import { fmtDateTime, todayISO } from '../lib/format'
 import { notifyErr, notifyOk } from '../lib/toast'
@@ -216,6 +217,22 @@ export default function Interviews({ profile, onChanged }: PageProps) {
     }
   }
 
+  /** 面试准备包存入知识库：生成结果此前关弹窗即失，落进「个人知识库 → 面试准备」随时复看 */
+  async function savePrepToKnowledge() {
+    if (!aiFor || !aiOut) return
+    try {
+      await insertRow('knowledge', {
+        title: `面试准备 · ${aiFor.company} ${aiFor.title ?? ''} · ${todayISO()}`,
+        category: '面试准备',
+        content: aiOut,
+        tags: [],
+      })
+      notifyOk('已存入「个人知识库 → 面试准备」')
+    } catch (error) {
+      notifyErr(errText(error))
+    }
+  }
+
   async function polish() {
     if (!form.reflection) {
       notifyErr('先在复盘里写点原始记录，再让 AI 整理')
@@ -236,6 +253,18 @@ export default function Interviews({ profile, onChanged }: PageProps) {
   const pending = rows.filter((r) => (r.result ?? 'pending') === 'pending').length
   const passed = rows.filter((r) => r.result === 'pass').length
   const failed = rows.filter((r) => r.result === 'fail').length
+
+  // 事实守门：面试记录里的数字必须与简历口径一致（面试官会 clone 仓库核对）
+  const factViolations = useMemo(() => interviewFactGate(rows, profile), [rows, profile])
+  const violationsByInterview = useMemo(() => {
+    const map = new Map<number, typeof factViolations>()
+    for (const v of factViolations) {
+      const list = map.get(v.interviewId) ?? []
+      list.push(v)
+      map.set(v.interviewId, list)
+    }
+    return map
+  }, [factViolations])
 
   return (
     <div className="grid" style={{ gap: 14 }}>
@@ -305,6 +334,11 @@ export default function Interviews({ profile, onChanged }: PageProps) {
                       <div className="md">{row.reflection}</div>
                     </div>
                   ) : null}
+                  {(violationsByInterview.get(Number(row.id)) ?? []).map((v) => (
+                    <div key={v.label} className="small mt8" style={{ color: '#b45309' }}>
+                      ⚠ {v.label} —— {v.fix}（原话：{v.quote}）
+                    </div>
+                  ))}
                   <div className="actions mt8">
                     <button className="btn sm" onClick={() => openEdit(row)}>
                       编辑 / 复盘
@@ -428,6 +462,12 @@ export default function Interviews({ profile, onChanged }: PageProps) {
               <button className="btn" onClick={() => setAiFor(null)}>
                 关闭
               </button>
+              {aiOut ? (
+                <button className="btn" onClick={() => void savePrepToKnowledge()}>
+                  保存到知识库
+                </button>
+              ) : null}
+              <span className="spacer" />
               <button className="btn primary" onClick={runPrep} disabled={aiBusy || aiLoading}>
                 {aiBusy ? '生成中…' : '生成面试准备'}
               </button>

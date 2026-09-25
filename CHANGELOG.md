@@ -13,6 +13,19 @@
 - **投递看板「原岗位 ↗」跳转**（`Pipeline.tsx` / `ConversationDrawer.tsx` + `timeline.ts`）：看板卡片、表格操作列、会话抽屉头部三处入口跳回招聘平台原帖（打招呼的人此前回不去岗位页）；`jobUrlByApplication` 沿 job_id 映射，无链接的投递提示去岗位池补「岗位链接」。
 - **AI·JD 评估表单「岗位链接」字段**（`AiLab.tsx`）：从评估页入池的岗位此前不写 url、天生跳不回去，现在粘贴 JD 时顺手存链接。
 
+### Added
+
+- **漏斗转化统计**（新 `funnel.ts` + 总览卡）：投递 → 回复 → 面试 → Offer 四层转化率，从沟通流水/面试记录推导；内置**评分校准**（career-ops calibrate 思路）——被拒的当时均分 vs 推进到后面的均分，差值就是预筛准头。
+- **跟进节奏**（新 `followup.ts` + 总览「待跟进」卡）：按最后沟通状态给窗口（招呼 4 天/已读·超时 2 天/回复·约面 1 天，与 timeline.defaultFollowAt 同源），到期即给行动建议，替换原先粗放的「7 天没动静」。
+- **JD 关键词覆盖**（新 `keywordCoverage.ts` + AI·JD 评估面板；Resume-Matcher 思路，Apache-2.0）：本地抽取 JD 技术词与画像摘要做覆盖比对，缺失清单提示「用哪段已有能力顶上」，不耗模型额度。
+- **僵尸岗位检测 + 黑名单**（新 `reposts.ts` / `blacklist.ts` + 广场徽标与「拉黑这家公司」）：同岗位挂过/失效又重发即标「⚠ 僵尸重发」（判定复用 import.ts 的 dedupeKey 保证同源）；黑名单三类维度（company/recruiter/job，get_jobs 维度设计）存设备级 localStorage。
+- **事实守门**（新 `factGate.ts` + 面试页提示）：面试记录里「口径关键词+数字」必须与简历口径文本一致——面试官会 clone 仓库核对；只扫口径词（测试/评测/项目/仓库等），画像无口径文本时宁可不报。
+- **面试准备包存知识库**（Interviews 页 + `KNOW_CATEGORIES` 增「面试准备」）：生成的准备材料可一键存入「个人知识库」，零迁移复用既有表。
+- **安全停止清单**（新 `crawler/lib/stopRules.mjs` + run.mjs 接线 + 契约测试）：验证码/登录墙/风控拦截三类显式规则，命中即停本站点不绕过——把 AGENTS.md §2.3 从文档承诺升级为代码约束。
+- **岗位日报**（stopRules.mjs 的 `dailyReportMd` + run.mjs 每轮产出 `output/daily-YYYY-MM-DD.md`；campus-radar 思路）：按站点分组列本轮新增与提前停止原因。
+
+### Changed
+
 ### Changed
 
 - **模型调用点隔离覆盖率改为推导式**（`aiPromptCoverage.test.mjs`）：扫描 src 全部源码推导 `streamChat` 调用点，未包装的新增调用点默认失败；修掉第 8 个未包装的调用点（`import.ts` 岗位文本结构化）。

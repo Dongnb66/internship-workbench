@@ -46,7 +46,7 @@ export const INDUSTRIES = ['互联网', '人工智能', '金融', '游戏', '硬
 export const PRIORITIES = ['高', '中', '低']
 export const DIMS = ['技能匹配', '经验匹配', '成长空间', '薪资结构', '工作强度', '稳定性', '通勤'] as const
 export const TASK_KINDS = ['投递', '笔试', '面试', '截止', '跟进', '其它']
-export const KNOW_CATEGORIES = ['八股', '面经', '项目', '打招呼话术', '公司情报']
+export const KNOW_CATEGORIES = ['八股', '面经', '项目', '打招呼话术', '公司情报', '面试准备']
 export const RESUME_DIRECTIONS = ['AI Agent 方向', '后端方向', '全栈方向', '算法方向', '通用投递']
 
 /** 目标条件模板：一键填入发起人已知的可验证事实，可自行修改 */
