@@ -170,6 +170,7 @@ npm run selftest                             # 用真浏览器跑本地夹具自
 | [`docs/FAQ.md`](docs/FAQ.md) | 设计取舍问答：为什么不做自动投递、为什么不用 UI 库、匹配度怎么算 |
 | [`docs/architecture.html`](docs/architecture.html) | 手绘架构图（单文件，随代码版本管理） |
 | [`docs/BENCHMARK.md`](docs/BENCHMARK.md) | 同类项目对标：已吸收的能力、待吸收清单、明确不吸收的项及原因 |
+| [`docs/HANDOFF.md`](docs/HANDOFF.md) | 交接单：架构地图、不可违反的不变量、工程纪律、发布流程与坑、接手方拿不到的能力清单 |
 | [`AGENTS.md`](AGENTS.md) | AI 协作规范：人的职责边界、硬性约束、代码约定、提交前验证 |
 | [`crawler/README.md`](crawler/README.md) | 本地抓取器：用法、站点验证状态、已知限制 |
 | [`CHANGELOG.md`](CHANGELOG.md) | 版本变更记录 |

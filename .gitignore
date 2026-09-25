@@ -52,3 +52,12 @@ crawler/output
 
 # 本地 agent 网关的抓取产出
 gateway/out/
+
+# 环境变量与密钥。
+# ⚠️ 原来这里只靠 `*.local` 之类的规则间接挡住 `.env.local`，而 `.env` 本身**并没有被忽略**，
+# 但 AGENTS.md 里写着「不提交 .env…（已在 .gitignore 中）」——文档与事实不符。
+# 本项目当前不使用 .env（云配置写在 src/cloud.ts），但将来接入任何密钥必然第一时间用它，
+# 所以现在就把规则补上，别等到真有密钥时才发现。
+.env
+.env.*
+!.env.example
