@@ -1,4 +1,5 @@
 import { todayISO } from './format'
+import { FOLLOWUP_WINDOWS } from './timeline'
 import type { Row } from '../types'
 
 /**
@@ -6,18 +7,11 @@ import type { Row } from '../types'
  *
  * 打招呼节奏有（pace.ts 管发送频控），投递之后一直是空白：已读不回几天该催、
  * HR 回复了别晾着，全靠感觉。这里按最后一条沟通的状态给不同跟进窗口——
- * 窗口数值与 timeline.defaultFollowAt 同源（招呼 4 天 / 已读·超时 2 天 / 回复·约面 1 天），
+ * 窗口数值与 timeline.defaultFollowAt 同一份常量（FOLLOWUP_WINDOWS），
  * 算出每条活跃投递的建议跟进日，到期和超期的挑出来给行动建议。
  */
 
-/** 各状态的跟进窗口（天）。rejected 是终态不跟进；offer 同理。 */
-export const FOLLOWUP_WINDOWS: Record<string, number> = {
-  sent: 4,
-  read: 2,
-  no_reply: 2,
-  replied: 1,
-  interview: 1,
-}
+/** rejected 是终态不跟进；offer 同理。 */
 
 const SUGGESTIONS: Record<string, string> = {
   sent: '招呼快 4 天了：补一条带新信息的跟进，或换渠道重投',
@@ -66,7 +60,7 @@ export function followupDue(applications: Row[], messages: Row[], today: string 
       lastAt = String(app.applied_at ?? app.created_at ?? '').slice(0, 10)
     }
     if (!lastAt) continue
-    const window = FOLLOWUP_WINDOWS[lastStatus] ?? (lastStatus === 'none' ? 2 : 1)
+    const window = lastStatus === 'none' ? 2 : (FOLLOWUP_WINDOWS[lastStatus] ?? 1)
     const dueAt = plusDays(lastAt, window)
     const overdueDays = diffDays(today, dueAt)
     if (overdueDays < 0) continue

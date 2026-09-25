@@ -29,11 +29,18 @@ function plusDays(days: number): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
+/** 各状态的跟进窗口（天）：与 followup.ts 共用这一份，两处口径永不漂移 */
+export const FOLLOWUP_WINDOWS: Record<string, number> = {
+  sent: 4,
+  read: 2,
+  no_reply: 2,
+  replied: 1,
+  interview: 1,
+}
+
 /** 不同状态给不同跟进节奏：招呼后 4 天、已读/超时未回 2 天、其余 1 天 */
 export function defaultFollowAt(status: string): string {
-  if (status === 'sent') return plusDays(4)
-  if (status === 'read' || status === 'no_reply') return plusDays(2)
-  return plusDays(1)
+  return plusDays(FOLLOWUP_WINDOWS[status] ?? 1)
 }
 
 /** 某个投递的全部沟通，按时间升序 */
