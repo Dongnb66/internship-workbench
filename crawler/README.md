@@ -154,13 +154,38 @@ npm run crawl -- --site boss --keyword Python
   "page": { "url": "https://join.qq.com/post.html", "title": "腾讯招聘", "site": "join.qq.com" },
   "count": 10,
   "jobs": [
-    { "company": "腾讯", "title": "AI全栈工程师", "city": "深圳", "salary": "", "url": "", "raw": "岗位原文…" }
+    { "company": "腾讯", "title": "AI全栈工程师", "city": "深圳", "salary": "", "url": "", "deadline": "", "raw": "岗位原文…" }
   ],
   "text": "# 采集自 …\n\n公司：腾讯\n岗位：…"
 }
 ```
 
-字段名与浏览器扩展的采集结果**逐字一致**（`src/lib/import.ts#parseCollectorJson` 只认这一套）。多出来的 `channel` 是来源标签，工作台优先用它，没有才按域名猜。`output/.seen-<站点>.json` 是跨轮次去重历史（避免每天重复产出同一批岗位），`--purge` 清掉它。
+字段名与浏览器扩展的采集结果**逐字一致**（`src/lib/import.ts#parseCollectorJson` 只认这一套）。多出来的 `channel` 是来源标签，工作台优先用它，没有才按域名猜。`deadline` 是结构化源才能给到的投递截止日（`yyyy-mm-dd`），DOM 抓取一般是空串 —— 它直接喂给概览页的临近截止待办，所以能拿到就别丢。`output/.seen-<站点>.json` 是跨轮次去重历史（避免每天重复产出同一批岗位），`--purge` 清掉它。
+
+## OfferBiu 校招库（API 源，不需要浏览器）
+
+`sites.mjs` 里的站点全是 **DOM 翻页**型（进列表页、点下一页、认卡片结构）。OfferBiu 不一样：
+它是 **JSON API**，一次请求就能拿到「公司 + 岗位 + 地点 + 投递截止日 + 官方公告链接 + 投递入口 + 公司性质 + 行业分类」，
+字段密度是 DOM 抓取拿不到的。实测 2027 届秋招库内 **5860 条 / 293 页**。
+
+```bash
+# 取 300 条落到本地（推荐：先落盘，重复用不要反复打对方接口）
+node crawler/sources/offerbiu.mjs --season 2027 --limit 300 --out crawler/output/offerbiu-2027.json
+
+# 只按行业大类取（多值用逗号分隔）
+node crawler/sources/offerbiu.mjs --season 2027 --groups internet-tech,consumer-retail --limit 100
+
+# 先小量试一条链路
+node crawler/sources/offerbiu.mjs --season 2027 --limit 20
+```
+
+产出走的就是上面那套采集器 JSON 契约（`channel` 固定为「岗位广场」，`site_id` 为 `offerbiu`），
+所以工作台「岗位池 → 批量导入」选中它即可，**不消耗模型额度**。
+
+**合规边界（这类功能最容易越界，所以写死在代码注释里）**：只读公开接口、不登录不带 cookie、
+请求间隔默认 1.2 秒且不做并发、只取公开字段、产出物标注来源、鼓励落盘缓存。
+对方 `robots.txt` 当前为空——**空 robots 不等于许可**，所以按以上更严标准自我约束；
+若对方将来明确禁止，这条源应当直接删掉，而不是改换姿势继续抓。
 
 ## 抓不到东西怎么办
 

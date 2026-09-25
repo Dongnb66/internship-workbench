@@ -147,6 +147,42 @@ issue #2368 列了 10 个 mode，#2461 又追加 4 个，而那个 PR 排队期�
 4. 写成 `.mjs` 而非 `.ts`：app 的 tsconfig 只给 DOM 类型（`"types": ["vite/client"]`），
    用 `node:fs` 会编译失败；`.mjs` 不参与 tsc、只参与 vitest，与 `crawler/`、`gateway/` 的既有契约测试一致。
 
+### 6. OfferBiu 校招库接入 — 来自 recruitops-agent 的数据源做法
+
+**怎么发现它的**：recruitops-agent 里 `offerbiu` 出现 **403 次**，且有专门的模块
+（`packages/discovery/offerbiu_{refresh,registry}.py`、`packages/recruitment_core/offerbiu_policy.py`、
+`scripts/eval_offerbiu_crawl_sample.py`）——一个数据源值得单开 policy 与 eval 脚本，说明它是核心依赖。
+
+**它是什么**：`offerbiu.com` 既是**同赛道的商业产品**（大学生秋招投递管理：总览/我的投递/简历库/
+面试跟进/AI 匹配/简历优化），也提供**公开 JSON API**。recruitops 的代码注释写得很准：
+`BIU is a public source and does not need the local browser proxy or cookies`。
+
+**实测（2026-09-25）**：
+
+| 项 | 结果 |
+| --- | --- |
+| `GET /api/recruitment/postings?seasonYear=2027&recruitType=秋招&size=n` | **HTTP 200，application/json，无需鉴权** |
+| 2027 届秋招库容量 | **5860 条 / 293 页**（2026 届 5840 条；2028 届暂无数据） |
+| 单条字段 | `companyName` `companyNature`（央国企/民企…）`industry` `industryGroupCodes` `recruitType` `targetYears` `locations` `positionsText` `deadlineAt` `announcementUrl`（官方公告）`applyUrl`（投递入口）`id` … |
+| `robots.txt` | 空（**无声明 ≠ 许可**，因此按更严标准自我约束） |
+
+**本项目的落点**：
+
+1. 新增 `crawler/sources/offerbiu.mjs`：`sites.mjs` 里的站点全是 **DOM 翻页**型，
+   而这是第一个 **API 型**来源 —— 一次请求拿到 DOM 抓取拿不到的字段密度
+   （尤其**投递截止日**与**官方公告链接**）。
+2. **复用既有采集器 JSON 契约**，不发明新格式：产出直接进「岗位池 → 批量导入」，不消耗模型额度。
+   `channel` 固定「岗位广场」（必须落在 `CHANNELS` 里，否则按渠道筛选会漏），`site_id` 为 `offerbiu`。
+3. **顺手修掉一个真实契约缺口**：`parseCollectorJson` 原本把 `deadline` 写死成 `''`
+   —— 即 payload 里带得进来也会被丢掉，症状是静态的（导入成功、岗位都在、**截止日全空**，
+   概览页的临近截止待办永远是空的）。现已两端打通：`makePayload` 写、`parseCollectorJson` 读，
+   并配 `crawler/__tests__/offerbiu.test.mjs` 12 条断言，含「截止日穿过 payload 边界后仍然存在」。
+4. 夹具用**真实 API 返回的形状**，不是照文档编的 —— 字段名写错的契约测试等于没写。
+
+**合规边界**（写进代码注释，因为这是最容易越界的一类功能）：只读公开接口、不登录不带 cookie、
+默认 1.2 秒间隔且不做并发、只取公开字段、产出标注来源、鼓励落盘缓存。
+对方 robots 为空**不等于许可**，所以按更严标准自我约束；**若对方将来明确禁止，这条源应直接删除**。
+
 ---
 
 ## 二、待吸收（按「价值 ÷ 投入」排序）

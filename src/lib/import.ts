@@ -397,7 +397,10 @@ export function parseCollectorJson(text: string): JobDraft[] | null {
       job_type: normalizeJobType(`${title} ${jd.slice(0, 200)}`),
       salary: String(raw?.salary ?? '').trim().slice(0, 40),
       education: '',
-      deadline: '',
+      // 截止日：结构化源（OfferBiu 校招库这类）会带；DOM 抓取一般没有。
+      // 这里曾经把它丢掉（固定写 ''），导致「岗位广场」导进来的岗位全部没有截止日，
+      // 概览页的临近截止待办因此永远空着。认不出的写法一律留空，不猜日期。
+      deadline: normalizeDate(String(raw?.deadline ?? '')),
       url: String(raw?.url ?? '').trim(),
       tags: [],
       jd_text: jd.slice(0, 8000),

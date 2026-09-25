@@ -1,4 +1,9 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+
+const here = path.dirname(fileURLToPath(import.meta.url))
 
 import {
   dedupeKey,
@@ -190,8 +195,24 @@ describe('makePayload / toText', () => {
     now: new Date('2026-09-23T09:07:00Z'),
   })
 
-  it('字段名与浏览器扩展的采集结果一致（parseCollectorJson 只认这套键）', () => {
-    expect(Object.keys(payload.jobs[0]).sort()).toEqual(['city', 'company', 'raw', 'salary', 'title', 'url'])
+  it('字段名与浏览器扩展的采集结果一致（扩展的键必须被全部覆盖，抓取器只许多出白名单字段）', () => {
+    // 扩展那侧的键**从源码里推导**，不再手抄一遍：手抄的清单两边一起改名时会一起错，
+    // 而这个断言的职责恰恰是"两边一旦不同步就报错"。
+    const source = readFileSync(path.join(here, '..', '..', 'extension', 'collector.js'), 'utf8')
+    const m = source.match(/return\s*\{\s*(company,\s*title,\s*city,\s*salary,\s*url,\s*raw)\s*\}/)
+    expect(m, '没能从 extension/collector.js 里解析出岗位字段，扫描逻辑坏了').not.toBeNull()
+    const extKeys = m[1].split(',').map((s) => s.trim()).sort()
+
+    const crawlerKeys = Object.keys(payload.jobs[0]).sort()
+    const missing = extKeys.filter((k) => !crawlerKeys.includes(k))
+    expect(missing, `抓取器少了扩展有的字段：${missing.join('、')}`).toEqual([])
+
+    // 抓取器允许多出的字段：每条都要有理由，没理由的"多出来"就是漂移
+    const EXTRA_ALLOWED = { deadline: '结构化源（OfferBiu 校招库）才有，DOM 抓取恒为空串' }
+    const extra = crawlerKeys.filter((k) => !extKeys.includes(k))
+    const unexplained = extra.filter((k) => !(k in EXTRA_ALLOWED))
+    expect(unexplained, `这些新增字段没有说明理由：${unexplained.join('、')}`).toEqual([])
+
     expect(payload.source).toContain('抓取器')
     expect(payload.channel).toBe('官网投递')
     expect(payload.page.site).toBe('join.qq.com')

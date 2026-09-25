@@ -211,11 +211,22 @@ export function makePayload({ siteId = '', siteName = '', channel = '', pageUrl 
       city: cleanText(j?.city),
       salary: cleanText(j?.salary),
       url: String(j?.url ?? ''),
+      // 截止日：结构化源（如 OfferBiu 校招库）能给到，DOM 抓取一般给不了。
+      // 有就带出来，没有就是空串 —— 不在这里猜。
+      deadline: dateOnlyOf(j?.deadline),
       raw: cleanText(j?.raw),
     })),
   }
   payload.text = toText(payload)
   return payload
+}
+
+/** 把各种日期写法收敛成 yyyy-mm-dd；认不出就返回空串（宁可不带，也不给错日期） */
+export function dateOnlyOf(value) {
+  const m = /(\d{4})\s*[-/年.]\s*(\d{1,2})\s*[-/月.]\s*(\d{1,2})/.exec(String(value ?? ''))
+  if (!m) return ''
+  const p = (n) => String(Number(n)).padStart(2, '0')
+  return `${m[1]}-${p(m[2])}-${p(m[3])}`
 }
 
 /** 与扩展的 toText 同格式，保证两条通道产出的文本能被同一套正则吃掉 */
@@ -227,6 +238,7 @@ export function toText(payload) {
       `岗位：${j.title}`,
       j.city ? `城市：${j.city}` : '',
       j.salary ? `薪资：${j.salary}` : '',
+      j.deadline ? `截止：${j.deadline}` : '',
       j.url ? j.url : '',
       '岗位原文：',
       String(j.raw ?? '').replace(/\n{2,}/g, '\n'),
