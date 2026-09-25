@@ -3,6 +3,7 @@ import { errText } from '../cloud'
 import { Empty, Field, Modal } from '../components/ui'
 import { generateApplyAnswers } from '../lib/ai'
 import { listRows } from '../lib/api'
+import { APPLY_KIT_FIELDS, APPLY_KIT_HINTS, type ApplyKitValues } from '../lib/constants'
 import { notifyErr, notifyOk } from '../lib/toast'
 import type { Row } from '../types'
 import type { PageProps } from './Overview'
@@ -27,30 +28,38 @@ export default function ApplyKit({ profile, go }: PageProps) {
   const kit = useMemo(() => {
     const p = profile ?? {}
     const main = resumes.find((r) => r.is_default) ?? resumes[0]
-    const skills = (p.skills ?? []).join('、')
-    const directions = (p.directions ?? []).join('、')
-    return [
-      { label: '姓名', value: p.full_name ?? '', required: true },
-      { label: '性别', value: '', required: true, hint: '按证件如实填' },
-      { label: '联系电话', value: p.phone ?? '', required: true },
-      { label: '电子邮箱', value: p.contact_email ?? '', required: true },
-      { label: '学校', value: p.school ?? '', required: true },
-      { label: '学历', value: '本科', required: true },
-      { label: '专业', value: p.major ?? '', required: true },
-      { label: '年级', value: p.grade ?? '', required: false },
-      { label: '毕业年份', value: p.grad_year ?? '', required: true },
-      { label: '期望城市', value: (p.expect_city ?? []).join('、'), required: false },
-      { label: '期望岗位', value: directions || (p.expect_type ?? []).join('、'), required: false },
-      { label: '期望日薪', value: p.expect_daily ? `${p.expect_daily} 元/天` : '', required: false },
-      { label: '可到岗时间', value: p.available_from ? String(p.available_from).slice(0, 10) : '', required: false },
-      { label: '可实习时长', value: p.available_days ?? '', required: false },
-      { label: '技能关键词', value: skills, required: false },
-      { label: 'GitHub', value: p.github ?? '', required: false },
-      { label: '作品集', value: p.portfolio ?? '', required: false },
-      { label: '一句话自我介绍', value: p.self_intro ?? '', required: false },
-      { label: '项目经历', value: main?.projects ?? p.resume_summary ?? '', required: false },
-      { label: '简历文件名', value: main ? `${main.name} ${main.version ?? ''}`.trim() : '', required: false },
-    ]
+    // 取值必须覆盖 APPLY_KIT_FIELDS 的每一项：类型是 ApplyKitValues，
+    // 以后往清单里加字段但忘了在这里给取值，`tsc -b` 会直接失败
+    const values: ApplyKitValues = {
+      姓名: p.full_name ?? '',
+      性别: '',
+      联系电话: p.phone ?? '',
+      电子邮箱: p.contact_email ?? '',
+      学校: p.school ?? '',
+      学历: '本科',
+      专业: p.major ?? '',
+      年级: p.grade ?? '',
+      毕业年份: p.grad_year ?? '',
+      期望城市: (p.expect_city ?? []).join('、'),
+      期望岗位: (p.directions ?? []).join('、') || (p.expect_type ?? []).join('、'),
+      期望日薪: p.expect_daily ? `${p.expect_daily} 元/天` : '',
+      可到岗时间: p.available_from ? String(p.available_from).slice(0, 10) : '',
+      可实习时长: p.available_days ?? '',
+      技能关键词: (p.skills ?? []).join('、'),
+      GitHub: p.github ?? '',
+      作品集: p.portfolio ?? '',
+      一句话自我介绍: p.self_intro ?? '',
+      项目经历: main?.projects ?? p.resume_summary ?? '',
+      简历文件名: main ? `${main.name} ${main.version ?? ''}`.trim() : '',
+    }
+    // 顺序与提示全部来自 APPLY_KIT_FIELDS，页面不再自己维护一份字段清单
+    return APPLY_KIT_FIELDS.map((f) => ({
+      label: f.label,
+      value: values[f.label],
+      required: f.required,
+      fillable: f.fillable,
+      hint: APPLY_KIT_HINTS[f.label],
+    }))
   }, [profile, resumes])
 
   const missing = kit.filter((f) => f.required && !f.value)

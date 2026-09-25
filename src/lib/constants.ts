@@ -36,28 +36,50 @@ export const PROFILE_TEMPLATE = {
     '可流畅阅读英文技术文档与官方 API 文档。',
 }
 
-/** 网申填写包字段顺序（也用于 Chrome 扩展的字段匹配） */
+/**
+ * 网申填写包的字段清单 —— **唯一事实源**。
+ *
+ * 这份清单有三个消费者：填写包页面（生成 `applykit.json`）、浏览器扩展（按它去页面上
+ * 找对应输入框填入）、契约测试（校验两边一致）。以前三个地方各写一份，
+ * 结果「性别」「技能关键词」在页面里导出了、扩展里却没有对应规则 —— 用户以为填了，
+ * 页面上其实是空的，而且全程不报错。所以清单必须只有一处。
+ *
+ * `fillable` 这个标记是给契约测试用的：像「简历文件名」这种只随包带出去供人核对、
+ * 页面上并没有对应输入框的字段，必须显式标成 false，否则测试会永远要求扩展
+ * 给它写一条匹配规则，逼着后来的人要么加假规则、要么关掉测试。
+ */
 export const APPLY_KIT_FIELDS = [
-  '姓名',
-  '性别',
-  '联系电话',
-  '电子邮箱',
-  '学校',
-  '学历',
-  '专业',
-  '年级',
-  '毕业年份',
-  '期望城市',
-  '期望岗位',
-  '期望日薪',
-  '可到岗时间',
-  '可实习时长',
-  '技能关键词',
-  'GitHub',
-  '作品集',
-  '一句话自我介绍',
-  '项目经历',
+  { label: '姓名', required: true, fillable: true },
+  { label: '性别', required: true, fillable: true, hint: '按证件如实填' },
+  { label: '联系电话', required: true, fillable: true },
+  { label: '电子邮箱', required: true, fillable: true },
+  { label: '学校', required: true, fillable: true },
+  { label: '学历', required: true, fillable: true },
+  { label: '专业', required: true, fillable: true },
+  { label: '年级', required: false, fillable: true },
+  { label: '毕业年份', required: true, fillable: true },
+  { label: '期望城市', required: false, fillable: true },
+  { label: '期望岗位', required: false, fillable: true },
+  { label: '期望日薪', required: false, fillable: true },
+  { label: '可到岗时间', required: false, fillable: true },
+  { label: '可实习时长', required: false, fillable: true },
+  { label: '技能关键词', required: false, fillable: true },
+  { label: 'GitHub', required: false, fillable: true },
+  { label: '作品集', required: false, fillable: true },
+  { label: '一句话自我介绍', required: false, fillable: true },
+  { label: '项目经历', required: false, fillable: true },
+  { label: '简历文件名', required: false, fillable: false, hint: '仅供你核对投的是哪一版，页面上没有这个输入框' },
 ] as const
+
+export type ApplyKitLabel = (typeof APPLY_KIT_FIELDS)[number]['label']
+
+/** 取值映射必须覆盖清单里的每一个字段：漏一个，TypeScript 直接报错（编译期强制，不靠人记） */
+export type ApplyKitValues = Record<ApplyKitLabel, string>
+
+/** 用户自定义提示（少数需要额外说明的字段才有） */
+export const APPLY_KIT_HINTS: Partial<Record<ApplyKitLabel, string>> = Object.fromEntries(
+  APPLY_KIT_FIELDS.filter((f) => 'hint' in f).map((f) => [f.label, (f as { hint: string }).hint]),
+) as Partial<Record<ApplyKitLabel, string>>
 
 /** 打招呼生成的硬约束：只放大可验证能力，不主动暴露短板 */
 export const GREETING_RULES = `打招呼纪律（必须严格遵守）：

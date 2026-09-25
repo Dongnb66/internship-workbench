@@ -12,7 +12,7 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   test: {
     environment: 'node',
-    include: ['src/**/*.test.ts', 'crawler/**/*.test.mjs', 'gateway/**/*.test.mjs'],
+    include: ['src/**/*.test.ts', 'crawler/**/*.test.mjs', 'gateway/**/*.test.mjs', 'extension/**/*.test.mjs'],
     coverage: {
       provider: 'v8',
       include: ['src/lib/**/*.ts'],

@@ -3,12 +3,18 @@
 本文记录一次**对标调研**的结果：把 GitHub 上同类项目的做法逐条对照本项目，已吸收的写清落点，
 未吸收的写清为什么不吸收或排在哪一步。目的不是罗列功能，而是让「下一步做什么」有依据。
 
-调研对象（均为 MIT / 开源，可直接读源码）：
+调研对象（均为公开仓库，可直接读源码）：
 
-| 项目 | 规模 | 形态 | 为什么看它 |
-| --- | --- | --- | --- |
-| [career-ops](https://github.com/career-ops-hq/career-ops) | 72k★ | 本地 CLI，跑在 AI 编程 CLI 里 | 同领域的**规模上限**，MIT，评测与守门机制最完整 |
-| [recruitops-agent](https://github.com/849879772/recruitops-agent) | — | Windows 桌面（Electron + 本地 FastAPI + PostgreSQL） | 国内秋招场景，抓取/投递/邮件链路最贴近 |
+| 项目 | 规模 | 形态 | 许可 | 为什么看它 |
+| --- | --- | --- | --- | --- |
+| [career-ops](https://github.com/career-ops-hq/career-ops) | 72k★ | 本地 CLI，跑在 AI 编程 CLI 里 | MIT（可抄） | 同领域的**规模上限**，评测与守门机制最完整 |
+| [recruitops-agent](https://github.com/849879772/recruitops-agent) | — | Windows 桌面（Electron + 本地 FastAPI + PostgreSQL） | MIT（可抄） | 国内秋招场景，抓取/投递/邮件链路最贴近 |
+| [BossHunter](https://github.com/shengjidaguai-china/BossHunter) | 893★ | Python 本地服务 + Chrome 自动化 | **PolyForm Noncommercial（不可抄代码）** | 多平台采集 + 人工确认投递闭环，工程治理体系成熟 |
+| Offertong 网申插件（商业产品，无源码） | — | Chrome 扩展 | 专有 | 只作为**产品形态**参考：网申一键填表 |
+
+> ⚠️ **许可证红线**：BossHunter 用的是 PolyForm Noncommercial，属于 **source-available（源码可见）而非 OSI 开源**，
+> 商业使用需另行授权。**它的代码一行都不能进本仓库**（本仓库是 MIT，会把许可传染性搞乱）。
+> 只借鉴**思路与文档表达方式**——这类"看得见的高质量工程"最容易让人顺手抄代码，所以在这里写死。
 
 ---
 
@@ -62,27 +68,57 @@ JD 是从 BOSS / 官网 / 岗位广场**抓来的陌生人写的文本**，简�
 
 一个刻意的边界：**JD 评估不注入语气样本**。风格锚点会干扰判断，需要风格的是给对方看的话术，不是判断本身。
 
+### 4. 填写包字段契约 — 来自 Offertong 类网申插件的产品形态，机制借鉴本项目 `crawler/` 的既有契约测试
+
+**它的做法（产品层面）**：网申页面上装一个扩展，一键把简历信息填进各类表单。
+
+本项目其实**早就有这个能力**（`extension/` 的「一键填充当前页面」+ 「网申填写包」页导出 `applykit.json`），
+真正的问题在实现层：**同一份字段清单存在三个副本**——
+
+| 位置 | 条数 |
+| --- | --- |
+| `src/lib/constants.ts` 的 `APPLY_KIT_FIELDS` | 19（从来没被任何代码引用，纯死代码） |
+| `src/pages/ApplyKit.tsx` 的 `kit`（自己硬编码） | 20 |
+| `extension/content.js` 的 `FIELD_RULES` | 17 |
+
+后果是**静默的**：`性别`、`技能关键词` 两个字段在页面里导出了，扩展里却没有对应匹配规则 →
+填充提示"完成"，但页面上这两个格子是空的，不报错、也不知道少了什么。
+
+**本项目的落点**：
+
+1. `APPLY_KIT_FIELDS` 升级为**唯一事实源**（对象数组 + `required` + `fillable` + `hint`）。
+2. `ApplyKit.tsx` 按清单生成，取值映射类型为 `Record<ApplyKitLabel, string>` ——
+   以后往清单里加字段却忘了给取值，**`tsc -b` 直接失败**，不靠人记得。
+3. `extension/content.js` 补齐 `性别` / `技能关键词` 两条规则。
+4. 新增 `extension/__tests__/contract.test.mjs`（并入 `vitest include`）：正向断言"每个可填字段都有规则"，
+   配合主键归属与条数一致构成双射。**契约测试的价值在于新增/改名时自动报错**，
+   而不是靠人记得去两个文件里同步。
+
 ---
 
 ## 二、待吸收（按「价值 ÷ 投入」排序）
 
-| 优先级 | 能力项 | career-ops 的做法 | 本项目现状与计划 |
+| 优先级 | 能力项 | 来源 | 本项目现状与计划 |
 | --- | --- | --- | --- |
-| P0 | 漏斗转化统计 | `stats.mjs` / `funnel-velocity.mjs` / `rejection-latency.mjs`：各阶段转化率、投递到回复的延迟 | 有阶段历史（`timeline.ts`），但没有汇总。**下一步**：纯函数统计 + 概览页卡片 |
-| P0 | 跟进节奏 | `followup-cadence.mjs` + 逾期种子提醒 | 有打招呼节奏（`pace.ts`），但投递后无跟进提醒。**下一步**：按阶段设基准天数，逾期在待办里冒出来 |
-| P1 | 评分校准 | `calibrate.mjs`：评估分数是否预测了真实结果（读 outcome 数据，不改评分） | 完全没有。这是自省型功能，也是最能体现工程判断力的一块 |
-| P1 | 事实守门 | `verify-cv-facts.mjs` / `story-provenance-check.mjs`：数字必须可溯源 | 已有规则版体检（`healthCheck.ts`）查数字口径，缺「面试故事里的数字必须来自仓库」 |
-| P1 | 僵尸岗位检测 | `detect-reposts.mjs` / `check-liveness.mjs`（`--verify` 用 Playwright 复查） | 有失效标记，缺「同岗位反复重发」与发布时间异常检测 |
-| P2 | 冻结论证集 | `evals/` + `eval-golden.mjs` | workbench 没有；主力项目 python-learning-agent 有 9 条评测，可平移同一套方法 |
-| P2 | 环境自检 | `doctor.mjs` | 有 `healthCheck.ts`（数据体检），缺「运行环境/版本/依赖」自检 |
-| P2 | 文档体系 | `DATA_CONTRACT.md` / `ARCHITECTURE.md` / `GOVERNANCE.md` / `SECURITY.md` / 17 语言 README | 有 `docs/` 但缺数据契约与安全说明。面试时这类文档是「工程成熟度」的硬证据 |
-| P3 | 一致性检查脚本族 | `cv-sync-check` / `tracker-sync-check` / `check-table-freshness` | 部分覆盖（`healthCheck.ts`），暂不展开 |
-| P3 | 插件系统 | `docs/PLUGINS.md` + 社区注册表 | 规模不匹配，暂不做 |
+| P0 | 渠道能力边界表 | BossHunter 的「平台能力边界」表（哪个平台支持投递/监听、哪个只读采集后人工回填） | 渠道只记为字符串标签。**下一步**：把「采集 / AI 处理 / 投递 / 回填」四项能力做成常量矩阵并在 UI 显示，避免用户误以为自动投递 |
+| P0 | 漏斗转化统计 | career-ops `stats.mjs` / `rejection-latency.mjs` | 有阶段历史（`timeline.ts`）但没有汇总。**下一步**：纯函数统计 + 概览页卡片 |
+| P0 | 跟进节奏 | career-ops `followup-cadence.mjs` | 有打招呼节奏（`pace.ts`），投递后无跟进提醒 |
+| P1 | 评分校准 | career-ops `calibrate.mjs` | 完全没有。自省型功能，最能体现工程判断力 |
+| P1 | 事实守门 | career-ops `verify-cv-facts.mjs` / `story-provenance-check.mjs` | 已有规则版体检（`healthCheck.ts`）查数字口径，缺「面试故事里的数字必须来自仓库」 |
+| P1 | 僵尸岗位检测 | career-ops `detect-reposts.mjs` / `check-liveness.mjs` | 有失效标记，缺「同岗位反复重发」检测 |
+| P1 | 安全停止清单 | BossHunter：检测到验证码/风控/登录墙/未知页面结构即停止，不尝试绕过 | 扩展与抓取器已有类似表述，但没做成**显式规则 + 测试**。值得把这条从文档承诺升级为代码约束 |
+| P2 | 冻结论证集 | career-ops `evals/` + `eval-golden.mjs` | workbench 没有；主力项目 python-learning-agent 有 9 条评测，可平移同一套方法 |
+| P2 | 迭代式架构图 | BossHunter 的 GitHub Pages 交互架构图（缩放/搜索/主题切换） | 有静态 `docs/architecture.html`，够用，暂不升级 |
+| P2 | 贡献者与治理文档 | BossHunter 的 GOVERNANCE / CONTRIBUTORS / MAINTAINERS（含"作者不得自审计票"） | 个人项目暂不需要完整治理，但**「作者不得自我批准」这条原则**在 AI 协作写代码时值得借鉴到自己的评审习惯上 |
 
 ## 三、明确**不**吸收
 
 | 项 | 原因 |
 | --- | --- |
 | 「让用户自己填 API Key」 | 本项目是平台托管的 Web 应用，模型通道是平台 keyless 通道（额度错误码 `quota_` 的官方语义是 **Creator quota**）。recruitops-agent 能这么做是因为它**是单机自托管软件**，Key 存在用户自己电脑上。两种形态不同，不是能力差异。详见 `docs/FAQ.md` 相关条目 |
+| 自动化投递 / 监听 HR 回复 | BossHunter 对 BOSS 直聘做了低频发送与回复监听，并**自己标注了封号风险**。本项目不做：账号安全 > 效率，且平台规则风险由用户独自承担 |
 | 自动投递 / 自动发送 | career-ops 自己也把 `prepare-application.mjs` 写成「永不 POST」，并把这条当产品承诺。本项目同样只生成草稿，最终提交由人完成 |
+| 绕验证码 / 风控 | BossHunter 明确"不尝试绕过"，本条与其一致，且是硬约束 |
 | 把个人短板写进代码做自动判断 | 见上文隐私红线。工具可以提示「JD 提出了这项要求」，但不能在公开仓库里替用户断言「你不满足」 |
+| 直接搬运 BossHunter 代码 | 许可证不允许（PolyForm Noncommercial），见开头的红线说明 |
+

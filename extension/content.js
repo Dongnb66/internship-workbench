@@ -6,6 +6,7 @@
 
 const FIELD_RULES = [
   { key: ['姓名', 'name', '真实姓名'], patterns: ['姓名', '真实姓名', '中文名', 'yourname', 'fullname', 'realname', 'username', 'name'], ignore: ['姓', 'lastname', 'firstname', '昵称', 'nickname', '项目名', '公司名', '学校名', '用户名'] },
+  { key: ['性别'], patterns: ['性别', 'gender', 'sex'], ignore: ['性別', '性别要求'] },
   { key: ['联系电话', '手机号'], patterns: ['手机', '电话', 'mobile', 'phone', 'tel'], ignore: ['紧急', 'parent', '区号', '验证码'] },
   { key: ['电子邮箱', '常用邮箱'], patterns: ['邮箱', 'email', 'mail'], ignore: ['验证码', '确认'] },
   { key: ['学校'], patterns: ['学校', '院校', '毕业院校', 'school', 'university', 'college'], ignore: ['中学', '高中', '小学'] },
@@ -18,6 +19,7 @@ const FIELD_RULES = [
   { key: ['期望日薪'], patterns: ['期望薪资', '期望日薪', '薪资要求', 'salary', 'expectsalary'], ignore: ['月薪', '年薪'] },
   { key: ['可到岗时间'], patterns: ['到岗', '入职时间', '可实习时间', 'availablefrom', 'joindate', 'reportdate'], ignore: [] },
   { key: ['可实习时长'], patterns: ['实习时长', '实习期限', '可实习周期', 'duration', 'internperiod'], ignore: [] },
+  { key: ['技能关键词'], patterns: ['技能关键词', '专业技能', '技术栈', '技能', 'techstack', 'skill', '专长'], ignore: ['技能等级', '技能证书', '语言能力', '技能培训'] },
   { key: ['GitHub'], patterns: ['github', '代码仓库', '开源'], ignore: [] },
   { key: ['作品集'], patterns: ['作品集', '个人主页', '博客', 'portfolio', 'website', 'homepage', 'blog'], ignore: [] },
   { key: ['一句话自我介绍'], patterns: ['自我介绍', '个人简介', '自我评价', 'selfintro', 'selfevaluation', 'introduction', 'aboutme'], ignore: ['为什么', '优势'] },
