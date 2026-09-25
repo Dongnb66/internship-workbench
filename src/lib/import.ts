@@ -1,6 +1,7 @@
 import { streamChat } from './ai'
 import { JOB_TYPES } from './constants'
 import { textToArray } from './format'
+import { wrapUntrusted } from './untrusted'
 import type { Profile, Row } from '../types'
 
 /**
@@ -244,7 +245,11 @@ export async function parseJobsFromBlock(block: string, hintSource: string): Pro
   try {
     const rawText = await streamChat({
       system: PARSE_JOBS_SYSTEM,
-      user: `【待结构化文本】\n${text.slice(0, 9000)}`,
+      // 这段文本是从招聘网站／邮件／聊天记录里复制来的陌生人写的原文，属于外部不可信数据，
+      // 必须走隔离包装。之前这里是裸拼的 —— 它是本仓第 8 个模型调用点，
+      // 而当时的覆盖率断言是手写清单，只列了 7 个，所以一直没被发现。
+      // 现在覆盖率断言改成从源码里**推导**调用点，漏一个就红。
+      user: wrapUntrusted('待结构化文本', text.slice(0, 9000)),
       json: true,
     })
     const parsed = JSON.parse(rawText) as { jobs?: unknown[] }

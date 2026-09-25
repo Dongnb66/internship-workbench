@@ -18,6 +18,34 @@
 
 ---
 
+## 〇、调研方法（先说清楚证据等级）
+
+**第一轮的做法是不合格的**：只读 README + 文件列表就下结论，等于把"作者声称的优点"当成了"实际优点"。
+比如 career-ops 的 README 说它有 A-H 评估、有 untrusted 校验、有 voice-dna——这些话术层面的东西，
+读 README 就能写出来，但**写不出它的实现为什么这么设计**，也发现不了自己仓库里对应的真实缺陷。
+
+现在的方式（可复现）：
+
+```bash
+git clone --depth 1 <repo>            # 三个都拉到本地，不只看网页
+cd career-ops && npm i --ignore-scripts   # 只装 4 个依赖，跳过 playwright 浏览器下载
+node test-all.mjs --quick            # 跑它自己的全量测试入口
+node --test tests/*.test.mjs         # 逐文件跑单测，拿真实通过数
+# 再定向读关键实现的源码注释 —— 设计理由几乎都写在文件头的块注释里
+```
+
+**实测记录（career-ops v1.34.0）**：`tests/` 下 273 个测试文件；`node --test tests/*.test.mjs`
+在**本机沙箱内**跑出 **781 个用例 / 通过 509 / 失败 268 / 跳过 4**（耗时 6 分钟）。
+抽查失败项：`followup-seed-tests.mjs` 报 `ENOENT ...\Temp\co-seed-*\follow-ups.md`、
+`set-status-tests.mjs` 报 `spawnSync ... EBUSY` —— 都是**沙箱拦子进程与临时目录写入**造成的，
+不是它的代码有问题（个别脚本单独跑反而 OK，例：`validate-untrusted-content-coverage.mjs --self-test` 通过）。
+
+> **结论的边界**：因此本文件里"跑过"的含义是"跑过、拿到了真实数据、并区分了环境失败与真实失败"，
+> **不等于**"它的主流程在本机跑通了"。它的完整流程需要 AI 编程 CLI（Claude Code / Codex）与真实 API Key，
+> 本项目没有构造那一步。
+
+---
+
 ## 一、已吸收（本轮落地，均有回归断言）
 
 ### 1. 硬门槛检测 — 来自 career-ops 的 Block G / Work-Auth 硬阻断信号
@@ -93,6 +121,31 @@ JD 是从 BOSS / 官网 / 岗位广场**抓来的陌生人写的文本**，简�
 4. 新增 `extension/__tests__/contract.test.mjs`（并入 `vitest include`）：正向断言"每个可填字段都有规则"，
    配合主键归属与条数一致构成双射。**契约测试的价值在于新增/改名时自动报错**，
    而不是靠人记得去两个文件里同步。
+
+### 5. 推导式覆盖率检查 — 来自 career-ops `validate-untrusted-content-coverage.mjs` 的**实现注释**
+
+这一条是**读了它的源码注释才拿到的**，README 里完全看不出来。
+
+它的注释写着：`COVERED_MODES` 以前是一份手维护的名单，而"手维护的覆盖名单只能永远追着现实跑"——
+issue #2368 列了 10 个 mode，#2461 又追加 4 个，而那个 PR 排队期间**又落了一个摄取外部文本的新 mode，
+校验器全程绿灯**。所以最终改成**派生**：任何出现 fetch 原语（`WebFetch|WebSearch|browser_navigate|Playwright`）
+的 mode 都被要求带标记，让新增的摄取点**默认失败（fail closed）**，而不是默认通过。
+
+**这条教训直接命中本仓库的一个真实缺陷。** 本项目的隔离覆盖率断言（`aiPrompt.test.ts`）
+原来是一张**手写的 7 条清单**，跑起来全绿；而仓库里其实有**第 8 个模型调用点**
+（`src/lib/import.ts` 的岗位文本结构化），它把用户从招聘网站复制的**陌生人原文裸拼进了 prompt**。
+手写清单不会有任何反应——它压根不知道有这么个调用点。
+
+**本项目的落点**：
+
+1. 修掉真实缺口：`import.ts` 的该处改为 `wrapUntrusted('待结构化文本', …)`。
+2. 新增 `src/lib/__tests__/aiPromptCoverage.test.mjs`：**扫描 `src/` 全部源码推导调用点**，
+   凡 `streamChat(` 的 user 载荷必须走 `wrapUntrusted(` 或 `build*UserMessage(`；
+   例外必须写明理由，且例外失效时会红（不许留尸体）。
+3. 「先钉住扫描本身」：断言扫描到的调用点数量 ≥ 8 且包含 `lib/import.ts` ——
+   扫描逻辑一旦失效，下游断言会变成假绿，所以先钉住它。
+4. 写成 `.mjs` 而非 `.ts`：app 的 tsconfig 只给 DOM 类型（`"types": ["vite/client"]`），
+   用 `node:fs` 会编译失败；`.mjs` 不参与 tsc、只参与 vitest，与 `crawler/`、`gateway/` 的既有契约测试一致。
 
 ---
 

@@ -12,7 +12,15 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   test: {
     environment: 'node',
-    include: ['src/**/*.test.ts', 'crawler/**/*.test.mjs', 'gateway/**/*.test.mjs', 'extension/**/*.test.mjs'],
+    include: [
+      'src/**/*.test.ts',
+      // 需要在 node 里读文件/做源码推导的检查写成 .mjs：app 的 tsconfig 只给 DOM 类型，
+      // 用 node:fs 会编译失败；而 tsc 不检查 .mjs，正好两不相扰
+      'src/**/*.test.mjs',
+      'crawler/**/*.test.mjs',
+      'gateway/**/*.test.mjs',
+      'extension/**/*.test.mjs',
+    ],
     coverage: {
       provider: 'v8',
       include: ['src/lib/**/*.ts'],
