@@ -14,6 +14,8 @@ export default function AiLab({ profile, onChanged, go }: PageProps) {
   const [company, setCompany] = useState('')
   const [title, setTitle] = useState('')
   const [jd, setJd] = useState('')
+  /** 岗位原帖链接：评估页是「粘贴 JD」进来的，不带链接的话入池后投递看板跳不回去 */
+  const [jobUrl, setJobUrl] = useState('')
   const [busy, setBusy] = useState(false)
   const [raw, setRaw] = useState('')
   const [result, setResult] = useState<Evaluated | null>(null)
@@ -104,6 +106,7 @@ export default function AiLab({ profile, onChanged, go }: PageProps) {
         match_score: result.score,
         priority: result.score >= 70 ? '高' : result.score >= 50 ? '中' : '低',
         notes: `AI 结论：${result.verdict}`,
+        url: jobUrl.trim() || null,
       })
       notifyOk('已加入岗位池')
       await onChanged()
@@ -161,6 +164,9 @@ export default function AiLab({ profile, onChanged, go }: PageProps) {
             </div>
             <Field label="JD 原文 *" hint="从 BOSS / 实习僧 / 官网整段复制粘贴，越长越准">
               <textarea className="textarea" style={{ minHeight: 240 }} value={jd} onChange={(e) => setJd(e.target.value)} placeholder="粘贴完整岗位描述…" />
+            </Field>
+            <Field label="岗位链接（强烈建议填）" hint="加入岗位池后，投递看板和会话抽屉才能一键跳回原帖发招呼；地址栏复制即可">
+              <input className="input" value={jobUrl} onChange={(e) => setJobUrl(e.target.value)} placeholder="https://www.zhipin.com/job_detail/…" />
             </Field>
             <div className="row">
               <button className="btn primary" onClick={run} disabled={busy}>
