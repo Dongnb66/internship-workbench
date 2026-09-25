@@ -13,8 +13,8 @@
 | 本机路径 | `C:\Users\dong\Documents\GitHub\internship-workbench` |
 | 技术栈 | React 19 + Vite + TypeScript（前端）/ 平台云服务 BaaS（DB + Auth + Storage + LLM） |
 | 线上地址 | https://internship-workbench-47024.app.workbuddy.host/ |
-| 远程仓库 | `origin` = `https://github.com/Dongnb66/internship-workbench.git`（**私有，首次推送需人工执行**，见第 11 节） |
-| 分支 | `master`，工作树干净 |
+| 远程仓库 | **`git@github.com:Dongnb66/internship-workbench.git`（私有，已推送）** |
+| 分支 | `master`，跟踪 `origin/master`，工作树干净 |
 | 规模 | 190 个已跟踪文件 / 1.2 MB / 20 个测试文件 / 336 条断言（全绿） |
 
 ## 1. 五分钟上手
@@ -157,25 +157,33 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
 3. 读 `AGENTS.md` 的硬约束 + 本文件第 3 节的不变量。
 4. 从 `docs/BENCHMARK.md` 第二节挑一个 P0 缺口开工，并在动手前先写会变红的断言。
 
-## 11. 首次推送必须由人执行（本机 git 没有写凭据）
+## 11. 私有仓库的访问方式（接手方必读）
 
-`origin` 已配置好，但**在这个 AI 会话环境里推不上去**：跑 `git push` 会得到
-`could not read Username for 'https://github.com': terminal prompts disabled`
-（匿名只能读公开仓库，写要凭据；GitHub 集成也没有建仓权限，`POST /user/repos` 返回 403）。
-
-所以交接的第一步由人完成，两步：
+仓库地址：`git@github.com:Dongnb66/internship-workbench.git`（私有）。
 
 ```bash
-# 1) 在 GitHub 网页建一个**空**私有仓：https://github.com/new
-#    名称 internship-workbench，选 Private，
-#    不要勾 Add a README / .gitignore / license（避免非快进冲突）
-# 2) 在本机自己的终端里推（那里有你的凭据）：
-cd C:\Users\dong\Documents\GitHub\internship-workbench
-git push -u origin master
+git clone git@github.com:Dongnb66/internship-workbench.git
+cd internship-workbench && npm install && npm run typecheck && npm test   # 基线 336 全绿
 ```
 
-推送前已核对：190 个文件 / 1.2 MB / 无大于 200KB 的文件 /
-`.env`、`crawler/.profile*`、`crawler/output`、`node_modules`、`dist` 均已被忽略规则挡住。
+**私有仓意味着接手方必须先能认证**，两条路：
+
+| 接手方运行位置 | 需要什么 |
+| --- | --- |
+| 本机（同一台 Windows） | 直接用现有 SSH key（`~/.ssh/id_ed25519` 已加到 GitHub 账号），无需额外配置 |
+| 其他机器 / 云端 | 需要单独授权：把该环境的 SSH 公钥加成**仓库 Deploy Key**（只读即可），或在 GitHub 网页把它加成 Collaborator |
+
+**首次推送的完整经过（记下来，避免重复踩）**：
+1. AI 侧**建不了仓**——GitHub 集成对 `POST /user/repos` 返回 403（`Resource not accessible by integration`）。
+2. AI 侧**走 HTTPS 推不了**——报 `could not read Username`（本机 git 只有 WorkBuddy 的
+   `helper-selector`，不外露用户凭据）。**必须用 SSH remote。**
+3. GitHub Desktop 的 `Publish branch` 也失败了，原因是 **Desktop 自己没登录 GitHub 账号**
+   （`File → Options → Accounts` 登录可修）。它失败在建仓那一步之前，所以没有留下半成品仓库。
+4. 最终路径：**人在网页建一个空私有仓**（不勾 README/.gitignore/license）→ AI 用 SSH 推送成功。
+
+推送后核对过四项：远端 `master` = 本地 HEAD、远端 190 个文件、分支跟踪已建立、
+**未登录访问 `github.com/Dongnb66/internship-workbench` 与 API 均返回 404**（确认私有）。
+
 
 **仓库里确实存在个人信息的 3 类**（私有仓可接受，转公开前必须处理）：
 
