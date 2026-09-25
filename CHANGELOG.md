@@ -2,6 +2,18 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 与 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### Added
+
+- **OfferBiu 校招库接入**（`crawler/sources/offerbiu.mjs`）：第一个 API 型岗位来源，复用采集器 JSON 契约直进「岗位池 → 批量导入」，带投递截止日与官方公告链接；只读公开接口、不登录、1.2s 串行（若对方将来明确禁止则删除该源）。
+- **渠道能力边界表**（`constants.ts` + `Jobs.tsx`）：8 渠道 ×「采集 / AI 处理 / 投递 / 回填」常量矩阵，岗位池页折叠卡片展示；`apply` 字面量「人工」类型锁死 + `channelCapability` 契约测试（双射 / 人工守卫 / UI 消费，推导式）。把「不自动投递」从文档承诺变成页面与测试共同钉死的事实。
+- **AI 面试准备包**（`Interviews.tsx` + `ai.ts`）：「AI 押题」升级为「AI 面试准备」。打开弹窗自动带入三路输入——投递关联岗位的 JD 原文（可在框内改）、投递时选的那份简历全文、同一家公司往轮的面试复盘；输出固定三节：项目深挖题（对着简历追问 + 答题框架）、高频八股（按 JD×简历交集排优先级）、缺口与补救话术（用已有能力顶上，不自我设限）。三路外部文本各自包独立不可信数据区（`buildInterviewPrepUserMessage`），行为断言 6 条 + 覆盖度入口断言同步升级；复盘喂出题的闭环借鉴 OfferCome（BENCHMARK 第四节）。
+
+### Changed
+
+- **模型调用点隔离覆盖率改为推导式**（`aiPromptCoverage.test.mjs`）：扫描 src 全部源码推导 `streamChat` 调用点，未包装的新增调用点默认失败；修掉第 8 个未包装的调用点（`import.ts` 岗位文本结构化）。
+
 ## [0.7.6] - 2026-09-24
 
 对标 recruitops-agent 的三个能力缺口，各落一个**能落地**的版本：模型配置、简历附件 + AI 分析、抓取任务生成器。全部遵循既有边界——服务端不跑爬虫、不绕任何平台风控。
