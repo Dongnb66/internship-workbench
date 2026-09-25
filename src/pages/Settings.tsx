@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { cloud, errText } from '../cloud'
 import { Field, Modal } from '../components/ui'
-import { getModelChoice, getTokenStats, listUsableModels, pickModel, setModelChoice, type TokenStats, type UsableModel } from '../lib/ai'
+import { getModelChoice, getTokenStats, listUsableModels, modelCostLabel, pickModel, setModelChoice, type TokenStats, type UsableModel } from '../lib/ai'
 import { listRows, saveProfile } from '../lib/api'
 import { PROFILE_TEMPLATE } from '../lib/constants'
 import { healthSummary, profileHealth } from '../lib/healthCheck'
@@ -373,35 +373,35 @@ export default function Settings({ profile, onChanged }: PageProps) {
               <div className="small muted">模型目录加载中…</div>
             ) : (
               <>
-                <Field label="模型" hint={`共 ${models.length} 个可用模型可选`}>
+                <Field label="模型" hint={`共 ${models.length} 个可用模型可选；倍率来自平台下发的目录`}>
                   <select className="select" value={chosen} onChange={(e) => setChosen(e.target.value)}>
-                    <option value="">（使用平台默认）</option>
+                    <option value="">（使用平台默认：Auto，思考型 · 倍率浮动）</option>
                     {models.map((m) => (
                       <option key={m.id} value={m.id}>
                         {m.name}
-                        {m.provider ? ` · ${m.provider}` : ''}
+                        {m.credits ? ` · ${m.credits.replace(/credits?/i, '').trim()}` : ''}
                         {m.reasoning ? ' · 思考型（更慢）' : ''}
                       </option>
                     ))}
                   </select>
                 </Field>
-                <div className="small muted mt8">
-                  计费：
-                  {chosenModel?.credits
-                    ? `${chosenModel.name} — ${chosenModel.credits}`
-                    : chosenModel
-                      ? `${chosenModel.name} — 平台未下发该模型的计费信息`
-                      : '未选择具体模型，按平台默认计价'}
-                  {chosenModel?.reasoning ? ' · 思考型模型会先推理再出字，本次调用耗时明显更长' : ''}
+                <div className="small muted mt8">计费：{modelCostLabel(chosenModel)}</div>
+                <div className="hint mt8">
+                  不选＝走平台的 <strong>Auto</strong>：它每次都自动挑模型，且是<strong>高推理档的思考型</strong>，
+                  所以又快又便宜都不是它的目标——想稳、想省钱、想快，就在上面选一个具体模型。
                 </div>
                 <button className="btn primary mt8" onClick={saveModel} disabled={savingModel}>
                   {savingModel ? '保存中…' : '保存模型选择'}
                 </button>
                 <div className="hint mt16">
-                  <strong>额度归谁</strong>：AI 调用由本应用的云服务端代你发起，前端只带应用标识、走应用发布域，
-                  所以这里<strong>不需要你填任何 API Key</strong>，也不消耗你个人的模型密钥。
-                  消耗计入<strong>本应用的云服务额度</strong>；额度用尽时接口会返回 429，此时换模型也不管用，
-                  要等额度恢复或额度加量。
+                  <strong>额度归谁</strong>：这里选的是<strong>平台模型目录里的模型</strong>（DeepSeek / GLM / Kimi / 混元…），
+                  调用链路是「本应用前端 → 本应用的云服务端 → 模型提供方」。
+                  厂商 Key 存在<strong>云服务端</strong>，前端只出示应用标识 + 你的登录态
+                  （SDK 明确不自己构造 Authorization/厂商请求头），
+                  所以<strong>不需要你填任何 API Key</strong>，也不消耗你个人的模型密钥。
+                  消耗按目录里的<strong>积分倍率</strong>计入<strong>本应用的云服务额度</strong>，
+                  账单落在开通这个应用云服务的账号上。额度耗尽时接口返回 429（SDK 归类为限流），
+                  这时换模型也没用；应用侧读不到余额，只能靠下面的本会话统计与报错感知。
                 </div>
                 <div className="small muted mt8">
                   本次会话（当前标签页，关闭即归零）：已调用 {stats.calls} 次 · 输入 {stats.prompt} tokens · 输出 {stats.completion} tokens

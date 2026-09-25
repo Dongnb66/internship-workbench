@@ -30,7 +30,7 @@ const store = new Map<string, string>()
   clear: () => store.clear(),
 }
 
-const { getTokenStats, listUsableModels, streamChat } = await import('../ai')
+const { getTokenStats, listUsableModels, modelCostLabel, streamChat } = await import('../ai')
 
 beforeEach(() => {
   store.clear()
@@ -127,5 +127,36 @@ describe('listUsableModels 目录投影', () => {
     expect(list[2].reasoning).toBe(true)
     // 目录没给 credits 时留 undefined，让 UI 显示「平台未下发」而不是编一个数字
     expect(list[1].credits).toBeUndefined()
+  })
+
+  it('vendor 是单字母打码代号时不当作厂商名展示', async () => {
+    modelList = [{ id: 'z', name: 'Z', enabled: true, vendor: 'f' }]
+    vi.resetModules()
+    const fresh = await import('../ai')
+    const list = await fresh.listUsableModels()
+    expect(list[0].provider).toBeUndefined()
+  })
+})
+
+describe('modelCostLabel 计费文案', () => {
+  it('把目录的 credits 文案归一成倍率，不换算成金额', () => {
+    expect(modelCostLabel({ id: 'deepseek-v4.1-flash', credits: 'x0.11 credits', reasoning: false })).toBe('积分倍率 x0.11')
+    // 实测目录里有不带 credits 字样的写法，也要认
+    expect(modelCostLabel({ id: 'hy3-x', credits: 'x0.05', reasoning: false })).toBe('积分倍率 x0.05')
+    // 高倍率的贵模型必须原样呈现，不能被四舍五入掩盖
+    expect(modelCostLabel({ id: 'kimi-k3-1', credits: 'x1.62 credits', reasoning: false })).toBe('积分倍率 x1.62')
+  })
+
+  it('Auto 不给倍率时说清是浮动，不编数字', () => {
+    expect(modelCostLabel({ id: 'auto', reasoning: true })).toBe('积分倍率按任务浮动（Auto 自动挑模型） · 思考型，更慢')
+  })
+
+  it('目录没给倍率时如实说未下发，且思考型标记仍要带上', () => {
+    expect(modelCostLabel({ id: 'hunyuan-chat', reasoning: false })).toBe('平台未下发该模型的积分倍率')
+    expect(modelCostLabel({ id: 'hunyuan-chat', reasoning: true })).toBe('平台未下发该模型的积分倍率 · 思考型，更慢')
+  })
+
+  it('未选模型时指向平台默认', () => {
+    expect(modelCostLabel(null)).toBe('未选具体模型，按平台默认（Auto）计费')
   })
 })

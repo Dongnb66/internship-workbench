@@ -16,8 +16,9 @@ let cachedModels: UsableModel[] | null = null
 export interface UsableModel {
   id: string
   name: string
+  /** 目录里可能给 vendor（本环境是 f/j/e/v 这类打码代号，展示无意义），有真名才用 */
   provider?: string
-  /** 平台下发的计费展示文案，如「2 credits/1K tokens」；目录没给就是未知 */
+  /** 平台下发的积分倍率文案，实测形如「x0.11 credits」；Auto 不固定所以目录不填 */
   credits?: string
   /** 思考型模型：先吐 reasoning_content（不出正文）再出结果，选它要有等更久的预期 */
   reasoning: boolean
@@ -29,14 +30,36 @@ export async function listUsableModels(): Promise<UsableModel[]> {
   const models = await cloud.llm.models.list()
   cachedModels = (models ?? [])
     .filter((m: any) => m?.disabled !== true && m?.enabled !== false)
-    .map((m: any) => ({
-      id: String(m.id),
-      name: String(m.name || m.id),
-      provider: m.provider ? String(m.provider) : undefined,
-      credits: m.credits ? String(m.credits) : undefined,
-      reasoning: m.supportsReasoning === true || m.onlyReasoning === true,
-    }))
+    .map((m: any) => {
+      // vendor 在本环境是单字母打码代号，显示出来只是噪声；>1 字符才当成可读厂商名
+      const vendor = typeof m?.vendor === 'string' && m.vendor.length > 1 ? m.vendor : undefined
+      return {
+        id: String(m.id),
+        name: String(m.name || m.id),
+        provider: m.provider ? String(m.provider) : vendor,
+        credits: m.credits ? String(m.credits) : undefined,
+        reasoning: m.supportsReasoning === true || m.onlyReasoning === true,
+      }
+    })
   return cachedModels
+}
+
+/**
+ * 模型计费展示文案（纯函数，便于断言）。
+ *
+ * 「花的是谁的额度」在本应用里唯一的可核对依据：目录下发的 credits 是**积分倍率**，
+ * 不是价格——绝对金额无法在前端算出（目录不给单价、也不给余额接口）。
+ * 所以文案只说倍率与相对快慢，绝不换算成钱。
+ */
+export function modelCostLabel(m?: Pick<UsableModel, 'id' | 'credits' | 'reasoning'> | null): string {
+  if (!m) return '未选具体模型，按平台默认（Auto）计费'
+  const rate = m.credits?.replace(/credits?/i, '').trim().replace(/^x/i, '')
+  const base = rate
+    ? `积分倍率 x${rate}`
+    : m.id === 'auto'
+      ? '积分倍率按任务浮动（Auto 自动挑模型）'
+      : '平台未下发该模型的积分倍率'
+  return m.reasoning ? `${base} · 思考型，更慢` : base
 }
 
 export function getModelChoice(): string | null {
