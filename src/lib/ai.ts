@@ -159,6 +159,43 @@ function recordUsage(u: any): void {
   }
 }
 
+/**
+ * 把云服务的模型调用错误翻成用户能行动的中文。
+ *
+ * 依据官方云服务的错误契约：LLM 错误一律是 CloudOpenAIError，只按稳定的 `error.code`
+ * 前缀分支（request_ / auth_ / quota_ / gateway_ / model_ / internal_），不要读私有字段。
+ *
+ * `quota_` 的语义是 **Creator quota**（创建者额度）——本应用的 AI 额度记在**应用创建者**
+ * 账号上，不是终端用户自己的。所以文案必须说清「不是你的额度问题」，否则每个用户都会
+ * 以为自己欠费，然后去问一个跟他对不上的客服。
+ */
+export function aiErrorText(error: unknown): string {
+  const e = error as any
+  const code = String(e?.error?.code ?? e?.code ?? '').trim()
+  const raw = String(e?.error?.message ?? (typeof error === 'string' ? error : e?.message ?? '')).trim()
+  const tail = code ? `（${code}）` : ''
+
+  if (code === 'gateway_stream_interrupted') {
+    return `连接中断，上面已生成的内容保留着，可以重新分析${tail}`
+  }
+  if (code.startsWith('request_')) return `请求参数或所选模型不被支持，换一个模型再试${tail}`
+  if (code.startsWith('auth_')) return `AI 通道校验失败：应用标识或访问域名不匹配，与你的账号无关${tail}`
+  if (code.startsWith('quota_')) {
+    const wait = Number(e?.retryAfterMs)
+    if (code === 'quota_rate_limited' && Number.isFinite(wait) && wait > 0) {
+      return `调用太频繁，请 ${Math.ceil(wait / 1000)} 秒后重试${tail}`
+    }
+    return `本应用的 AI 额度已用尽（额度记在应用创建者账号上，不是你的账号）${tail}`
+  }
+  if (code.startsWith('gateway_') || code.startsWith('model_')) return `模型服务暂时不可用，稍后重试${tail}`
+  if (code.startsWith('internal_')) {
+    return `服务内部错误，请把这条报给应用创建者${e?.requestId ? `（requestId: ${e.requestId}）` : ''}`
+  }
+  if (e?.status === 429) return `调用过于频繁，或本应用的 AI 额度已用尽，稍后重试${tail}`
+  if (e?.status === 401 || e?.status === 403) return `AI 通道校验失败，与你的账号无关${tail}`
+  return raw || '模型调用失败，请重试'
+}
+
 /** 唯一的模型调用入口：只支持流式，逐帧累积文本 */
 export async function streamChat(opts: StreamOptions): Promise<string> {
   const model = await pickModel()
@@ -167,26 +204,32 @@ export async function streamChat(opts: StreamOptions): Promise<string> {
   let text = ''
   // 末帧才带 usage；逐帧记「最后一次」，循环结束后统一入账，避免重复计数
   let lastUsage: any = null
-  const stream = await cloud.llm.chat.completions.create({
-    model,
-    messages: [
-      { role: 'system', content: opts.system },
-      { role: 'user', content: opts.user },
-    ],
-    stream: true,
-    stream_options: { include_usage: true },
-    ...(opts.json ? { response_format: { type: 'json_object' } } : {}),
-    ...(opts.signal ? { signal: opts.signal } : {}),
-  } as any)
+  try {
+    const stream = await cloud.llm.chat.completions.create({
+      model,
+      messages: [
+        { role: 'system', content: opts.system },
+        { role: 'user', content: opts.user },
+      ],
+      stream: true,
+      stream_options: { include_usage: true },
+      ...(opts.json ? { response_format: { type: 'json_object' } } : {}),
+      ...(opts.signal ? { signal: opts.signal } : {}),
+    } as any)
 
-  for await (const chunk of stream as any) {
-    const delta = chunk?.choices?.[0]?.delta
-    if (delta?.reasoning_content) opts.onReasoning?.(delta.reasoning_content)
-    if (delta?.content) {
-      text += delta.content
-      opts.onDelta?.(delta.content)
+    for await (const chunk of stream as any) {
+      const delta = chunk?.choices?.[0]?.delta
+      if (delta?.reasoning_content) opts.onReasoning?.(delta.reasoning_content)
+      if (delta?.content) {
+        text += delta.content
+        opts.onDelta?.(delta.content)
+      }
+      if (chunk?.usage) lastUsage = chunk.usage
     }
-    if (chunk?.usage) lastUsage = chunk.usage
+  } catch (error) {
+    // 主动取消不算故障，原样抛出，让调用方自己判断
+    if ((error as any)?.name === 'AbortError') throw error
+    throw new Error(aiErrorText(error))
   }
   // 即使网关没回 usage 也要计入调用次数——「调了几次/花了多少」里次数是确定的事实
   recordUsage(lastUsage)

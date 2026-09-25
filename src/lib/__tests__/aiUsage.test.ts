@@ -10,12 +10,20 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 let streamChunks: any[] = []
 let modelList: any[] = []
+let createError: any = null
 
 vi.mock('../../cloud', () => ({
   cloud: {
     llm: {
       models: { list: async () => modelList },
-      chat: { completions: { create: async () => (async function* () { for (const c of streamChunks) yield c })() } },
+      chat: {
+        completions: {
+          create: async () => {
+            if (createError) throw createError
+            return (async function* () { for (const c of streamChunks) yield c })()
+          },
+        },
+      },
     },
   },
   errText: (e: unknown) => String(e),
@@ -30,12 +38,13 @@ const store = new Map<string, string>()
   clear: () => store.clear(),
 }
 
-const { getTokenStats, listUsableModels, modelCostLabel, streamChat } = await import('../ai')
+const { aiErrorText, getTokenStats, listUsableModels, modelCostLabel, streamChat } = await import('../ai')
 
 beforeEach(() => {
   store.clear()
   streamChunks = []
   modelList = [{ id: 'm1', name: '模型一', enabled: true }]
+  createError = null
 })
 
 function chunk(choices: any[], usage?: any) {
@@ -158,5 +167,67 @@ describe('modelCostLabel 计费文案', () => {
 
   it('未选模型时指向平台默认', () => {
     expect(modelCostLabel(null)).toBe('未选具体模型，按平台默认（Auto）计费')
+  })
+})
+
+describe('aiErrorText 错误契约（按 code 前缀分支）', () => {
+  const err = (code: string, extra: Record<string, unknown> = {}) => ({ error: { code, message: 'upstream says so' }, status: 429, ...extra })
+
+  it('quota_ 必须说清额度记在创建者账号上，别让终端用户以为自己欠费', () => {
+    const msg = aiErrorText(err('quota_exhausted'))
+    expect(msg).toContain('本应用的 AI 额度已用尽')
+    expect(msg).toContain('创建者账号')
+    expect(msg).toContain('不是你的账号')
+    // 不能把上游原文直接糊到用户脸上
+    expect(msg).not.toContain('upstream says so')
+    // 但 code 要留着，方便排查
+    expect(msg).toContain('quota_exhausted')
+  })
+
+  it('quota_rate_limited 有 retryAfterMs 时给秒数，没给时不编秒数', () => {
+    expect(aiErrorText(err('quota_rate_limited', { retryAfterMs: 2500 }))).toContain('请 3 秒后重试')
+    const noWait = aiErrorText(err('quota_rate_limited'))
+    expect(noWait).toContain('额度已用尽')
+    expect(noWait).not.toContain('秒后重试')
+  })
+
+  it('auth_ 明确说与用户账号无关——别引导用户去重新登录', () => {
+    const msg = aiErrorText({ error: { code: 'auth_origin_rejected', message: 'x' }, status: 403 })
+    expect(msg).toContain('与你的账号无关')
+    expect(msg).not.toContain('登录')
+  })
+
+  it('流中断要说清已生成内容还在、可以重来', () => {
+    expect(aiErrorText(err('gateway_stream_interrupted'))).toContain('已生成的内容保留')
+  })
+
+  it('internal_ 带 requestId，且不透出后端细节', () => {
+    const msg = aiErrorText({ error: { code: 'internal_error', message: 'stacktrace: at foo()' }, requestId: 'rid-1' })
+    expect(msg).toContain('rid-1')
+    expect(msg).not.toContain('stacktrace')
+  })
+
+  it('request_ / gateway_ / model_ 各自给出不同动作', () => {
+    expect(aiErrorText(err('request_model_not_found'))).toContain('换一个模型')
+    expect(aiErrorText(err('gateway_unavailable'))).toContain('稍后重试')
+    expect(aiErrorText(err('model_error'))).toContain('稍后重试')
+  })
+
+  it('没有 code 时退回可读信息，绝不返回空串', () => {
+    expect(aiErrorText({ message: 'boom' })).toBe('boom')
+    expect(aiErrorText(undefined)).toBe('模型调用失败，请重试')
+    expect(aiErrorText({ error: { code: null, message: null }, status: 429 })).toContain('稍后重试')
+  })
+
+  it('streamChat 真的用了这套文案（不只是纯函数自测）', async () => {
+    createError = { error: { code: 'quota_exhausted', message: 'upstream says so' }, status: 429 }
+    await expect(streamChat({ system: 's', user: 'u' })).rejects.toThrow(/创建者账号/)
+  })
+
+  it('主动取消（AbortError）原样抛出，不伪装成业务故障', async () => {
+    const abort = new Error('aborted')
+    abort.name = 'AbortError'
+    createError = abort
+    await expect(streamChat({ system: 's', user: 'u' })).rejects.toThrow('aborted')
   })
 })

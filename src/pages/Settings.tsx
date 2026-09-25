@@ -398,10 +398,14 @@ export default function Settings({ profile, onChanged }: PageProps) {
                   调用链路是「本应用前端 → 本应用的云服务端 → 模型提供方」。
                   厂商 Key 存在<strong>云服务端</strong>，前端只出示应用标识 + 你的登录态
                   （SDK 明确不自己构造 Authorization/厂商请求头），
-                  所以<strong>不需要你填任何 API Key</strong>，也不消耗你个人的模型密钥。
-                  消耗按目录里的<strong>积分倍率</strong>计入<strong>本应用的云服务额度</strong>，
-                  账单落在开通这个应用云服务的账号上。额度耗尽时接口返回 429（SDK 归类为限流），
-                  这时换模型也没用；应用侧读不到余额，只能靠下面的本会话统计与报错感知。
+                  所以<strong>不需要你填任何 API Key</strong>。
+                  <br />
+                  <strong>账单落在应用创建者账号上</strong>：平台的额度错误码前缀是 <code>quota_</code>，
+                  语义明确是 <em>Creator quota</em>（创建者额度）——<strong>不是每个终端用户扣自己的</strong>。
+                  也就是说这个站是开放注册的，任何注册用户调 AI 花的都是创建者的额度。
+                  按平台安全要求，终端用户能触发的调用应当限流，避免额度被一次掏空。
+                  <br />
+                  应用侧读不到余额（SDK 只给模型目录和调用两个接口），只能靠下面的本会话统计与报错感知。
                 </div>
                 <div className="small muted mt8">
                   本次会话（当前标签页，关闭即归零）：已调用 {stats.calls} 次 · 输入 {stats.prompt} tokens · 输出 {stats.completion} tokens
