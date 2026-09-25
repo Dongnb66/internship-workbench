@@ -308,10 +308,6 @@ export function buildGreetingUserMessage(company: string, title: string, jd: str
     .join('\n\n')
 }
 
-export function buildInterviewUserMessage(company: string, title: string, jd: string, profile: Profile | null): string {
-  return `【候选人】\n${profileBrief(profile)}\n\n【岗位】${company} · ${title}\n\n${wrapUntrusted('JD', jd.slice(0, 6000))}`
-}
-
 export function buildApplyUserMessage(company: string, title: string, jd: string, profile: Profile | null): string {
   const voice = voiceBlock(profile)
   const jdBlock = jd.trim() ? wrapUntrusted('JD', jd.slice(0, 6000)) : '（未提供 JD）'
@@ -397,10 +393,68 @@ ${GREETING_RULES}`,
   })
 }
 
-export async function generateInterviewQuestions(company: string, title: string, jd: string, profile: Profile | null): Promise<string> {
+// ---------------------------------------------------------------- 面试准备包
+
+/**
+ * 面试准备包的三路输入。触发场景：投递后 HR 约面 → 用户要准备这一场。
+ * JD 与简历决定「他会问什么」，历史复盘决定「这场要重点补什么」——
+ * 同一家二面/三面时，上一场登记的薄弱点会被带进来（复盘喂出题的闭环）。
+ */
+export interface InterviewPrepParts {
+  company: string
+  title: string
+  jd: string
+  /** 我投的那份简历全文（resumes.content_text），缺席时整块省略 */
+  resumeText?: string | null
+  /** 同一投递的往轮记录（questions / reflection 非空才收） */
+  pastRounds?: { round: string; questions: string; reflection: string }[]
+}
+
+/**
+ * 三路外部文本各自包成独立数据区，而不是合并成一块：
+ * JD 是陌生人写的、简历是附件文件、复盘是自己敲的零散记录——来源不同，
+ * 边界混在一个区里，模型就分不清「哪段是谁说的、哪段能当事实」。
+ */
+export function buildInterviewPrepUserMessage(parts: InterviewPrepParts, profile: Profile | null): string {
+  const jd = String(parts.jd ?? '').trim()
+  const blocks = [
+    `【候选人画像】\n${profileBrief(profile)}`,
+    `【公司岗位】${parts.company || '（未填）'} · ${parts.title || '（未填）'}`,
+    jd ? wrapUntrusted('JD 原文', jd.slice(0, 6000)) : '（未提供 JD：按简历与通用面试题准备）',
+  ]
+  const resume = String(parts.resumeText ?? '').trim()
+  if (resume) blocks.push(wrapUntrusted('我投的简历全文', resume.slice(0, 12000)))
+  const rounds = (parts.pastRounds ?? [])
+    .filter((r) => String(r.questions ?? '').trim() || String(r.reflection ?? '').trim())
+    .map((r) => {
+      const q = String(r.questions ?? '').trim()
+      const f = String(r.reflection ?? '').trim()
+      return `【${r.round || '上一轮'}】\n被问到的问题：${q || '（未登记）'}\n我的复盘：${f || '（未登记）'}`
+    })
+  if (rounds.length) blocks.push(wrapUntrusted('同一家公司历史面试记录', rounds.join('\n\n').slice(0, 6000)))
+  return blocks.filter(Boolean).join('\n\n')
+}
+
+const INTERVIEW_PREP_SYSTEM = `你是技术面试教练，为一场即将到来的校招/实习面试生成准备材料。候选人会给你三样东西：岗位 JD、他投出去的那份简历、同一家公司往轮的面试记录（可能缺一两样）。
+输出 Markdown，固定三节，不要客套开头：
+
+## 一、项目深挖（面试官拿着我的简历最可能追问）
+针对简历上出现的每个项目，列出 2-4 个最可能被追问的问题，每题下面给「答题框架」：必须引用简历或 JD 里真实出现的设计、数字与技术词，教他怎么组织回答，不替他编造新事实。
+
+## 二、高频八股（按 JD 技术栈 × 简历技术词的交集排优先级）
+每个知识点一行：「考点 —— 一句话答题要点」。只有 JD 或简历里真实出现的才列，没有交集就直说「两边重合度低，按简历技术栈列」。
+
+## 三、缺口与补救（JD 提到但我简历没覆盖的）
+每条给「用哪段已有能力顶上」的答法。措辞纪律：
+- 不虚构经历，数字必须来自简历原文；
+- 不写「我不会/没学过」这类自我设限，一律改成「短期可迁移 + 用哪段经验顶上」的积极框架；
+- 简历与 JD 重合度太低时如实说，不要硬凑。`
+
+export async function generateInterviewPrep(parts: InterviewPrepParts, profile: Profile | null, onDelta?: (t: string) => void): Promise<string> {
   return streamChat({
-    system: `你是技术面试教练。基于 JD 与候选人的真实项目，输出 6-8 个高概率被问到的面试题，每题下面用 2-3 行给出「他怎么答」的框架（必须引用他自己仓库里的真实设计与数字，不得编造）。输出 Markdown。`,
-    user: buildInterviewUserMessage(company, title, jd, profile),
+    system: INTERVIEW_PREP_SYSTEM,
+    user: buildInterviewPrepUserMessage(parts, profile),
+    onDelta,
   })
 }
 

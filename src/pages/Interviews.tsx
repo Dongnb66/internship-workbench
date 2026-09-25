@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { errText } from '../cloud'
 import { Empty, Field, Modal, Stat } from '../components/ui'
-import { generateInterviewQuestions, summarizeReflection } from '../lib/ai'
+import { generateInterviewPrep, summarizeReflection } from '../lib/ai'
 import { deleteRow, insertRow, listRows, updateRow } from '../lib/api'
 import { fmtDateTime, todayISO } from '../lib/format'
 import { notifyErr, notifyOk } from '../lib/toast'
@@ -22,6 +22,10 @@ export default function Interviews({ profile, onChanged }: PageProps) {
   const [form, setForm] = useState<Record<string, string>>({})
   const [aiFor, setAiFor] = useState<Row | null>(null)
   const [aiJd, setAiJd] = useState('')
+  const [aiResumeText, setAiResumeText] = useState('')
+  const [aiResumeName, setAiResumeName] = useState('')
+  const [aiPast, setAiPast] = useState<{ round: string; questions: string; reflection: string }[]>([])
+  const [aiLoading, setAiLoading] = useState(false)
   const [aiOut, setAiOut] = useState('')
   const [aiBusy, setAiBusy] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -128,12 +132,65 @@ export default function Interviews({ profile, onChanged }: PageProps) {
     }
   }
 
-  async function runAiQuestions() {
+  /**
+   * 打开「AI 面试准备」弹窗：能自动带上的都带上，不让用户再手抄一遍。
+   * JD 来自投递关联的岗位池原文；简历来自投递时选的那一版（resumes.content_text）；
+   * 历史复盘取同一家同一投递的往轮记录——往轮答不好的地方，这场要重点补。
+   * 带入失败不挡手动流程：JD 永远可以自己粘。
+   */
+  async function openAi(row: Row) {
+    setAiFor(row)
+    setAiOut('')
+    setAiJd('')
+    setAiResumeText('')
+    setAiResumeName('')
+    setAiPast([])
+    if (!row.application_id) return
+    setAiLoading(true)
+    try {
+      const apps = await listRows('applications', { limit: 500 })
+      const app = apps.find((a) => Number(a.id) === Number(row.application_id))
+      if (!app) return
+      const [jobs, resumes] = await Promise.all([
+        app.job_id ? listRows('jobs', { limit: 800 }) : Promise.resolve([] as Row[]),
+        app.resume_id ? listRows('resumes', { limit: 200 }) : Promise.resolve([] as Row[]),
+      ])
+      const job = app.job_id ? jobs.find((j) => Number(j.id) === Number(app.job_id)) : null
+      if (job?.jd_text) setAiJd(String(job.jd_text))
+      const resume = app.resume_id ? resumes.find((r) => Number(r.id) === Number(app.resume_id)) : null
+      if (resume?.content_text) {
+        setAiResumeText(String(resume.content_text))
+        setAiResumeName(String(resume.name ?? resume.file_name ?? '已关联简历'))
+      }
+      const past = rows
+        .filter(
+          (r) =>
+            r.id !== row.id &&
+            Number(r.application_id ?? -1) === Number(row.application_id) &&
+            (String(r.questions ?? '').trim() || String(r.reflection ?? '').trim()),
+        )
+        .map((r) => ({
+          round: String(r.round_name ?? '上一轮'),
+          questions: String(r.questions ?? ''),
+          reflection: String(r.reflection ?? ''),
+        }))
+      setAiPast(past)
+    } catch (error) {
+      notifyErr(`自动带入关联数据失败（JD 可手动粘贴）：${errText(error)}`)
+    } finally {
+      setAiLoading(false)
+    }
+  }
+
+  async function runPrep() {
     if (!aiFor) return
     setAiBusy(true)
     setAiOut('')
     try {
-      const text = await generateInterviewQuestions(aiFor.company, aiFor.title ?? '', aiJd, profile)
+      const text = await generateInterviewPrep(
+        { company: aiFor.company, title: aiFor.title ?? '', jd: aiJd, resumeText: aiResumeText, pastRounds: aiPast },
+        profile,
+      )
       setAiOut(text)
     } catch (error) {
       notifyErr(errText(error))
@@ -243,13 +300,9 @@ export default function Interviews({ profile, onChanged }: PageProps) {
                     </button>
                     <button
                       className="btn sm ghost"
-                      onClick={() => {
-                        setAiFor(row)
-                        setAiOut('')
-                        setAiJd('')
-                      }}
+                      onClick={() => void openAi(row)}
                     >
-                      AI 押题
+                      AI 面试准备
                     </button>
                   </div>
                 </div>
@@ -338,24 +391,34 @@ export default function Interviews({ profile, onChanged }: PageProps) {
       {aiFor ? (
         <Modal
           wide
-          title={`AI 押题 · ${aiFor.company} ${aiFor.title ?? ''}`}
+          title={`AI 面试准备 · ${aiFor.company} ${aiFor.title ?? ''}`}
           onClose={() => setAiFor(null)}
           footer={
             <>
               <button className="btn" onClick={() => setAiFor(null)}>
                 关闭
               </button>
-              <button className="btn primary" onClick={runAiQuestions} disabled={aiBusy}>
-                {aiBusy ? '生成中…' : '生成高频面试题'}
+              <button className="btn primary" onClick={runPrep} disabled={aiBusy || aiLoading}>
+                {aiBusy ? '生成中…' : '生成面试准备'}
               </button>
             </>
           }
         >
-          <Field label="岗位 JD（可选，粘贴后押题更准）">
+          <div className="small muted" style={{ lineHeight: 1.8 }}>
+            {aiJd ? 'JD：已从岗位池自动带入原文，可在下方修改。' : 'JD：这条记录没关联到岗位原文，可在下方手动粘贴。'}
+            {aiResumeName
+              ? `简历：已带入你投的那份「${aiResumeName}」全文，深挖题会对着它出。`
+              : '简历：这条投递没关联简历，将按画像准备。'}
+            {aiPast.length
+              ? `历史复盘：已带入同一家公司 ${aiPast.length} 轮记录，往轮答不好的地方会被重点提示。`
+              : ''}
+            {aiLoading ? '正在带入关联数据…' : ''}
+          </div>
+          <Field label="岗位 JD（自动带入，可修改）">
             <textarea className="textarea" value={aiJd} onChange={(e) => setAiJd(e.target.value)} placeholder="把该岗位 JD 粘到这里" />
           </Field>
           <div className="md" style={{ background: '#fafbfc', padding: 12, borderRadius: 9, minHeight: 120 }}>
-            {aiOut || '生成结果会显示在这里：6-8 个高概率问题 + 结合你自己项目的回答框架。'}
+            {aiOut || '生成结果显示在这里：一、项目深挖题（对着你简历追问） 二、高频八股（按 JD×简历交集） 三、缺口与补救话术。'}
           </div>
         </Modal>
       ) : null}
