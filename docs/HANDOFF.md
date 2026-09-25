@@ -12,7 +12,7 @@
 | --- | --- |
 | 本机路径 | `C:\Users\dong\Documents\GitHub\internship-workbench` |
 | 技术栈 | React 19 + Vite + TypeScript（前端）/ 平台云服务 BaaS（DB + Auth + Storage + LLM） |
-| 线上地址 | https://internship-workbench-47024.app.workbuddy.host/ |
+| 线上地址 | https://internship-workbench-47024.app.workbuddy.host/ （发布方式见第 12 节） |
 | 远程仓库 | **`git@github.com:Dongnb66/internship-workbench.git`（私有，已推送）** |
 | 分支 | `master`，跟踪 `origin/master`，工作树干净 |
 | 规模 | 191 个已跟踪文件 / 1.2 MB / 21 个测试文件 / 348 条断言（全绿） |
@@ -195,3 +195,36 @@ cd internship-workbench && npm install && npm run typecheck && npm test   # 基�
 
 （QQ 邮箱扫描为 0 处。）
 
+
+## 12. 线上发布（App 发布 / Sites）
+
+线上地址：**https://internship-workbench-47024.app.workbuddy.host/**（以 `http-service` 形式部署，非静态页）。
+
+发布入口：用平台的 App 发布能力，`directory` 指向本目录、`language: node`、`startCmd: npm run serve`。
+
+### 为什么必须用 `npm run serve` 而不是 `vite preview`
+
+平台注入 `PORT` 环境变量，但 **`vite preview` 只认自己配置文件里的 `preview.port`**，
+沙箱里会起在默认 4173 上，导致「服务活着但 3000 无人监听」发布失败。
+`scripts/serve.mjs` 在**同一进程内**先 `npm run build`、再调 Vite JS API 起 preview，
+把 `host: '0.0.0.0'` / `port: process.env.PORT` / `strictPort` / `allowedHosts` 显式写进
+inline config（优先级高于配置文件），从而真正监听 `$PORT`。
+
+其他坑（都踩过）：
+
+- `startCmd` 里写 `--port $PORT` **无效**——沙箱执行时不展开 shell 变量，Vite 报
+  `option --port <port> value is missing`；让 Node 脚本自己读 `process.env.PORT` 才行。
+- `vite.config.ts` 的 `preview.allowedHosts: true` 不能删，否则反代域名被 Vite 拦成
+  `Blocked request. This host is not allowed.`
+- 发布目录里**不能有 `miniprogram/`**：它含 `project.config.json` + 带 `pages` 数组的
+  `app.json`，会被发布流程识别成小程序项目、走「创建小程序应用」而非 Web 发布。
+  发布前临时移出、发完移回（用 `mv` 移动而非复制删除，避免任何内容风险）。
+
+### 发布后核对（照抄即可）
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" https://internship-workbench-47024.app.workbuddy.host/   # 期望 200
+curl -s https://internship-workbench-47024.app.workbuddy.host/ | grep -o "<title>[^<]*</title>"    # 期望「实习管理工作台」
+```
+
+站点管理入口在平台侧：**设置—数据管理—应用**。
