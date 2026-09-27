@@ -6,6 +6,7 @@ import type { Profile } from './types'
 import AiLab from './pages/AiLab'
 import ApplyKit from './pages/ApplyKit'
 import CalendarPage from './pages/CalendarPage'
+import Coach from './pages/Coach'
 import Crawler from './pages/Crawler'
 import Interviews from './pages/Interviews'
 import Jobs from './pages/Jobs'
@@ -37,6 +38,7 @@ const NAV = [
       { key: 'resumes', label: '简历库', icon: '📄' },
       { key: 'applykit', label: '网申填写包', icon: '🧾' },
       { key: 'ai', label: 'AI · JD 评估', icon: '🤖' },
+      { key: 'coach', label: '项目教练', icon: '🧭' },
       { key: 'calendar', label: '提醒日历', icon: '🗓' },
       { key: 'knowledge', label: '个人知识库', icon: '📚' },
     ],
@@ -183,6 +185,7 @@ export default function App() {
           {page === 'resumes' ? <Resumes {...pageProps} /> : null}
           {page === 'applykit' ? <ApplyKit {...pageProps} /> : null}
           {page === 'ai' ? <AiLab {...pageProps} /> : null}
+          {page === 'coach' ? <Coach {...pageProps} /> : null}
           {page === 'calendar' ? <CalendarPage {...pageProps} /> : null}
           {page === 'knowledge' ? <Knowledge {...pageProps} /> : null}
           {page === 'settings' ? <Settings {...pageProps} /> : null}

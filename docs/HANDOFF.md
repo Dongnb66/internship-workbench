@@ -15,7 +15,7 @@
 | 线上地址 | https://internship-workbench-47024.app.workbuddy.host/ （发布方式见第 12 节） |
 | 远程仓库 | **`git@github.com:Dongnb66/internship-workbench.git`（私有，已推送）** |
 | 分支 | `master`，跟踪 `origin/master`，工作树干净 |
-| 规模 | 221 个已跟踪文件 / 1.2 MB / 35 个测试文件 / 475 条断言（全绿） |
+| 规模 | 226 个已跟踪文件 / 1.2 MB / 37 个测试文件 / 504 条断言（全绿） |
 
 ## 1. 五分钟上手
 
@@ -84,14 +84,14 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
 4. **扫描/解析类断言要先「钉住扫描本身」**（如「至少扫到 N 个且包含已知文件」），
    否则扫描逻辑一失效，下游断言全部假绿。
 5. **改完必须跑 `npm run typecheck && npm test && npm run lint && npm run build` 四件套**，
-   并把测试数变化写进提交信息（当前基线 **475**，35 个测试文件）。
+   并把测试数变化写进提交信息（当前基线 **504**，37 个测试文件）。
 6. **提交信息写「为什么」**，不写「改了什么」。历次提交都遵循这个风格，可以 `git log` 看。
 
 ## 5. 当前状态快照（2026-09-27）
 
 - **求职智能体开工中**（`docs/AGENT_PLAN.md`）：第一步「限额护栏」已落地，执行点在 `streamChat` 内部，
   第二/三/四步（agent 循环、投递决策、项目教练）待做。
-- 测试：**35 个文件 / 475 条断言全绿**（2026-09-27，第一/二/三步落地：限额护栏 + agent 循环 + 投递决策）；`tsc -b`、`oxlint`（0 error）、`vite build` 均通过。
+- 测试：**37 个文件 / 504 条断言全绿**（2026-09-27，`docs/AGENT_PLAN.md` 四步全部落地：限额护栏 → agent 循环 → 投递决策 → 项目教练）；`tsc -b`、`oxlint`（0 error）、`vite build` 均通过。
 - 最近 5 个提交（倒序）：限额护栏（AGENT_PLAN 第一步）→ 智能体实施计划落盘 → 跟进窗口常量收敛 → 关键词词表修偏 → BENCHMARK 待办补记。
 - 线上站已发布过 13 次，最近一次与 `ba5c7c7` 对应。
 - 已知缺口与优先级在 `docs/BENCHMARK.md` 第二节（P0：渠道能力边界表、漏斗转化统计、跟进节奏）。
@@ -156,7 +156,7 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
 
 按顺序做，别跳：
 
-1. `npm install && npm run typecheck && npm test` —— 确认基线是 475 全绿（不是就先查环境）。
+1. `npm install && npm run typecheck && npm test` —— 确认基线是 504 全绿（不是就先查环境）。
 2. `git log --oneline -15` 读提交信息，理解近期决策的「为什么」。
 3. 读 `AGENTS.md` 的硬约束 + 本文件第 3 节的不变量。
 4. 从 `docs/BENCHMARK.md` 第二节挑一个 P0 缺口开工，并在动手前先写会变红的断言。
@@ -167,7 +167,7 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
 
 ```bash
 git clone git@github.com:Dongnb66/internship-workbench.git
-cd internship-workbench && npm install && npm run typecheck && npm test   # 基线 475 全绿
+cd internship-workbench && npm install && npm run typecheck && npm test   # 基线 504 全绿
 ```
 
 **私有仓意味着接手方必须先能认证**，两条路：
