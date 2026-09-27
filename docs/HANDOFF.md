@@ -55,7 +55,8 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
 | `crawler/` | 本地抓取器（DOM 翻页）+ `sources/offerbiu.mjs`（API 源） | 两条通道**产出同一套 JSON 契约**，字段名必须逐字一致 |
 | `gateway/server.mjs` | 本地网关（`npm run gateway`） | 与部署无关，别当成后端 |
 | `db/` | 迁移 SQL + `db/exec/` 可粘贴执行的拆分脚本 | schema 工具当前不可用，新增表要手工执行并同步文档 |
-| `miniprogram/` | 微信小程序端 | **发布时要先移出目录**，见第 6 节 |
+| `src/lib/mentor.ts` · `githubVerify.ts` · `pages/Coach.tsx` | 项目教练：四周任务包生成 + 公开仓库只读验收 | 两者都**不打模型**（不消耗创建者额度）；验收读不到的东西一律说「无法确认」，不编判定 |
+| `miniprogram/` | 微信小程序端 | **发布时要先移出目录**，见第 6 节。AI 层（quota / agentLoop / agentTools / agentRun / mentor / githubVerify）**只在网页端**，没有小程序移植，别去 `miniprogram/utils/` 找同名模块 |
 
 ## 3. 不可违反的不变量
 
@@ -92,7 +93,8 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
 - **求职智能体开工中**（`docs/AGENT_PLAN.md`）：第一步「限额护栏」已落地，执行点在 `streamChat` 内部，
   第二/三/四步（agent 循环、投递决策、项目教练）待做。
 - 测试：**37 个文件 / 504 条断言全绿**（2026-09-27，`docs/AGENT_PLAN.md` 四步全部落地：限额护栏 → agent 循环 → 投递决策 → 项目教练）；`tsc -b`、`oxlint`（0 error）、`vite build` 均通过。
-- 最近 5 个提交（倒序）：限额护栏（AGENT_PLAN 第一步）→ 智能体实施计划落盘 → 跟进窗口常量收敛 → 关键词词表修偏 → BENCHMARK 待办补记。
+- 最近 5 个提交（倒序）：项目教练（第四步）→ 投递决策智能体（第三步）→ ReAct 循环（第二步）→ 限额护栏（第一步）→ 智能体实施计划落盘。
+- **这四步都只在本地提交**，没有推送到 `origin`（推送由人决定，见第 11 节）。
 - 线上站已发布过 13 次，最近一次与 `ba5c7c7` 对应。
 - 已知缺口与优先级在 `docs/BENCHMARK.md` 第二节（P0：渠道能力边界表、漏斗转化统计、跟进节奏）。
 
