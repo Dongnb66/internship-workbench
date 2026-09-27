@@ -1,7 +1,7 @@
 # 求职智能体 · 实施计划（待开工）
 
 > **给接手本计划的智能体**：先读 `AGENTS.md`（硬约束）与 `docs/HANDOFF.md`（怎么做才不出错），
-> 确认基线（`npm run typecheck && npm test` 当前 **421 条断言全绿**，31 个测试文件），
+> 确认基线（`npm run typecheck && npm test` 当前 **457 条断言全绿**，34 个测试文件），
 > 再回到本文档按顺序实施。本文档是完整设计，不依赖任何对话上下文。
 > 纪律不变：**每个模块先写会变红的断言再实现**（见 HANDOFF 第 4 节）。
 
@@ -97,7 +97,31 @@ agent 运行建议强制用便宜模型而非用户所选，避免循环烧高�
 - 测试：392 → **421**（新增 `quota.test.ts` 14、`aiQuotaGate.test.ts` 11、`aiQuotaCoverage.test.mjs` 4）。
   每道闸门都做过变异检查（关掉就变红），共 15 个变异体全部被杀。
 
-### 第二步：agentLoop + agentTools + 每日巡检 v1
+### 第二步：agentLoop + agentTools + 每日巡检 v1 ✅ 已落地（2026-09-27）
+- `src/lib/agentTools.ts`：8 个工具（followupDue / staleApplications / funnelStats / calibration /
+  todayPicks / paceStatus / keywordCoverage / interviewFactGate），**全部是 §2 那些纯函数的一次调用**，
+  不重写算法——两边各算一遍迟早对不上，而对不上的症状是「智能体说还有 3 条，页面显示 5 条」。
+  每个工具带 `implementedIn`，测试会去读那个源文件确认同名导出还在（注册表指向空气时不会假绿）。
+  observation 一律裁剪到 20 条 / 2400 字，并如实带 `truncated` / `hidden`。
+- `src/lib/agentLoop.ts`：ReAct 循环，模型调用**注入**（`ask`），所以单测不打网络、不烧额度。
+  四条硬规则都有断言且逐个做过变异检查：Observation 只由应用侧填（模型自己写的 observation 被丢弃，
+  连回给它的历史都换成结构化复述，免得那句编造以「既成事实」的身份回到上下文）、
+  max_steps 硬上限 + 「部分结论」路径、每步审计（thought/tool/args/observation/error/ms）、
+  工具失败回填并连续失败 2 次收手。
+- `src/lib/agentRun.ts`：接到 `streamChat`。整轮循环用**固定标签「每日巡检」**（台账断言钉住），
+  JSON 模式开着，signal 一路传到模型调用。
+  ⚠️ 这里的 `buildAgentUserMessage` **不是可有可无的包装**：工具观察结果里带着从招聘网站抓来的
+  陌生人文本，是 prompt 注入的入口。第一版接线把它裸拼进 prompt，是**推导式覆盖率检查
+  （aiPromptCoverage.test.mjs）自己变红发现的**——那条检查当初就是为了「第 8 个调用点漏网」而改成推导的。
+- 入口在总览页「求职智能体 · 每日巡检」卡：按钮 + 每步审计展示 + 停止 + 剩余额度，
+  并写明只出清单与建议、不替你发任何东西（AGENTS §2.3）。
+- 断言：421 → **457**（agentTools 12 / agentLoop 17 / agentRun 7，另含 aiQuotaCoverage 4）。
+- **没做**（§3.4 的建议）：agent 强制用便宜模型。`StreamOptions` 现在没有按次指定模型的口子，
+  加口子属于改公共契约，留给下一步；当前挡额度的是每任务 8 步 + 每日 60 次两道闸。
+- 场景 v1 只用**已有数据**跑通；投递决策（第三步）与项目教练（第四步）待做。
+
+**以下是本步的原始设计要点（实现即照此，保留给后来人对照）：**
+
 - 场景：「说一句今天该干嘛」→ agent 自主查跟进/漏斗/截止/日程 → 产出行动清单
 - 总览页入口（按钮 + 结果面板 + 每步审计展示——审计可视化本身就是面试演示素材）
 - **与第一步接上的两条硬约束**（改这里之前先看，别推翻护栏）：

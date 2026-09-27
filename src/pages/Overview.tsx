@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { errText } from '../cloud'
 import { Empty, Stat } from '../components/ui'
+import { getQuotaSnapshot } from '../lib/ai'
 import { listRows, updateRow } from '../lib/api'
 import { STAGES } from '../lib/constants'
 import { daysLeft, fmtDate, fmtDateTime, leftText, recentDays, todayISO } from '../lib/format'
@@ -8,6 +9,10 @@ import { todayPicks } from '../lib/daily'
 import { DEFAULT_PACE, paceStatus } from '../lib/pace'
 import { calibration, funnelStats } from '../lib/funnel'
 import { followupDue } from '../lib/followup'
+import { AGENT_TOOLS } from '../lib/agentTools'
+import { DAILY_TASK_LABEL, runDailyInspection } from '../lib/agentRun'
+import type { ActionStep, StopReason } from '../lib/agentLoop'
+import { DEFAULT_QUOTA } from '../lib/quota'
 import { notifyErr, notifyOk } from '../lib/toast'
 import type { Profile, Row } from '../types'
 
@@ -15,6 +20,15 @@ export interface PageProps {
   profile: Profile | null
   onChanged: () => void | Promise<void>
   go: (page: string) => void
+}
+
+/** 循环为什么停：每种停止原因给用户不同的下一步（护栏生效不是故障，得说清） */
+const STOP_LABEL: Record<StopReason, string> = {
+  final_answer: '已完成',
+  max_steps: '转满一件事的最大步数，被额度护栏熔断（不是卡住）',
+  tool_retries_exhausted: '某个工具连续失败，已停止重试',
+  model_error: '模型调用中断（多半是今天的 AI 额度用完了）',
+  aborted: '已手动停止',
 }
 
 export default function Overview({ profile, go }: PageProps) {
@@ -99,6 +113,43 @@ export default function Overview({ profile, go }: PageProps) {
   // 「今天先投哪几个」：按 截止紧急 → 优先级 → 匹配分 排，每条带依据和待确认标记
   const picks = todayPicks(jobs, apps, profile, 3)
 
+  // ---- 求职智能体 · 每日巡检（AGENT_PLAN 第二步）
+  // 每步审计直接摆出来是刻意的：结论后面没有「它查了什么」，用户就只能信或不信。
+  const [agent, setAgent] = useState<{ running: boolean; steps: ActionStep[]; answer: string; stop: StopReason | '' }>({
+    running: false,
+    steps: [],
+    answer: '',
+    stop: '',
+  })
+  const agentAbort = useRef<AbortController | null>(null)
+  const quotaNow = getQuotaSnapshot(DAILY_TASK_LABEL)
+
+  async function runInspection() {
+    if (agent.running) return
+    if (!quotaNow.allowed) {
+      // 挡住了就当场说清楚，别让按钮转圈两次再报错
+      notifyErr(quotaNow.reasons.join('；'))
+      return
+    }
+    const controller = new AbortController()
+    agentAbort.current = controller
+    setAgent({ running: true, steps: [], answer: '', stop: '' })
+    try {
+      const r = await runDailyInspection(
+        { jobs, applications: apps, messages: msgs, interviews: ivs, offers, resumes: [], profile, today, now: new Date() },
+        {
+          signal: controller.signal,
+          // 逐步回填：用户在它还在转的时候就能看见「现在在查什么」
+          onStep: (s) => setAgent((prev) => ({ ...prev, steps: [...prev.steps, s] })),
+        },
+      )
+      setAgent({ running: false, steps: r.steps, answer: r.answer, stop: r.stopReason })
+    } catch (error) {
+      setAgent((prev) => ({ ...prev, running: false }))
+      notifyErr(errText(error))
+    }
+  }
+
   async function toggleTask(row: Row) {
     try {
       await updateRow('tasks', row.id, { done: true })
@@ -154,6 +205,78 @@ export default function Overview({ profile, go }: PageProps) {
           {picks.length ? (
             <div className="small muted mt8">依据来自本地关键词匹配与截止日，不消耗模型额度；「待确认」是只有你自己能核实的事实，投前过一遍。</div>
           ) : null}
+        </div>
+      </section>
+
+      <section className="card">
+        <div className="card-head">
+          <h3>求职智能体 · 每日巡检</h3>
+          <span className="spacer" />
+          <span className="small muted">
+            它自己决定查哪些数据（{AGENT_TOOLS.length} 个工具，一件事最多 {DEFAULT_QUOTA.maxCallsPerTask} 步）· 今日剩 {quotaNow.remainingTasks} 件事
+          </span>
+          {agent.running ? (
+            <button
+              className="btn sm"
+              onClick={() => {
+                agentAbort.current?.abort()
+              }}
+            >
+              停止
+            </button>
+          ) : (
+            <button className="btn primary sm" onClick={() => void runInspection()} disabled={!quotaNow.allowed}>
+              开始巡检
+            </button>
+          )}
+        </div>
+        <div className="card-body">
+          {!quotaNow.allowed && !agent.running && !agent.answer ? (
+            <div className="small" style={{ color: '#b45309' }}>
+              {quotaNow.reasons.join('；')}
+            </div>
+          ) : null}
+          {quotaNow.degraded ? (
+            <div className="small mt4" style={{ color: '#b45309' }}>
+              额度台账当前不可用（浏览器隐私模式或存储配额爆了），这一轮的调用没被计数——护栏是放行状态。
+            </div>
+          ) : null}
+
+          {agent.steps.length ? (
+            <div className="mt4">
+              {agent.steps.map((s) => (
+                <div key={s.step} className="row" style={{ alignItems: 'flex-start', marginBottom: 8, gap: 8 }}>
+                  <span className={s.error ? 'badge danger' : 'badge info'}>{s.step}</span>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div className="cell-main">
+                      {s.tool ? `调用 ${s.tool}` : s.thought ? '给出结论' : '（没识别出指令）'}
+                      <span className="small muted"> · {s.ms}ms</span>
+                    </div>
+                    {s.thought ? <div className="cell-sub">想法：{s.thought}</div> : null}
+                    {s.args && Object.keys(s.args).length ? <div className="cell-sub">参数：{JSON.stringify(s.args)}</div> : null}
+                    <div className="small muted" style={{ wordBreak: 'break-all' }}>
+                      观察：{s.observation.length > 160 ? `${s.observation.slice(0, 160)}…` : s.observation}
+                    </div>
+                    {s.error ? <div className="small" style={{ color: '#b91c1c' }}>错误：{s.error}</div> : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {agent.answer ? (
+            <div className="hint mt8">
+              <div className="cell-main">行动清单</div>
+              <div className="small mt4" style={{ whiteSpace: 'pre-wrap' }}>{agent.answer}</div>
+            </div>
+          ) : null}
+          {agent.stop ? (
+            <div className="small muted mt4">
+              停止原因：{STOP_LABEL[agent.stop]}。巡检只给清单与建议，<strong>不替你发任何东西</strong>——投递与打招呼由你确认。
+            </div>
+          ) : (
+            <div className="small muted mt4">巡检只读数据、只出清单与建议，不自动投递也不自动发消息。</div>
+          )}
         </div>
       </section>
 
