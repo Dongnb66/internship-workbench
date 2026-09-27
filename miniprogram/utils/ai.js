@@ -1,5 +1,6 @@
 const { cloud } = require('./cloud')
 const constants = require('./constants')
+const { currentAccess } = require('./billing')
 
 let cachedModel = null
 
@@ -17,8 +18,14 @@ async function pickModel() {
  * 唯一的模型调用入口：只支持流式，逐帧累积文本。
  * 小程序里同样用 for await 消费 SSE —— 分块由 SDK 的 wx.request 传输层负责，
  * 不要改用 wx.request，也不要去找 EventSource（那个运行时里没有）。
+ *
+ * 计费门挂在挑模型之前：这一端没有自备 Key 那条路（见 `utils/billing.js`），
+ * 所以门默认关着；被挡住时连 `models.list()` 那次目录请求都不该发出去。
  */
 async function streamChat(opts) {
+  const access = currentAccess()
+  if (!access.allowed) throw new Error(access.reason)
+
   const model = await pickModel()
   if (!model) throw new Error('当前没有可用模型，请稍后重试')
 
