@@ -37,11 +37,23 @@ const store = new Map<string, string>()
   removeItem: (k: string) => void store.delete(k),
   clear: () => store.clear(),
 }
+// 计费门要读 localStorage；node 环境没有，和 sessionStorage 共用一个 Map 即可
+;(globalThis as any).localStorage = {
+  getItem: (k: string) => store.get(k) ?? null,
+  setItem: (k: string, v: string) => void store.set(k, v),
+  removeItem: (k: string) => void store.delete(k),
+  clear: () => store.clear(),
+}
 
 const { aiErrorText, getTokenStats, listUsableModels, modelCostLabel, streamChat } = await import('../ai')
+const { setOwnerTrialEnabled } = await import('../billing')
+
 
 beforeEach(() => {
+
   store.clear()
+  // 计费门默认关闭；这一批用例测的是创建者试用档那条通道，清完存储必须重开
+  setOwnerTrialEnabled(true)
   streamChunks = []
   modelList = [{ id: 'm1', name: '模型一', enabled: true }]
   createError = null

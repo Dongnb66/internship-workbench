@@ -42,9 +42,13 @@ const stub = {
 ;(globalThis as any).sessionStorage = stub
 
 const { modelRate, pickCheapModel, streamChat } = await import('../ai')
+const { setOwnerTrialEnabled } = await import('../billing')
+
 
 beforeEach(() => {
   mem.clear()
+  // 计费门默认关闭；这里测的是创建者试用档那条通道，必须显式打开（清完存储要重开）
+  setOwnerTrialEnabled(true)
   lastRequest = null
   modelList = [
     { id: 'auto', name: 'Auto', enabled: true, onlyReasoning: true },

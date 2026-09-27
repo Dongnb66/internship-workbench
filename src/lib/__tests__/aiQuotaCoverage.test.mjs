@@ -128,6 +128,15 @@ describe('模型调用点的额度归属标记覆盖率（推导式）', () => {
     expect(missing, `这些循环调用点没走便宜档：${missing.join('、')}`).toEqual([])
   })
 
+  it('唯一入口也挂了计费门（默认不花创建者的钱，不靠每个页面自觉）', () => {
+    const ai = readFileSync(path.join(SRC, 'lib', 'ai.ts'), 'utf8')
+    expect(ai).toMatch(/currentAccess\(\)/)
+    // 拒绝必须真的抛出去：查了不抛等于没门
+    expect(ai, '计费门查了状态却没拦住请求').toMatch(/if \(!access\.allowed\) throw/)
+    // byo 未接通时不许偷偷改用平台通道
+    expect(ai, 'byo 档不允许回落到平台额度').toMatch(/access\.access === 'byo'/)
+  })
+
   it('streamChat 自己内部真的查了额度闸（否则调用点标了名也没人挡）', () => {
     const ai = readFileSync(path.join(SRC, 'lib', 'ai.ts'), 'utf8')
     // 三件事缺一不可：拿到 store、问额度、被拒时**抛错**、花过就记账

@@ -1,4 +1,5 @@
 import { cloud } from '../cloud'
+import { currentAccess } from './billing'
 import { DIMS, GREETING_RULES } from './constants'
 import { todayISO } from './format'
 import { createQuotaStore, DEFAULT_QUOTA, type QuotaStatus, type QuotaStorage } from './quota'
@@ -306,6 +307,18 @@ export function taskSubject(prefix: string, text: string): string {
 
 /** 唯一的模型调用入口：只支持流式，逐帧累积文本。额度护栏就挡在这里。 */
 export async function streamChat(opts: StreamOptions): Promise<string> {
+  // 计费门在额度门之前：没付钱资格时连「今天还剩几次」都不该被消耗掉
+  const access = currentAccess()
+  if (!access.allowed) throw new Error(access.reason)
+  /**
+   * 走到 byo 就必须真的走 byo。**这里绝不允许"先用平台额度顶着"**：
+   * 那种"临时回落"正是本次改动要消灭的东西，而且它一旦发生就没人会察觉——
+   * 用户以为花的是自己的钱，实际记在你账上。BYO 发送器接上之前，这一档直接拒绝。
+   */
+  if (access.access === 'byo') {
+    throw new Error('自备 Key 通道的发送器还没接上（网关侧未完成），本功能暂不可用。不会改用本应用的额度。')
+  }
+
   const store = quotaStore()
   const day = todayISO()
   // 先查额度再挑模型：被挡住时连目录请求都不该发出去

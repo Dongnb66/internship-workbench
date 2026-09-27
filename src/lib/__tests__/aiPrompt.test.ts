@@ -46,6 +46,15 @@ const {
   voiceSample,
 } = await import('../ai')
 const { UNTRUSTED_CLOSE, UNTRUSTED_OPEN, countClosers, wrapUntrusted } = await import('../untrusted')
+// 这批用例断言平台通道实际发出去的 prompt，所以要过计费门：给一个内存版 localStorage 并开试用档
+const { setOwnerTrialEnabled } = await import('../billing')
+const lsMem = new Map<string, string>()
+;(globalThis as any).localStorage = {
+  getItem: (k: string) => lsMem.get(k) ?? null,
+  setItem: (k: string, v: string) => void lsMem.set(k, v),
+  removeItem: (k: string) => void lsMem.delete(k),
+  clear: () => lsMem.clear(),
+}
 
 const me = {
   full_name: '杨运栋',
@@ -63,6 +72,8 @@ const userMsg = () => String(lastParams?.messages?.[1]?.content ?? '')
 const sysMsg = () => String(lastParams?.messages?.[0]?.content ?? '')
 
 beforeEach(() => {
+  // 计费门默认关闭；这批用例断言的是「创建者试用档」那条通道实际发出去的 prompt，必须显式打开
+  setOwnerTrialEnabled(true)
   reply = '{}'
   lastParams = null
 })

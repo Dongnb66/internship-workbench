@@ -60,6 +60,7 @@ const stub = {
 const { DEFAULT_QUOTA } = await import('../quota')
 const { todayISO } = await import('../format')
 const { DAILY_TASK_LABEL, runApplyDecision, runDailyInspection } = await import('../agentRun')
+const { setOwnerTrialEnabled } = await import('../billing')
 import type { AgentContext } from '../agentTools'
 
 const quotaKey = `wb_quota_${todayISO()}`
@@ -88,6 +89,8 @@ const FINAL = JSON.stringify({ thought: '够了', final_answer: '今天有 1 条
 
 beforeEach(() => {
   mem.clear()
+  // 计费门默认关闭；这里测的是创建者试用档那条通道，必须显式打开（清完存储要重开）
+  setOwnerTrialEnabled(true)
   replies = []
   replyIndex = 0
   sent = []

@@ -47,6 +47,8 @@ const localStub = {
 ;(globalThis as any).sessionStorage = localStub
 
 const { getQuotaSnapshot, streamChat } = await import('../ai')
+const { setOwnerTrialEnabled } = await import('../billing')
+
 
 const TODAY = todayISO()
 const quotaKey = `wb_quota_${TODAY}`
@@ -66,6 +68,8 @@ function distinctTasks(n: number): string[] {
 
 beforeEach(() => {
   mem.clear()
+  // 计费门默认关闭；这里测的是创建者试用档那条通道，必须显式打开（清完存储要重开）
+  setOwnerTrialEnabled(true)
   createCalls = 0
   createError = null
 })
@@ -125,7 +129,16 @@ describe('放行时记账', () => {
 })
 
 describe('存储坏掉时的姿态', () => {
-  it('localStorage 读写抛错 → 降级放行，但 degraded 必须可见', async () => {
+  /**
+   * 两道门在存储坏掉时**方向相反**，这是刻意的，别改回去：
+   * - 额度台账读不到 → fail-open（挡不住就放行），因为误伤一个自用工作台不划算；
+   * - 计费门读不到 → fail-**closed**（一律拒绝），因为"读不到试用开关"的默认值
+   *   只能是「没人同意花创建者的钱」。
+   * 原来这条断言写的是「降级仍放行」，那是计费门存在之前的语义；现在放行的是计费错误文案，
+   * 而不是悄悄用你的额度把请求发出去。
+   */
+  it('localStorage 读写抛错 → 计费门拒绝发请求（额度侧仍是降级可见，但不参与决定）', async () => {
+    const real = (globalThis as any).localStorage
     ;(globalThis as any).localStorage = {
       getItem: () => {
         throw new Error('SecurityError')
@@ -135,12 +148,13 @@ describe('存储坏掉时的姿态', () => {
       },
     }
     try {
-      const text = await streamChat({ system: 's', user: 'u', task: 'JD 评估' })
-      expect(text).toBe('ok')
+      await expect(streamChat({ system: 's', user: 'u', task: 'JD 评估' })).rejects.toThrow(/自备|Key|开通/)
+      expect(createCalls).toBe(0)
+      // 额度快照本身仍要如实标出降级，设置页靠这句话提示用户
+      const { getQuotaSnapshot } = await import('../ai')
       expect(getQuotaSnapshot().degraded).toBe(true)
-      expect(getQuotaSnapshot().allowed).toBe(true)
     } finally {
-      ;(globalThis as any).localStorage = localStub
+      ;(globalThis as any).localStorage = real
     }
   })
 })
