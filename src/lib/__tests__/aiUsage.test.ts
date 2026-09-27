@@ -57,7 +57,7 @@ describe('streamChat 消耗入账', () => {
       chunk([{ index: 0, delta: { content: '{"a":1}' }, finish_reason: null }]),
       chunk([], { prompt_tokens: 1200, completion_tokens: 300, total_tokens: 1500 }),
     ]
-    await streamChat({ system: 's', user: 'u' })
+    await streamChat({ system: 's', user: 'u', task: '消耗入账用例' })
     expect(getTokenStats()).toEqual({ calls: 1, prompt: 1200, completion: 300, total: 1500 })
   })
 
@@ -67,21 +67,21 @@ describe('streamChat 消耗入账', () => {
       chunk([{ index: 0, delta: { content: 'b' }, finish_reason: null }], { prompt_tokens: 10, completion_tokens: 2, total_tokens: 12 }),
       chunk([], { prompt_tokens: 10, completion_tokens: 2, total_tokens: 12 }),
     ]
-    await streamChat({ system: 's', user: 'u' })
+    await streamChat({ system: 's', user: 'u', task: '消耗入账用例' })
     expect(getTokenStats()).toEqual({ calls: 1, prompt: 10, completion: 2, total: 12 })
   })
 
   it('网关没回 usage 时只计调用次数，不编造 token 数', async () => {
     streamChunks = [chunk([{ index: 0, delta: { content: 'x' }, finish_reason: 'stop' }])]
-    await streamChat({ system: 's', user: 'u' })
+    await streamChat({ system: 's', user: 'u', task: '消耗入账用例' })
     expect(getTokenStats()).toEqual({ calls: 1, prompt: 0, completion: 0, total: 0 })
   })
 
   it('多次调用累加在同一会话上', async () => {
     streamChunks = [chunk([], { prompt_tokens: 5, completion_tokens: 5, total_tokens: 10 })]
-    await streamChat({ system: 's', user: 'u' })
+    await streamChat({ system: 's', user: 'u', task: '消耗入账用例' })
     streamChunks = [chunk([], { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 })]
-    await streamChat({ system: 's', user: 'u' })
+    await streamChat({ system: 's', user: 'u', task: '消耗入账用例' })
     expect(getTokenStats()).toEqual({ calls: 2, prompt: 6, completion: 6, total: 12 })
   })
 })
@@ -98,6 +98,7 @@ describe('streamChat 推理通道隔离', () => {
     const text = await streamChat({
       system: 's',
       user: 'u',
+      task: '推理通道用例',
       json: true,
       onDelta: (t) => deltas.push(t),
       onReasoning: (t) => reasoning.push(t),
@@ -113,7 +114,7 @@ describe('streamChat 推理通道隔离', () => {
       chunk([{ index: 0, delta: { reasoning_content: '推理中' }, finish_reason: null }]),
       chunk([{ index: 0, delta: { content: '答案' }, finish_reason: 'stop' }]),
     ]
-    await expect(streamChat({ system: 's', user: 'u' })).resolves.toBe('答案')
+    await expect(streamChat({ system: 's', user: 'u', task: '消耗入账用例' })).resolves.toBe('答案')
   })
 })
 
@@ -221,13 +222,13 @@ describe('aiErrorText 错误契约（按 code 前缀分支）', () => {
 
   it('streamChat 真的用了这套文案（不只是纯函数自测）', async () => {
     createError = { error: { code: 'quota_exhausted', message: 'upstream says so' }, status: 429 }
-    await expect(streamChat({ system: 's', user: 'u' })).rejects.toThrow(/创建者账号/)
+    await expect(streamChat({ system: 's', user: 'u', task: '消耗入账用例' })).rejects.toThrow(/创建者账号/)
   })
 
   it('主动取消（AbortError）原样抛出，不伪装成业务故障', async () => {
     const abort = new Error('aborted')
     abort.name = 'AbortError'
     createError = abort
-    await expect(streamChat({ system: 's', user: 'u' })).rejects.toThrow('aborted')
+    await expect(streamChat({ system: 's', user: 'u', task: '消耗入账用例' })).rejects.toThrow('aborted')
   })
 })

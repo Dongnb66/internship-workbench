@@ -1,7 +1,7 @@
 # 求职智能体 · 实施计划（待开工）
 
 > **给接手本计划的智能体**：先读 `AGENTS.md`（硬约束）与 `docs/HANDOFF.md`（怎么做才不出错），
-> 确认基线（`npm run typecheck && npm test` 当前 **392 条断言全绿**，28 个测试文件），
+> 确认基线（`npm run typecheck && npm test` 当前 **421 条断言全绿**，31 个测试文件），
 > 再回到本文档按顺序实施。本文档是完整设计，不依赖任何对话上下文。
 > 纪律不变：**每个模块先写会变红的断言再实现**（见 HANDOFF 第 4 节）。
 
@@ -79,15 +79,33 @@ agent 运行建议强制用便宜模型而非用户所选，避免循环烧高�
 
 ## 4. 实施顺序（一步一个发布）
 
-### 第一步：限额护栏（必须最先，否则 agent 烧额度失控）
-- 全应用每天 N 次大模型调用硬上限（含 evaluateJD/generateGreeting/generateInterviewPrep/agent 循环）
-- 超出给明确提示「今日额度已用完，明天再来」（额度记在创建者账号，文案要说明）
-- 实现参考：现有频控框架 `pace.ts` + profile 的 daily_greet_limit 先例；
-  计数存 localStorage（设备级）或 profile 表（跨设备）——二选一并写明理由
+### 第一步：限额护栏（必须最先，否则 agent 烧额度失控）✅ 已落地（2026-09-27）
+
+- 新文件 `src/lib/quota.ts`：纯函数 `quotaStatus` / `canStartTask` + `createQuotaStore`（存储面只要求
+  `getItem`/`setItem`，测试注入 Map）。三道上限 `DEFAULT_QUOTA = { dailyTasks: 20, maxCallsPerTask: 8, maxCallsPerDay: 60 }`
+  —— `maxCallsPerTask` 与第二步的 `maxSteps` **必须相等**（`quota.test.ts` 钉的是 `<= 8`），否则护栏比循环还松。
+- 记账落点选了 **localStorage（设备级）**而不是 profile 表列：后者是一次 schema 迁移，而 AGENTS.md §1
+  把数据模型设计划归人拍板；从 `ai_reports`/`knowledge` 反算也不可靠（只有部分调用点落库）。
+  **代价已知并写进设置页**：清站点数据或换浏览器会归零，所以它挡的是「失控量」，不是「铁了心的自我攻击」。
+- 执行点：`streamChat` 内部（唯一入口），`StreamOptions.task` 做成**必填**——
+  漏标的调用点编译期就红，另有 `src/lib/__tests__/aiQuotaCoverage.test.mjs` 从源码推导兜底。
+  任务身份 = 能力 + 对象（`taskSubject`），批量评估里每个岗位各算一件事，否则第 9 个岗位会被
+  「每任务 8 步上限」当成失控循环误杀。
+- 记账时机：请求发出去过就算一次（含随后失败，钱确实花了）；**主动取消不记**。
+- 存储坏了 → **fail-open**（放行）但 `degraded: true`，设置页显式提示「额度台账当前不可用」。
+- 批量评分撞到护栏会**停整批**并把原因写在进度条上，而不是把剩下的岗位都算成「失败」。
+- 测试：392 → **421**（新增 `quota.test.ts` 14、`aiQuotaGate.test.ts` 11、`aiQuotaCoverage.test.mjs` 4）。
+  每道闸门都做过变异检查（关掉就变红），共 15 个变异体全部被杀。
 
 ### 第二步：agentLoop + agentTools + 每日巡检 v1
 - 场景：「说一句今天该干嘛」→ agent 自主查跟进/漏斗/截止/日程 → 产出行动清单
 - 总览页入口（按钮 + 结果面板 + 每步审计展示——审计可视化本身就是面试演示素材）
+- **与第一步接上的两条硬约束**（改这里之前先看，别推翻护栏）：
+  1. `maxSteps` 必须 **= `DEFAULT_QUOTA.maxCallsPerTask`（当前 8）**。每任务熔断按调用次数算，
+     循环比闸松等于没有闸；`quota.test.ts` 有 `maxCallsPerTask <= 8` 这条断言钉着。
+  2. agent 的每一圈都调 `streamChat`，而 `StreamOptions.task` 是**必填**。整轮循环用**同一个固定标签**
+     （如「每日巡检」）——这样 8 圈才算「一件事转了 8 步」并被熔断；每圈换标签就等于绕过这道闸。
+     固定标签还会被 `aiQuotaCoverage.test.mjs` 的推导式扫描看见，漏标编译期就红。
 - 断言要点：循环步数上限、Observation 不可伪造、final_answer 正常返回、
   工具失败重试上限、审计数组结构
 

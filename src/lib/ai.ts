@@ -1,5 +1,7 @@
 import { cloud } from '../cloud'
 import { DIMS, GREETING_RULES } from './constants'
+import { todayISO } from './format'
+import { createQuotaStore, DEFAULT_QUOTA, type QuotaStatus, type QuotaStorage } from './quota'
 import { wrapUntrusted } from './untrusted'
 import type { Profile } from '../types'
 
@@ -101,6 +103,13 @@ export async function pickModel(): Promise<string | null> {
 export interface StreamOptions {
   system: string
   user: string
+  /**
+   * 这次调用属于哪件「任务」。必填是刻意的：额度按任务数算（AGENT_PLAN §5 红线——
+   * 用户理解「今天还能跑 20 次巡检」，理解不了「还能调 137 次模型」），
+   * 没有归属就没有每任务熔断，agent 死循环时没人知道是谁在转。
+   * 新增调用点漏标会在编译期红，另有 aiQuotaCoverage.test.mjs 从源码推导兜底。
+   */
+  task: string
   json?: boolean
   signal?: AbortSignal
   onDelta?: (text: string) => void
@@ -197,15 +206,67 @@ export function aiErrorText(error: unknown): string {
   return raw || '模型调用失败，请重试'
 }
 
-/** 唯一的模型调用入口：只支持流式，逐帧累积文本 */
+/**
+ * localStorage 不可用时的占位实现：让额度存储直接进**降级态**（fail-open 但 degraded 可见），
+ * 而不是在调用链上抛一个跟 AI 无关的错。
+ */
+const missingStorage: QuotaStorage = {
+  getItem: () => {
+    throw new Error('localStorage 不可用')
+  },
+  setItem: () => {
+    throw new Error('localStorage 不可用')
+  },
+}
+
+/**
+ * 每次调用现取一个 store，不在模块级缓存：
+ * localStorage 可能跑到一半才坏（隐私模式、配额爆了），
+ * 缓存就会把「降级」冻在第一次读到的状态上，护栏坏掉反而看不见了。
+ */
+function quotaStore() {
+  return createQuotaStore(typeof localStorage === 'undefined' ? missingStorage : localStorage, DEFAULT_QUOTA)
+}
+
+/** 今天的额度快照（设置页 / 巡检面板显示「还能干几件事」用） */
+export function getQuotaSnapshot(focusTask?: string): QuotaStatus {
+  return quotaStore().status(todayISO(), focusTask)
+}
+
+/**
+ * 任务身份 = **能力 + 对象**，不是只有能力。
+ *
+ * 批量评估 20 个岗位时，每个岗位各是用户眼里的一件「事」；如果它们共用「JD 评估」
+ * 这一个标签，第 9 个岗位就会被每任务 8 步上限当成「失控循环」误杀。
+ * 反过来，agent 循环自己会用**固定**标签（同一件事转很多圈），那正是这道闸要挡的。
+ *
+ * 对象取正文开头 60 字 + 总长：同一段文本重复评估仍算同一件事，不同岗位几乎不会撞。
+ */
+export function taskSubject(prefix: string, text: string): string {
+  const key = String(text ?? '').trim()
+  return key ? `${prefix}：${key.slice(0, 60)}(${key.length})` : prefix
+}
+
+/** 唯一的模型调用入口：只支持流式，逐帧累积文本。额度护栏就挡在这里。 */
 export async function streamChat(opts: StreamOptions): Promise<string> {
+  const store = quotaStore()
+  const day = todayISO()
+  // 先查额度再挑模型：被挡住时连目录请求都不该发出去
+  const gate = store.status(day, opts.task)
+  if (!gate.allowed) throw new Error(gate.reasons.join('；'))
+
   const model = await pickModel()
   if (!model) throw new Error('当前没有可用模型，请稍后重试')
 
   let text = ''
   // 末帧才带 usage；逐帧记「最后一次」，循环结束后统一入账，避免重复计数
   let lastUsage: any = null
+  let started = false
+  let aborted = false
+  let failure: unknown = null
   try {
+    // 置在 create 之前：create 自己抛错时请求也已经发出去了，额度是真花掉了
+    started = true
     const stream = await cloud.llm.chat.completions.create({
       model,
       messages: [
@@ -228,10 +289,21 @@ export async function streamChat(opts: StreamOptions): Promise<string> {
       if (chunk?.usage) lastUsage = chunk.usage
     }
   } catch (error) {
-    // 主动取消不算故障，原样抛出，让调用方自己判断
-    if ((error as any)?.name === 'AbortError') throw error
-    throw new Error(aiErrorText(error))
+    aborted = (error as any)?.name === 'AbortError'
+    failure = error
   }
+
+  /**
+   * 额度记账：请求发出去过就算一次（含随后失败），主动取消不算。
+   * 取消不算的代价是「反复手动取消」能少记额度——可以接受：每次取消都要人亲手点一下，
+   * 不是会自动放大的那种失控。
+   */
+  if (started && !aborted) store.record(opts.task, day)
+
+  // 主动取消不算故障，原样抛出，让调用方自己判断
+  if (aborted) throw failure
+  if (failure) throw new Error(aiErrorText(failure))
+
   // 即使网关没回 usage 也要计入调用次数——「调了几次/花了多少」里次数是确定的事实
   recordUsage(lastUsage)
   return text
@@ -363,6 +435,7 @@ export interface Evaluated {
 
 export async function evaluateJD(jd: string, profile: Profile | null, onDelta?: (t: string) => void): Promise<Evaluated> {
   const raw = await streamChat({
+    task: taskSubject('JD 评估', jd),
     system: EVAL_SYSTEM,
     user: buildEvalUserMessage(jd, profile),
     json: true,
@@ -386,6 +459,7 @@ export async function evaluateJD(jd: string, profile: Profile | null, onDelta?: 
 
 export async function generateGreeting(company: string, title: string, jd: string, profile: Profile | null, onDelta?: (t: string) => void): Promise<string> {
   return streamChat({
+    task: `打招呼：${company || '未填'} · ${title || '未填'}`,
     system: `你在帮一名中国大学生写发给 HR / 技术负责人 的第一条打招呼消息。输出只有消息正文本身，不要标题、不要解释、不要引号包裹。
 ${GREETING_RULES}`,
     user: buildGreetingUserMessage(company, title, jd, profile),
@@ -452,6 +526,7 @@ const INTERVIEW_PREP_SYSTEM = `你是技术面试教练，为一场即将到来�
 
 export async function generateInterviewPrep(parts: InterviewPrepParts, profile: Profile | null, onDelta?: (t: string) => void): Promise<string> {
   return streamChat({
+    task: `面试准备包：${parts.company || '未填'} · ${parts.title || '未填'}`,
     system: INTERVIEW_PREP_SYSTEM,
     user: buildInterviewPrepUserMessage(parts, profile),
     onDelta,
@@ -460,6 +535,7 @@ export async function generateInterviewPrep(parts: InterviewPrepParts, profile: 
 
 export async function summarizeReflection(text: string): Promise<string> {
   return streamChat({
+    task: taskSubject('面试复盘整理', text),
     system: '你是面试复盘助手。把用户零散的面试记录整理成「问到的问题 / 我的回答漏洞 / 下一步补齐动作」三段，输出 Markdown，语言精简，不要客套话。',
     user: buildReflectionUserMessage(text),
   })
@@ -468,6 +544,7 @@ export async function summarizeReflection(text: string): Promise<string> {
 /** 网申系统常见问答：期望薪资、可实习时长、为什么选择我们 */
 export async function generateApplyAnswers(company: string, title: string, jd: string, profile: Profile | null): Promise<string> {
   return streamChat({
+    task: taskSubject(`网申答案：${company || '未填'} · ${title || '未填'}`, jd),
     system: `你在帮一名中国大学生填写网申系统的开放题。输出 Markdown，按「期望薪资 / 可到岗与实习时长 / 为什么选择我们 / 自我介绍（200 字内）」四节给出可直接粘贴的答案。
 要求：只使用候选人画像中真实存在的事实，不虚构经历；语气平实、口语化，不要排比堆砌；不主动提及任何短板；不出现学校名称以外的无关信息。
 ${GREETING_RULES}`,
@@ -551,6 +628,7 @@ export async function analyzeResume(
   onReasoning?: (t: string) => void,
 ): Promise<ResumeAnalysis> {
   const raw = await streamChat({
+    task: taskSubject('简历分析', text),
     system: RESUME_ANALYSIS_SYSTEM,
     user: buildResumeAnalysisUserMessage(text, targetRole),
     json: true,
@@ -573,6 +651,7 @@ export interface ResumeFieldDraft {
  */
 export async function draftResumeFields(text: string): Promise<ResumeFieldDraft> {
   const raw = await streamChat({
+    task: taskSubject('简历字段草稿', text),
     system: `你在把一份简历全文提炼成求职管理系统的三个字段草稿。只输出一个 JSON 对象，不要解释文字或代码块：
 {"highlights":"这一版主打的 3 条能力，每条一行，必须引用简历里真实的项目名与数字","projects":"项目与数字：每行一个「项目名：一句话说明 + 关键数字」，全部来自简历原文","notes":"备注：目标方向 / 可实习时间 / 其他值得记住的信息；简历里没有就给空字符串"}
 规则：

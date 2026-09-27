@@ -288,7 +288,14 @@ export default function Jobs({ profile, onChanged, go }: PageProps) {
             model: 'cloud-llm',
           })
           scored += 1
-        } catch {
+        } catch (e) {
+          const msg = String((e as Error)?.message ?? '')
+          if (/额度|上限，循环被熔断|总数已达/.test(msg)) {
+            // 额度挡住了就别再往下撞：剩下的岗位一条也不会评分，
+            // 继续循环只会把「失败」数刷高、把真正的原因（今天用完了）淹掉。
+            setBatch((b) => ({ ...b, current: `额度护罩生效，批量评分停在第 ${i + 1} 条：${msg}` }))
+            break
+          }
           failed += 1
           failedIds.push(job.id)
         }

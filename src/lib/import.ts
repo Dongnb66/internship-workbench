@@ -1,4 +1,4 @@
-import { streamChat } from './ai'
+import { streamChat, taskSubject } from './ai'
 import { JOB_TYPES } from './constants'
 import { textToArray } from './format'
 import { wrapUntrusted } from './untrusted'
@@ -244,6 +244,7 @@ export async function parseJobsFromBlock(block: string, hintSource: string): Pro
   let drafts: JobDraft[] = []
   try {
     const rawText = await streamChat({
+      task: taskSubject('岗位文本结构化', text),
       system: PARSE_JOBS_SYSTEM,
       // 这段文本是从招聘网站／邮件／聊天记录里复制来的陌生人写的原文，属于外部不可信数据，
       // 必须走隔离包装。之前这里是裸拼的 —— 它是本仓第 8 个模型调用点，

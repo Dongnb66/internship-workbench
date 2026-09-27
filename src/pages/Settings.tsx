@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { cloud, errText } from '../cloud'
 import { Field, Modal } from '../components/ui'
-import { getModelChoice, getTokenStats, listUsableModels, modelCostLabel, pickModel, setModelChoice, type TokenStats, type UsableModel } from '../lib/ai'
+import { getModelChoice, getQuotaSnapshot, getTokenStats, listUsableModels, modelCostLabel, pickModel, setModelChoice, type TokenStats, type UsableModel } from '../lib/ai'
 import { listRows, saveProfile } from '../lib/api'
 import { PROFILE_TEMPLATE } from '../lib/constants'
 import { healthSummary, profileHealth } from '../lib/healthCheck'
 import { textToArray } from '../lib/format'
 import { DEFAULT_PACE, GREET_CHECKLIST } from '../lib/pace'
+import { DEFAULT_QUOTA, type QuotaStatus } from '../lib/quota'
 import { notifyErr, notifyOk } from '../lib/toast'
 import type { PageProps } from './Overview'
 
@@ -55,9 +56,13 @@ export default function Settings({ profile, onChanged }: PageProps) {
   const [savingModel, setSavingModel] = useState(false)
   // 会话内累计消耗：进出设置页时刷新，让「花的是谁的额度」这件事可见
   const [stats, setStats] = useState<TokenStats>({ calls: 0, prompt: 0, completion: 0, total: 0 })
+  // 今日额度（设备级 localStorage 台账）：和上面那个「本会话消耗」是两件事——
+  // 会话统计关了就归零，额度台账按日历日算，是护栏实际依据的那份。
+  const [quota, setQuota] = useState<QuotaStatus | null>(null)
 
   useEffect(() => {
     setStats(getTokenStats())
+    setQuota(getQuotaSnapshot())
   }, [])
 
   useEffect(() => {
@@ -403,10 +408,26 @@ export default function Settings({ profile, onChanged }: PageProps) {
                   <strong>账单落在应用创建者账号上</strong>：平台的额度错误码前缀是 <code>quota_</code>，
                   语义明确是 <em>Creator quota</em>（创建者额度）——<strong>不是每个终端用户扣自己的</strong>。
                   也就是说这个站是开放注册的，任何注册用户调 AI 花的都是创建者的额度。
-                  按平台安全要求，终端用户能触发的调用应当限流，避免额度被一次掏空。
                   <br />
-                  应用侧读不到余额（SDK 只给模型目录和调用两个接口），只能靠下面的本会话统计与报错感知。
+                  <strong>本应用已经上了限额护栏</strong>：每天最多 {DEFAULT_QUOTA.dailyTasks} 件 AI 任务、
+                  单件事最多 {DEFAULT_QUOTA.maxCallsPerTask} 步、全天最多 {DEFAULT_QUOTA.maxCallsPerDay} 次调用，
+                  任一上限命中就拒绝再调，并把原因说清楚（是额度用完，不是网络或你的账号问题）。
+                  <br />
+                  应用侧读不到余额（SDK 只给模型目录和调用两个接口），所以下面这几行就是全部的可见性。
                 </div>
+                <div className="small mt8">
+                  今日额度：已用 {quota?.usedTasks ?? 0} / {DEFAULT_QUOTA.dailyTasks} 件事 · 剩 {quota?.remainingTasks ?? DEFAULT_QUOTA.dailyTasks} 件 · 今日累计 {quota?.callsToday ?? 0} 次调用
+                </div>
+                {quota?.degraded ? (
+                  <div className="hint mt8">
+                    <strong>额度台账当前不可用</strong>（浏览器隐私模式，或本机存储配额爆了）：护栏处于
+                    <strong>放行</strong>状态，挡不住超额调用。回到正常浏览模式即可恢复计数。
+                  </div>
+                ) : (
+                  <div className="small muted mt8">
+                    台账记在<strong>这台设备</strong>的浏览器里：清站点数据或换浏览器会重新计数，跨设备不同步。
+                  </div>
+                )}
                 <div className="small muted mt8">
                   本次会话（当前标签页，关闭即归零）：已调用 {stats.calls} 次 · 输入 {stats.prompt} tokens · 输出 {stats.completion} tokens
                 </div>
