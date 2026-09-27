@@ -57,4 +57,15 @@ describe('CI 触发器', () => {
     }
     expect(ci).toContain('if-no-files-found: error')
   })
+
+  it('package-lock 与 package.json 同步 —— 否则 npm ci 第一步就把整条流水线打红', () => {
+    // 真实踩到（2026-09-27）：升版本只改了 package.json，锁里还停在旧版本号，
+    // CI 的 `npm ci` 在校验一致性时就退出，lint/typecheck/test/build 一步没跑到，
+    // 而失败信息只在 Actions 日志里 —— 本地四道门全绿，谁都看不见。
+    const pkg = JSON.parse(readFileSync(path.join(here, '..', '..', '..', 'package.json'), 'utf8'))
+    const lock = JSON.parse(readFileSync(path.join(here, '..', '..', '..', 'package-lock.json'), 'utf8'))
+    expect(lock.version, '锁的顶层 version 与 package.json 不一致').toBe(pkg.version)
+    expect(lock.packages?.['']?.version, '锁的 packages[""] version 与 package.json 不一致').toBe(pkg.version)
+    expect(lock.name).toBe(pkg.name)
+  })
 })
