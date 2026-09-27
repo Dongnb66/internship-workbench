@@ -15,7 +15,7 @@
 | 线上地址 | https://internship-workbench-47024.app.workbuddy.host/ （发布方式见第 12 节） |
 | 远程仓库 | **`git@github.com:Dongnb66/internship-workbench.git`（私有，已推送）** |
 | 分支 | `master`，跟踪 `origin/master`，工作树干净 |
-| 规模 | 231 个已跟踪文件 / 1.2 MB / 40 个测试文件 / 538 条断言（全绿） |
+| 规模 | 244 个已跟踪文件 / 1.6 MB / 48 个测试文件 / 640 条断言（全绿，2026-09-27 实测） |
 
 ## 1. 五分钟上手
 
@@ -46,6 +46,13 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
 | `src/lib/quota.ts` | 限额护栏：三道上限（每日任务数 / 每任务步数 / 每日调用总数）+ localStorage 台账 | 纯函数 + 存储适配器分开，断言全部打在纯函数上；降级时**故意 fail-open** 但 `degraded` 必须可见 |
 | `src/lib/agentLoop.ts` · `agentTools.ts` · `agentRun.ts` | 求职智能体：ReAct 循环 / 工具注册表 / 接到 streamChat 的接线 | 循环的模型调用是**注入**的（单测不烧额度）；工具全部调用 `src/lib/` 既有纯函数，**不要在工具里重写算法**；`agentRun` 的 `buildAgentUserMessage` 做不可信包装，删掉它等于把抓来的 JD 裸拼进 prompt |
 | `src/lib/untrusted.ts` | 外部文本隔离（边界 + 声明 + 中和伪造边界） | 中和那一步有回归断言，别删 |
+| `src/lib/aiChannels.ts` | 厂商白名单表（**谁的 Key 发给哪家、能不能浏览器直发、谁付钱**）+ 转发闸 + Key 脱敏 | `browserDirect` 是 **2026-09-27 实测 CORS** 的结果不是文档抄的：deepseek/moonshot/openrouter/dashscope 为 true，`open.bigmodel.cn` 为 false；本机 Ollama 档是 https 规则的唯一例外（只认 `127.0.0.1:11434`）。`findPreset` 与 `assertForwardTarget` **共用同一条匹配规则**，别再写第二遍 |
+| `src/lib/byoSend.ts` | 自备 Key 的**浏览器直发器**（用户 Key 不过本项目任何服务端） | 发送前再过一次白名单；Key 只进鉴权头；厂商错误体**全部脱敏**后才进文案；`browserDirect:false` 的厂商根本不发（免得把 CORS 伪装成"你的 Key 有问题"）。`fetchImpl` 是注入点，单测不发真请求 |
+| `src/lib/billing.ts` | 计费门：`decideAccess` 是「谁能用 AI」的唯一判定点 | 顺序 byo → （配好但发不出 ⇒ **拒绝**，`paidBy:'nobody'`）→ 试用 → 拒绝；读不到/抛错一律按关。**「配置好了」跟着所选档位走**（要 Key 的看 Key，本机档看探活） |
+| `src/lib/byoSetup.ts` | 设置页那张卡的全部判定 + 自检 | 页面只显示不判断；Key 的掩码在**读到它的同一处**完成（`keyHint`），所以视图层拿不到原文——由 `byoHygiene.test.mjs` 从源码目录推导守着 |
+| `src/lib/registration.ts` | 注册收口：新邮箱要凭邀请码 | 出厂只有 `PLACEHOLDER_CODE` = **关闭状态**（含创建者自己）。门挡在 `verifyOtp` 之前，那一步是账号唯一的产生点。占位符**永远不算可用码** |
+| `src/lib/ownerAccount.ts` | 「这是不是创建者本人的账号」 | `OWNER_EMAIL` 出厂空串 = 谁都不算。「试用」开关只对创建者显示，且 `toggleTrial` 里**再判一次**（界面是入口不是授权） |
+| `miniprogram/utils/billing.js` | 小程序那一端的同名门 | **这一端没有自备 Key 那条路**（`wx.request` 域名要后台白名单），所以默认拒绝且界面上**不给开关**——使用者都能翻的 flag 等于把创建者钱包放台面上 |
 | `src/lib/blockers.ts` | 硬门槛检测（届数/学历/证书/年限/院校/地点） | 三条约束见文件头；**不得编码个人短板事实** |
 | `src/lib/import.ts` | 采集数据 → 岗位草稿（`parseCollectorJson`） | 与 `crawler/`、`extension/` 共享 JSON 契约，改字段要同步三处 |
 | `src/lib/constants.ts` | 字段清单的**唯一事实源**（填写包、渠道、岗位类型…） | `APPLY_KIT_FIELDS` 有三个消费者，别在别处再抄一份 |
@@ -72,6 +79,13 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
    只读公开接口、不登录不带 cookie、默认 1.2 秒间隔且**不做并发**、只取公开字段、产出标注来源、鼓励落盘缓存。
    对方 `robots.txt` 为空**不等于许可**；若将来明确禁止，**删除这条源**而不是改换姿势。
 6. **不绕验证码/风控/登录墙**：抓取器与扩展遇到就停。
+7. **钱与身份**：三条承诺各自有断言，改动前先读它们。
+   - **自备 Key 失败不许改用平台额度**（用户以为花自己的钱、实际记在创建者账上，且一声不吭）。
+     执行点在 `streamChat`，由 `aiQuotaCoverage.test.mjs` 从源码推导守着 + `aiBilling.test.ts` 从行为守着。
+   - **用户的 Key 只在「用户设备 ↔ 厂商」之间流动**：不进 URL、不进日志、不进错误文案、不进界面 DOM。
+     读取点被 `byoHygiene.test.mjs` 推导成白名单（多一处读取点就红），掩码必须在读到它的同一处完成。
+   - **默认值一律是"关"**：邀请码名单、试用开关、创建者邮箱、存储读失败——没配置就拒绝，
+     而不是"先按能用处理"。花钱的授权不能靠"反正没人会去勾"。
 
 ## 4. 工程纪律（本仓库最值钱的部分，别降低标准）
 
@@ -85,18 +99,34 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
 4. **扫描/解析类断言要先「钉住扫描本身」**（如「至少扫到 N 个且包含已知文件」），
    否则扫描逻辑一失效，下游断言全部假绿。
 5. **改完必须跑 `npm run typecheck && npm test && npm run lint && npm run build` 四件套**，
-   并把测试数变化写进提交信息（当前基线 **538**，40 个测试文件）。
+   并把测试数变化写进提交信息（当前基线 **640**，48 个测试文件）。
 6. **提交信息写「为什么」**，不写「改了什么」。历次提交都遵循这个风格，可以 `git log` 看。
 
 ## 5. 当前状态快照（2026-09-27）
 
-- **求职智能体开工中**（`docs/AGENT_PLAN.md`）：第一步「限额护栏」已落地，执行点在 `streamChat` 内部，
-  第二/三/四步（agent 循环、投递决策、项目教练）待做。
-- 测试：**40 个文件 / 538 条断言全绿**（2026-09-27，`docs/AGENT_PLAN.md` 四步全部落地：限额护栏 → agent 循环 → 投递决策 → 项目教练）；`tsc -b`、`oxlint`（0 error）、`vite build` 均通过。
-- 最近 5 个提交（倒序）：项目教练（第四步）→ 投递决策智能体（第三步）→ ReAct 循环（第二步）→ 限额护栏（第一步）→ 智能体实施计划落盘。
-- **这四步都只在本地提交**，没有推送到 `origin`（推送由人决定，见第 11 节）。
-- 线上站已发布过 13 次，最近一次与 `ba5c7c7` 对应。
+- **`docs/AGENT_PLAN.md` 四步全部落地**：限额护栏 → ReAct 循环 → 投递决策智能体 → 项目教练。
+- **计费与通道改造落地**：AI 默认走「用户自备 Key」，且是**浏览器直发**（用户的 Key 不过本项目任何服务端）；
+  公网开放注册收口成邀请码；小程序那一端挂了同名计费门（默认拒绝）。
+- 测试：**48 个文件 / 640 条断言全绿**；`tsc -b`、`oxlint`（0 error）、`vite build` 均通过。
+- 最近 5 个提交（倒序）：试用开关只认创建者账号 → 小程序计费门 → 注册收口 → 设置页配 Key → 自备 Key 直发器接上唯一入口。
+- **这些都只在本地提交**，没有推送到 `origin`（推送由人决定，见第 11 节）。
+- 线上站已发布过 13 次，最近一次与 `ba5c7c7` 对应——**线上还是改造前的代码**，这一轮的效果要点出去才看得见。
 - 已知缺口与优先级在 `docs/BENCHMARK.md` 第二节（P0：渠道能力边界表、漏斗转化统计、跟进节奏）。
+
+### 5b. 只有创建者本人能做的四件事（代码到不了的那一半）
+
+这一轮把"默认不花创建者的钱"做进了代码，但下面四条**必须由人来点**，我做不了：
+
+1. **决定站要不要开新注册**：`src/lib/registration.ts` 的 `INVITE_CODES` 出厂只有占位符，
+   意思是**现在谁都注册不进来（包括你自己）**。要用自己的账号，先把那串换成你定的码再发布。
+   服务端那一半（认证服务的 sign-up 开关）在云控制台，代码够不着——本构建连数据库管理工具都没挂载，
+   所以名单只能放源码。这条限制在 README / FAQ / 界面上都写着，没有假装关严。
+2. **决定要不要"本应用额度"这一档**：`src/lib/ownerAccount.ts` 的 `OWNER_EMAIL` 出厂是空串 = 谁都不算创建者，
+   所以试用开关对谁都不显示。填成你自己的登录邮箱、用该账号登录，设置页才会出现那道勾。
+3. **发布**：见第 6 节（先把 `miniprogram/` 移出目录）。
+4. **真点一次**：配好 Key 之后在浏览器里跑一次每日巡检 + 一次投递决策。
+   这一步会真的产生厂商侧的调用（花的是使用者自己的余额），所以我不替你点。
+   另外本机 Ollama 那条路要你自己装：`ollama pull qwen3:4b && ollama serve`，装不了我也验不了。
 
 ## 6. 发布流程（**只能在 WorkBuddy 平台完成**）
 
@@ -158,7 +188,7 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
 
 按顺序做，别跳：
 
-1. `npm install && npm run typecheck && npm test` —— 确认基线是 538 全绿（不是就先查环境）。
+1. `npm install && npm run typecheck && npm test` —— 确认基线是 640 全绿（不是就先查环境）。
 2. `git log --oneline -15` 读提交信息，理解近期决策的「为什么」。
 3. 读 `AGENTS.md` 的硬约束 + 本文件第 3 节的不变量。
 4. 从 `docs/BENCHMARK.md` 第二节挑一个 P0 缺口开工，并在动手前先写会变红的断言。
@@ -169,7 +199,7 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
 
 ```bash
 git clone git@github.com:Dongnb66/internship-workbench.git
-cd internship-workbench && npm install && npm run typecheck && npm test   # 基线 538 全绿
+cd internship-workbench && npm install && npm run typecheck && npm test   # 基线 640 全绿
 ```
 
 **私有仓意味着接手方必须先能认证**，两条路：
