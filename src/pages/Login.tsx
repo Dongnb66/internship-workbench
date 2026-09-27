@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { cloud, errText } from '../cloud'
 import { Field } from '../components/ui'
+import { codesAreConfigured, signupGate } from '../lib/registration'
 
 type Mode = 'otp' | 'password' | 'reset'
 
@@ -12,11 +13,14 @@ let pending: { email: string; verificationId: string; isExistingUser: boolean } 
 let resetPending = false
 
 export default function Login() {
-  // 默认落在「验证码登录 / 注册」：这一步同时完成登录与新账号创建，不需要先单独注册
+  // 默认落在「验证码登录」：已有账号一步到位；新邮箱还要邀请码（见 registration.ts）
   const [mode, setMode] = useState<Mode>('otp')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [code, setCode] = useState('')
+  const [invite, setInvite] = useState('')
+  // 这个邮箱是不是新用户，要等发码之后才知道（上游给的），所以单独存一份给界面用
+  const [isNewEmail, setIsNewEmail] = useState(false)
   const [newPassword, setNewPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -66,7 +70,12 @@ export default function Login() {
         return
       }
       pending = { email, verificationId: sent.data.verificationId, isExistingUser: sent.data.isExistingUser }
-      setInfo(`验证码已发送到 ${email}，请查收（含垃圾箱）`)
+      setIsNewEmail(sent.data.isExistingUser === false)
+      setInfo(
+        sent.data.isExistingUser === false
+          ? `验证码已发送到 ${email}。这个邮箱还没有账号：新邮箱要凭邀请码开账号（下一步会用到）。`
+          : `验证码已发送到 ${email}，请查收（含垃圾箱）`,
+      )
       setCodeSent(true)
       startCountdown()
     } catch (e) {
@@ -107,6 +116,18 @@ export default function Login() {
     }
     if (!current.isExistingUser && password.length < 6) {
       setError('请设置一个至少 6 位的登录密码')
+      return
+    }
+    /**
+     * 注册收口：账号只在下面这一次 `verifyOtp` 里产生（上游按 `isExistingUser` 决定
+     * 是登录还是开新号），所以门必须挡在这一行之前——过了门才准调用。
+     *
+     * 诚实的边界：这挡的是**从界面进来**的路人。绕过页面直接拿应用标识调认证接口的，
+     * 代码管不了；那半边要创建者在云控制台关 sign-up。界面上面那句话就是为此而写。
+     */
+    const gate = signupGate({ isExistingUser: current.isExistingUser, code: invite })
+    if (!gate.allowed) {
+      setError(gate.reason)
       return
     }
     setError('')
@@ -166,17 +187,21 @@ export default function Login() {
     setError('')
     setInfo('')
     setCodeSent(false)
+    setInvite('')
+    setIsNewEmail(false)
     pending = null
     resetPending = next === 'reset'
   }
 
   const tabs: Array<{ key: Mode; label: string }> = [
-    { key: 'otp', label: '验证码登录 / 注册' },
+    { key: 'otp', label: '验证码登录' },
     { key: 'password', label: '密码登录' },
     { key: 'reset', label: '找回密码' },
   ]
 
   const needPasswordField = mode === 'otp'
+  /** 新邮箱且名单还没配置：这不是用户的错，界面要说什么就是什么 */
+  const signupClosed = codesAreConfigured() === false
 
   return (
     <div className="login-wrap">
@@ -188,7 +213,10 @@ export default function Login() {
             <span className="small muted">岗位池 · 投递看板 · 面试跟进 · AI 分析</span>
           </div>
         </div>
-        <p className="login-sub">无需单独注册：填邮箱收验证码，首次使用会自动为你创建账号并登录。</p>
+        <p className="login-sub">
+          已有账号：用验证码或密码登录。<strong>新邮箱不再自行注册</strong>——需要应用创建者给的邀请码。
+          {signupClosed ? '（当前这台站还没设置邀请码，所以新账号一律开不出来。）' : ''}
+        </p>
 
         <div className="row wrap mb16" style={{ gap: 6 }}>
           {tabs.map((t) => (
@@ -238,6 +266,19 @@ export default function Login() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="至少 6 位（仅首次注册时生效）"
+            />
+          </Field>
+        ) : null}
+
+        {mode === 'otp' && isNewEmail ? (
+          <Field label="邀请码" hint="向应用创建者要一个。这一步之后才会真的创建账号；已有账号不需要它">
+            <input
+              className="input"
+              type="text"
+              autoComplete="off"
+              value={invite}
+              onChange={(e) => setInvite(e.target.value)}
+              placeholder="创建者发给你的邀请码"
             />
           </Field>
         ) : null}
