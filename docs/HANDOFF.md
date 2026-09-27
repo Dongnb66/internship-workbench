@@ -15,7 +15,7 @@
 | 线上地址 | https://internship-workbench-47024.app.workbuddy.host/ （发布方式见第 12 节） |
 | 远程仓库 | **`git@github.com:Dongnb66/internship-workbench.git`（私有，已推送）** |
 | 分支 | `master`，跟踪 `origin/master`，工作树干净 |
-| 规模 | 249 个已跟踪文件 / 1.6 MB / 50 个测试文件 / 672 条断言（全绿，2026-09-27 实测） |
+| 规模 | 258 个已跟踪文件 / 1.71 MB / 52 个测试文件 / 704 条断言全绿 + 59 条真浏览器夹具断言（`cd crawler && npm run selftest`）（2026-09-27 实测） |
 
 ## 1. 五分钟上手
 
@@ -100,25 +100,35 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
 4. **扫描/解析类断言要先「钉住扫描本身」**（如「至少扫到 N 个且包含已知文件」），
    否则扫描逻辑一失效，下游断言全部假绿。
 5. **改完必须跑 `npm run typecheck && npm test && npm run lint && npm run build` 四件套**，
-   并把测试数变化写进提交信息（当前基线 **672**，50 个测试文件）。
+   并把测试数变化写进提交信息（当前基线 **704**，52 个测试文件；另有 59 条真浏览器夹具断言，见第 6 节）。
 6. **提交信息写「为什么」**，不写「改了什么」。历次提交都遵循这个风格，可以 `git log` 看。
 
 ## 5. 当前状态快照（2026-09-27）
 
 - **`docs/AGENT_PLAN.md` 四步全部落地**：限额护栏 → ReAct 循环 → 投递决策智能体 → 项目教练。
 - **计费与通道改造落地**：AI 默认走「用户自备 Key」，且是**浏览器直发**（用户的 Key 不过本项目任何服务端）；
-  公网开放注册收口成邀请码；小程序那一端挂了同名计费门（默认拒绝）。
-- 测试：**50 个文件 / 672 条断言全绿**；`tsc -b`、`oxlint`（0 error）、`vite build` 均通过。
-- 最近提交（倒序）：推送状态更正 → 注册改回默认开放（推翻同日那版收口）→ 唯一入口两端守卫 → 自查修两个真 bug → 小程序三道上限 → 本地交付（邀请码生成器 + 文档）→ 试用开关只认创建者账号 → 小程序计费门 → 注册收口 → 设置页配 Key → 自备 Key 直发器。
-- **已推到私有仓** `origin/master`（截至 `5f2a30e`），并已按第 6 节发布到线上（内容 = `5f2a30e`；**第几次发布我读不到平台记录，不写这个序号**）。
-- **线上站内容 = `5f2a30e` 的前端构建**（2026-09-27 由 WorkBuddy 发布，仍是原域名 `-47024`；发布源是 `Documents\GitHub` 那份 clone，我实测其 `HEAD=5f2a30e`、`git status` 0 项）。
-   核对方式不是听它说成功：线上 HTML 引的 bundle 是 `assets/index-Dg4AeK0-.js`（585,961 字节），
-   我在本目录按 `5f2a30e` 重新构建出的产物 **sha256 与线上逐字节相同**（`fd80e6f2…`），且线上包里
-   `api.deepseek.com` / `127.0.0.1:11434` / `/v1/models` 有、旧文案「新邮箱不再自行注册」0 命中。
-   ⚠️ **但"第 15 次发布成功"这件事在线上产物层面是不可证明的**：`7feb9a7 → 5f2a30e` 只动了
-   `crawler/ · extension/ · CHANGELOG · docs`，前端源码一行没动，所以文件名、字节数、内容全与上一次相同。
-   能区分二者的只有平台侧部署记录。从下一次发布起用内容型判别器：
-   `curl -s <线上>/ | grep app-version`（标记由 `scripts/appVersionPlugin.mjs` 注入，见第 6 节第 4 条）。
+  小程序那一端挂了同名计费门（默认拒绝，且**故意不给界面开关**）；试用档只认创建者账号。
+  **注册是默认开放**——同日先收成邀请码、当天被推翻（理由见 `CHANGELOG.md` Unreleased/Changed 与
+  `src/lib/registration.ts` 文件头）：自备 Key 之后开号不再产生创建者成本，而码的代价是"每来一个用户都要亲自发一次"。
+  旋钮仍在：`INVITE_CODES` 里填进真码就自动回到"要码"模式。
+- 测试：**52 个文件 / 704 条断言全绿**；另有 **59 条真浏览器夹具断言**（`cd crawler && npm run selftest`，
+  对着 `extension/__fixtures__/` 的 7 个页面跑本机 Edge）；`tsc -b`、`oxlint`（0 error / 26 warning）、`vite build` 均通过。
+- 最近提交（倒序）：版本号升 0.8.1（让 app-version 标记能区分代际）→ 构建期注入版本标记 →
+  实习僧乱码不是反爬、是我们把干净数据压掉了 → 抓取器三件（CLI 入口可测 / 详情页 JD 不许静默 / OfferBiu 一条一岗）→
+  writeOutput 少了 log 参数（真跑必崩）→ 发布源目录事实写进 HANDOFF → 线上站发到 `7feb9a7` 的产物核对。
+- **`origin/master` = 本地 = `6ce185f`**（`git ls-remote origin master` 实测一致，无 ahead/behind）。
+- **线上站 = `6ce185f` 的前端构建**（2026-09-27 由 WorkBuddy 发布，仍是原域名 `-47024`；发布源是
+  `Documents\GitHub` 那份 clone，我实测其 `HEAD=6ce185f`、`git status` 0 项、`miniprogram/` 48 个文件已还原）。
+   **这次是本项目第一次能自证成功的发布**，因为判别器换成了内容型：
+  `curl -s <线上>/ | grep app-version` → 实测命中 `<meta name="app-version" content="0.8.1" />`
+  （`0.8.1` 这个值只存在于 `6ce185f` 之后 ⇒ 线上构建必然 ≥ 该提交）；bundle 也逐字节对上：
+  `index-Dg4AeK0-.js` 585,961 字节，sha256 前缀 `fd80e6f2`，与本目录 `npm run build` 完全一致；
+  包内 `api.deepseek.com` / `127.0.0.1:11434` / `/v1/models` 命中、旧文案「新邮箱不再自行注册」0 命中。
+   ⚠️ 两条口径别再犯（都实测过）：**别拿文件名或字节数当证据**（前端零改动时它们不变，见下一节的例子）；
+   **也别拿 ETag / Last-Modified 当证据**——`5f2a30e` 那次发布后 12 分钟内没有任何新提交，mtime 照样被推前
+   （沙箱重启也会改它），而首页 ETag 的"大小位"写的是 `292`、实际响应体 658 字节，连文件大小都不是。
+   比对首屏文件时还要注意**行尾**：本机 checkout 是 CRLF、沙箱产物是 LF，同一份内容会差出 14 字节。
+
 - 已知缺口与优先级在 `docs/BENCHMARK.md` 第二节（P0：渠道能力边界表、漏斗转化统计、跟进节奏）。
 
 ### 5b. 只有创建者本人能做的四件事（代码到不了的那一半）
@@ -208,7 +218,7 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
 
 按顺序做，别跳：
 
-1. `npm install && npm run typecheck && npm test` —— 确认基线是 672 全绿（不是就先查环境）。
+1. `npm install && npm run typecheck && npm test` —— 确认基线是 **704 全绿 / 52 个文件**（不是就先查环境）。
 2. `git log --oneline -15` 读提交信息，理解近期决策的「为什么」。
 3. 读 `AGENTS.md` 的硬约束 + 本文件第 3 节的不变量。
 4. 从 `docs/BENCHMARK.md` 第二节挑一个 P0 缺口开工，并在动手前先写会变红的断言。
@@ -219,7 +229,7 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
 
 ```bash
 git clone git@github.com:Dongnb66/internship-workbench.git
-cd internship-workbench && npm install && npm run typecheck && npm test   # 基线 672 全绿
+cd internship-workbench && npm install && npm run typecheck && npm test   # 基线 704 全绿 / 52 个文件
 ```
 
 **私有仓意味着接手方必须先能认证**，两条路：
