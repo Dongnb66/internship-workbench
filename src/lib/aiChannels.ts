@@ -5,15 +5,21 @@
  * 而它的 `quota_` 错误码语义是 **Creator quota**——所有 AI 消耗都记在应用创建者账上。
  * 现在要加「用户自备 key」这条通道，于是多出三件必须用代码钉住的事：
  *
- * 1. **转发目标只能是厂商白名单。** 一个「带上调用者给的 key、转发到调用者给的地址」的
- *    后端，本质就是任何人可用的跳板（SSRF、打内网元数据端点、借你的 IP 刷别人的站）。
+ * 1. **转发目标只能是表里那几家。** 一个「带上调用者给的 key、转发到调用者给的地址」的
+ *    通道，本质就是任何人可用的跳板（SSRF、打内网元数据端点、借别人的 IP 刷站）。
  *    所以**不提供自定义 baseURL 的口子**——哪怕用户说"我知道我在干什么"也不行：
- *    被滥用伤害的不是填地址的人，而是拿到这个后端 URL 的所有人。
+ *    被滥用伤害的不是填地址的人，而是能碰到这个入口的所有人。
+ *    模型名可以随便填（它不改变请求去哪），主机不行。
  * 2. **保管 ≠ 记录。** key 只在本机内存与厂商之间流动：不进 URL、不进日志、不进错误文案。
  *    错误文案尤其重要——用户截图来问问题，就等于把 key 贴到了公开群里。
  * 3. **档位是显式选择，默认值必须落在「用户自费」那一档。**
  *    这次改动要解决的问题就是「创建者在替别人付钱」，
  *    所以默认值悄悄回到平台额度，等于功能没改。
+ *
+ * 2026-09-27 实测之后，第 1 条从「本地网关转发」改成「浏览器直发」：
+ * 实测有四家厂商的响应带 `access-control-allow-origin`，浏览器可以直接把请求发给它们，
+ * 于是**用户的 Key 一次也不需要经过本项目的任何服务端**。少一跳，就少一处能泄露它的地方。
+ * 实测不通的厂商保留在表里、标成 `browserDirect: false`，界面据实说明它现在发不出去。
  */
 
 export type ChannelId = 'byo' | 'platform'
@@ -25,15 +31,27 @@ export interface ChannelPreset {
   host: string
   /** OpenAI 兼容的 chat 端点路径 */
   chatPath: string
-  authStyle: 'bearer' | 'x-api-key'
+  /** `none` = 连鉴权头都不带（本机档：Ollama 默认不校验） */
+  authStyle: 'bearer' | 'x-api-key' | 'none'
   /** 该厂商的可用模型（前端下拉用，不写死单价——平台与厂商都不给前端权威价格） */
   models: string[]
   /** 界面上必须原样显示的一句话：谁付钱 */
   whoPays: string
+  /**
+   * 浏览器能不能直发。来自实测（preflight + 真 POST 是否带 ACAO），不是文档说的。
+   * false 的厂商在界面上必须显示成「现在发不出去」，而不是伪装成「你的 Key 有问题」。
+   */
+  browserDirect: boolean
+  /** 是否需要用户自备 Key。本机档 false：花的是自己电脑的算力 */
+  requiresKey: boolean
+  /** 本机档专用：只允许 http + 精确主机 + 精确端口，是 https 规则的唯一例外 */
+  httpLocal?: boolean
+  /** 本机档钉死的端口 */
+  port?: string
 }
 
 /**
- * 自备 key 的厂商表。三家都是文档化的 OpenAI 兼容端点。
+ * 自备 key 的厂商表。列进来的都满足两件事：OpenAI 兼容端点 + 学生用得起（有免费档或单价低）。
  * 刻意**只列主机不列自定义入口**：见文件头第 1 条。
  */
 export const BYO_PRESETS: ChannelPreset[] = [
@@ -45,15 +63,8 @@ export const BYO_PRESETS: ChannelPreset[] = [
     authStyle: 'bearer',
     models: ['deepseek-chat', 'deepseek-reasoner'],
     whoPays: '花你自己的 DeepSeek 账户余额，与应用创建者无关',
-  },
-  {
-    id: 'zhipu',
-    label: '智谱 GLM',
-    host: 'open.bigmodel.cn',
-    chatPath: '/api/paas/v4/chat/completions',
-    authStyle: 'bearer',
-    models: ['glm-4.7-flash', 'glm-4.6', 'glm-4.5-air'],
-    whoPays: '花你自己的智谱账户额度，与应用创建者无关',
+    browserDirect: true,
+    requiresKey: true,
   },
   {
     id: 'moonshot',
@@ -63,8 +74,67 @@ export const BYO_PRESETS: ChannelPreset[] = [
     authStyle: 'bearer',
     models: ['kimi-k2-0905-preview', 'moonshot-v1-8k'],
     whoPays: '花你自己的 Moonshot 账户余额，与应用创建者无关',
+    browserDirect: true,
+    requiresKey: true,
+  },
+  {
+    id: 'openrouter',
+    label: 'OpenRouter（一把 Key 多家模型）',
+    host: 'openrouter.ai',
+    chatPath: '/api/v1/chat/completions',
+    authStyle: 'bearer',
+    models: ['deepseek/deepseek-chat', 'moonshotai/kimi-k2-instruct'],
+    whoPays: '花你自己的 OpenRouter 余额，与应用创建者无关',
+    browserDirect: true,
+    requiresKey: true,
+  },
+  {
+    id: 'dashscope',
+    label: '阿里云百炼（通义）',
+    host: 'dashscope.aliyuncs.com',
+    chatPath: '/compatible-mode/v1/chat/completions',
+    authStyle: 'bearer',
+    models: ['qwen-turbo', 'qwen-plus'],
+    whoPays: '花你自己的阿里云百炼额度（新用户有免费额度），与应用创建者无关',
+    browserDirect: true,
+    requiresKey: true,
+  },
+  {
+    id: 'zhipu',
+    label: '智谱 GLM',
+    host: 'open.bigmodel.cn',
+    chatPath: '/api/paas/v4/chat/completions',
+    authStyle: 'bearer',
+    models: ['glm-4.7-flash', 'glm-4.6', 'glm-4.5-air'],
+    whoPays: '花你自己的智谱账户额度，与应用创建者无关',
+    // 实测两条路径的响应都不带 access-control-allow-origin：浏览器直发必被 CORS 挡掉。
+    browserDirect: false,
+    requiresKey: true,
+  },
+  {
+    id: 'ollama',
+    label: '本机 Ollama（不花钱）',
+    host: '127.0.0.1',
+    chatPath: '/v1/chat/completions',
+    authStyle: 'none',
+    models: ['qwen3:4b', 'deepseek-r1:7b'],
+    whoPays: '跑在你自己电脑上，不花任何人的钱（慢一些，也没有额度这回事）',
+    browserDirect: true,
+    requiresKey: false,
+    httpLocal: true,
+    port: '11434',
   },
 ]
+
+/** 远端厂商（要 Key、只走 https） */
+export function remotePresets(): ChannelPreset[] {
+  return BYO_PRESETS.filter((p) => !p.httpLocal)
+}
+
+/** 本机档（这台电脑的主人是用户自己，所以允许 http 这一个例外） */
+export function localPresets(): ChannelPreset[] {
+  return BYO_PRESETS.filter((p) => p.httpLocal === true)
+}
 
 /** 平台额度档：没有厂商主机（走云服务 SDK），保留给创建者自己用 */
 export const PLATFORM_PRESET = {
@@ -75,6 +145,8 @@ export const PLATFORM_PRESET = {
   authStyle: 'bearer' as const,
   models: [] as string[],
   whoPays: '花应用创建者的额度（Creator quota）；已按日限与每任务步数封顶',
+  browserDirect: false,
+  requiresKey: false,
 }
 
 /**
@@ -90,7 +162,7 @@ export const CHANNELS: Array<ChannelPreset & { paidBy: 'user' | 'creator' }> = [
     ...BYO_PRESETS[0],
     id: 'byo',
     label: `自备 Key（默认 ${BYO_PRESETS[0].label}）`,
-    models: BYO_PRESETS.flatMap((p) => p.models.map((m) => `${p.id}:${m}`)),
+    models: remotePresets().flatMap((p) => p.models.map((m) => `${p.id}:${m}`)),
     whoPays: '花你自己的账户余额或额度，与应用创建者无关',
     paidBy: 'user',
   },
@@ -103,30 +175,64 @@ export const CHANNELS: Array<ChannelPreset & { paidBy: 'user' | 'creator' }> = [
  */
 export const AI_CHANNEL_DEFAULT = 'byo'
 
-/** 只接受 https + 主机全等；任何 userinfo、端口、后缀花招一律不认 */
-export function findPreset(baseUrl: string): ChannelPreset | null {
-  const raw = String(baseUrl ?? '').trim()
-  if (!raw) return null
-  let url: URL
+/** 本机档允许的主机写法：只有这两个，端口还得逐字等于表里那一个 */
+const LOCAL_HOSTS = ['127.0.0.1', 'localhost']
+
+function parseUrl(raw: string): URL | null {
+  const text = String(raw ?? '').trim()
+  if (!text) return null
   try {
-    url = new URL(raw)
+    return new URL(text)
   } catch {
     return null
   }
-  if (url.protocol !== 'https:') return null
-  if (url.username || url.password) return null
+}
+
+/**
+ * 一个 URL 属于不属于表里的某一档，以及这一档允不允许。
+ *
+ * **`findPreset` 与 `assertForwardTarget` 共用这一条规则**：「谁能被发到」写两遍，
+ * 迟早一处严一处松——那正是 SSRF 类问题的来源。
+ */
+function matchPreset(url: URL): { preset: ChannelPreset; ok: boolean; reason: string } | null {
   const host = url.hostname.toLowerCase()
-  return BYO_PRESETS.find((p) => p.host === host) ?? null
+  const userinfo = url.username || url.password ? '转发地址不允许携带 userinfo（形如 host@evil 的写法）' : ''
+  const local = localPresets()[0]
+  if (local && LOCAL_HOSTS.includes(host)) {
+    // 本机档只走 http：换成 https 就变成「拿自签证书冒充厂商」的另一条路。
+    if (url.protocol !== 'http:') return { preset: local, ok: false, reason: '本机档只允许 http（Ollama 默认没有证书）' }
+    if (userinfo) return { preset: local, ok: false, reason: userinfo }
+    if (url.port !== local.port) return { preset: local, ok: false, reason: `本机档只允许端口 ${local.port ?? '—'}` }
+    return { preset: local, ok: true, reason: '' }
+  }
+  const preset = remotePresets().find((p) => p.host === host)
+  if (!preset) return null
+  if (url.protocol !== 'https:') {
+    return { preset, ok: false, reason: '只允许 https 转发（明文会把你的 key 发给路上任何人）' }
+  }
+  if (userinfo) return { preset, ok: false, reason: userinfo }
+  if (url.port && url.port !== '443') return { preset, ok: false, reason: '转发地址只允许默认端口 443' }
+  return { preset, ok: true, reason: '' }
+}
+
+/** 认得出表里的地址才返回那一档；认不出返回 null，绝不"勉强匹配一个"（那等于把 key 发给陌生主机） */
+export function findPreset(baseUrl: string): ChannelPreset | null {
+  const url = parseUrl(baseUrl)
+  if (!url) return null
+  const hit = matchPreset(url)
+  return hit && hit.ok ? hit.preset : null
 }
 
 export interface ForwardCheck {
   allowed: boolean
   reason?: string
+  /** 放行时告诉调用方这是哪一档：要不要带 Key、是不是本机档 */
+  preset?: ChannelPreset
 }
 
 /**
- * 转发前的最后一道闸。调用方是本地网关：它收到 body 之后必须再过一次这里，
- * 不能只信前端——前端的输入框就是公网可达的攻击面。
+ * 发送前的最后一道闸。**浏览器直发也要过它**：目标地址虽然来自数据表，
+ * 但表会被改、路径会被拼、调用方会传进用户输入——发出去之前再核一遍最终 URL。
  *
  * **拒绝理由里一律不回显传入的地址**：地址可能带着 key 或 token，
  * 而这句话会被打印进日志、被用户截图问人。
@@ -134,31 +240,16 @@ export interface ForwardCheck {
 export function assertForwardTarget(url: string): ForwardCheck {
   const raw = String(url ?? '').trim()
   if (!raw) return { allowed: false, reason: '转发地址为空' }
-  let parsed: URL
-  try {
-    parsed = new URL(raw)
-  } catch {
-    return { allowed: false, reason: '转发地址无法解析' }
-  }
-  if (parsed.protocol !== 'https:') {
-    return { allowed: false, reason: '只允许 https 转发（明文会把你的 key 发给路上任何人）' }
-  }
-  // 纵深防御，**不是承重墙**：决定请求去哪的是下面按 parsed hostname 做的白名单全等匹配，
-  // 所以这条即使删掉，行为也不变（我拿它做过变异检查，测试全绿）。
-  // 留着是因为它将来决定安全性：谁把下面改成按字符串匹配主机名，这条就立刻变成必要防线。
-  if (parsed.username || parsed.password) {
-    return { allowed: false, reason: '转发地址不允许携带 userinfo（形如 host@evil 的写法）' }
-  }
-  if (parsed.port && parsed.port !== '443') {
-    return { allowed: false, reason: '转发地址只允许默认端口 443' }
-  }
-  const host = parsed.hostname.toLowerCase()
-  // 全等匹配。`api.deepseek.com.evil.cn` 这种后缀伪装在这里会被挡掉：
+  const parsed = parseUrl(raw)
+  if (!parsed) return { allowed: false, reason: '转发地址无法解析' }
+  const hit = matchPreset(parsed)
+  // 全等匹配。`api.deepseek.com.evil.cn` 这种后缀伪装在这里被挡掉：
   // 它不等于任何白名单主机，而按「以 xxx 开头」匹配就会放行。
-  if (!BYO_PRESETS.some((p) => p.host === host)) {
-    return { allowed: false, reason: '这个主机不在厂商白名单里。后端只做厂商转发，不做通用代理' }
+  if (!hit) {
+    return { allowed: false, reason: '这个主机不在厂商白名单里。只发白名单厂商与本机 Ollama，不做通用代理' }
   }
-  return { allowed: true }
+  if (!hit.ok) return { allowed: false, reason: hit.reason }
+  return { allowed: true, preset: hit.preset }
 }
 
 /** 形如 sk-xxxx / rk-xxxx / pk-xxxx 的密钥串（长度门槛避免误伤普通文本） */

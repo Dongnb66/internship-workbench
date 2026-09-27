@@ -16,11 +16,14 @@ import { describe, expect, it } from 'vitest'
  */
 import {
   AI_CHANNEL_DEFAULT,
+  BYO_PRESETS,
   CHANNELS,
   assertForwardTarget,
   describeChannel,
   findPreset,
+  localPresets,
   redactKey,
+  remotePresets,
 } from '../aiChannels'
 
 describe('厂商通道表', () => {
@@ -133,5 +136,86 @@ describe('通道是显式选择', () => {
       expect(c.whoPays).toMatch(/你|创建者|用户|自己/)
       expect(c.whoPays.length).toBeGreaterThan(8)
     }
+  })
+})
+
+/**
+ * 浏览器直发的实测结果**必须进数据表**，不能只留在聊天记录里。
+ *
+ * 2026-09-27 实测（preflight + 真 POST 看 `access-control-allow-origin`）：
+ * api.deepseek.com / api.moonshot.cn / openrouter.ai / dashscope.aliyuncs.com 通过；
+ * open.bigmodel.cn 两条路径都不带 ACAO；api.openai.com、api.x.ai 不通；
+ * ark.cn-beijing.volces.com 预检过了但 POST 响应仍缺 ACAO。
+ * 记成假就等于是：把「发不出去」写成「厂商拒绝了你的 key」，用户会去反复重填 Key。
+ */
+describe('厂商能力实测：浏览器能不能直发', () => {
+  it('实测通过的厂商列全了（少一家就会有一条静默失败的路）', () => {
+    expect(
+      remotePresets()
+        .filter((p) => p.browserDirect)
+        .map((p) => p.id)
+        .sort(),
+    ).toEqual(['dashscope', 'deepseek', 'moonshot', 'openrouter'])
+  })
+
+  it('实测不通的厂商明确标 false：界面说得出「只能走本地网关」，而不是让它悄悄失败', () => {
+    expect(
+      remotePresets()
+        .filter((p) => !p.browserDirect)
+        .map((p) => p.id),
+    ).toEqual(['zhipu'])
+  })
+
+  it('本机档（Ollama）不需要 Key：花的是自己电脑的算力，不花钱', () => {
+    const local = localPresets()
+    expect(local.length).toBe(1)
+    const p = local[0]
+    expect(p.httpLocal).toBe(true)
+    expect(p.requiresKey).toBe(false)
+    expect(p.port).toBe('11434')
+    expect(p.host).toBe('127.0.0.1')
+    expect(p.whoPays).toMatch(/不花钱|本机|自己.*电脑/)
+  })
+
+  it('远端厂商一律 requiresKey：没有 Key 就没有「用户自己付钱」这回事', () => {
+    for (const p of remotePresets()) expect(p.requiresKey).toBe(true)
+  })
+})
+
+/**
+ * http 是这次唯一新增的例外，所以例外必须钉到只剩一个端口一个地址。
+ * 一旦「本机」这两个字被写成前缀匹配或端口可填，浏览器就成了打内网的跳板。
+ */
+describe('本机档的转发规则', () => {
+  it('只放行 127.0.0.1 / localhost 的 11434，其余内网地址与端口一律拒绝', () => {
+    expect(assertForwardTarget('http://127.0.0.1:11434/v1/chat/completions').allowed).toBe(true)
+    expect(assertForwardTarget('http://localhost:11434/v1/chat/completions').allowed).toBe(true)
+    for (const url of [
+      'http://127.0.0.1:6379/',
+      'http://127.0.0.1:11435/v1/chat/completions',
+      'http://169.254.169.254:11434/latest/meta-data/',
+      'http://127.0.0.2:11434/',
+      'http://evil.cn:11434/',
+      // 本机档只走 http：换成 https 就变成「用自签证书冒充厂商」的另一条路
+      'https://127.0.0.1:11434/v1/chat/completions',
+    ]) {
+      const r = assertForwardTarget(url)
+      expect(r.allowed, `这个地址本不该被放行：${url}`).toBe(false)
+      expect(r.reason).toBeTruthy()
+    }
+  })
+
+  it('远端厂商不吃明文 http：路上任何人都能读到那把 Key', () => {
+    expect(assertForwardTarget('http://api.deepseek.com/chat/completions').allowed).toBe(false)
+  })
+
+  it('白名单主机上也不认 userinfo（它会变成 Basic Auth，把凭据带上路）', () => {
+    // 光测 evil.cn 杀不掉这条：那个主机名本身就进不了白名单。
+    // 必须拿**白名单内**的主机配 userinfo 来测，检查才有东西可挡。
+    expect(assertForwardTarget('https://u:p@api.deepseek.com/chat/completions').allowed).toBe(false)
+  })
+
+  it('显式写 :443 等于默认端口，放行（否则真实地址会被误杀）', () => {
+    expect(assertForwardTarget('https://api.deepseek.com:443/chat/completions').allowed).toBe(true)
   })
 })
