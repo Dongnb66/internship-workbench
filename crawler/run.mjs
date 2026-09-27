@@ -431,7 +431,7 @@ async function hasLoginCookie(context, site) {
 
 // ---------------------------------------------------------------- 输出
 
-async function writeOutput(results, opts) {
+export async function writeOutput(results, opts, log = () => {}) {
   await mkdir(OUT_DIR, { recursive: true })
   const now = new Date()
   const stampText = stamp(now)
@@ -581,7 +581,7 @@ async function main() {
     await context.close()
   }
 
-  const written = await writeOutput(results, opts)
+  const written = await writeOutput(results, opts, log)
 
   log('\n──────── 汇总 ────────')
   let total = 0
