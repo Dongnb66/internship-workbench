@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { errText } from '../cloud'
 import { Empty, Stat } from '../components/ui'
+import AgentSteps from '../components/AgentSteps'
 import { getQuotaSnapshot } from '../lib/ai'
 import { listRows, updateRow } from '../lib/api'
 import { STAGES } from '../lib/constants'
@@ -242,27 +243,7 @@ export default function Overview({ profile, go }: PageProps) {
             </div>
           ) : null}
 
-          {agent.steps.length ? (
-            <div className="mt4">
-              {agent.steps.map((s) => (
-                <div key={s.step} className="row" style={{ alignItems: 'flex-start', marginBottom: 8, gap: 8 }}>
-                  <span className={s.error ? 'badge danger' : 'badge info'}>{s.step}</span>
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <div className="cell-main">
-                      {s.tool ? `调用 ${s.tool}` : s.thought ? '给出结论' : '（没识别出指令）'}
-                      <span className="small muted"> · {s.ms}ms</span>
-                    </div>
-                    {s.thought ? <div className="cell-sub">想法：{s.thought}</div> : null}
-                    {s.args && Object.keys(s.args).length ? <div className="cell-sub">参数：{JSON.stringify(s.args)}</div> : null}
-                    <div className="small muted" style={{ wordBreak: 'break-all' }}>
-                      观察：{s.observation.length > 160 ? `${s.observation.slice(0, 160)}…` : s.observation}
-                    </div>
-                    {s.error ? <div className="small" style={{ color: '#b91c1c' }}>错误：{s.error}</div> : null}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : null}
+          <AgentSteps steps={agent.steps} />
 
           {agent.answer ? (
             <div className="hint mt8">

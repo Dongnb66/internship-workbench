@@ -29,6 +29,9 @@ const REQUIRED = [
   'paceStatus',
   'keywordCoverage',
   'interviewFactGate',
+  // 第三步「投递决策」要的两件事：本地硬门槛 + 同一家公司的历史对照
+  'prefilterJob',
+  'companyHistory',
 ]
 
 describe('注册表结构', () => {
@@ -150,6 +153,42 @@ describe('工具执行结果的形状', () => {
     const out = AGENT_TOOLS.find((t) => t.name === 'interviewFactGate').fn(ctx, {})
     expect(out.items.every((i) => String(i.quote).includes('999')), `通过项也混进来了：${JSON.stringify(out.items)}`).toBe(true)
     expect(out.items.length).toBeGreaterThan(0)
+  })
+})
+
+describe('focus：正在被评估的那个岗位是上下文，不是模型的记忆任务', () => {
+  it('args 没给 jd 时回落到 ctx.focus（模型手抄一遍 JD 必然抄错、抄漏）', () => {
+    const ctx = emptyContext({
+      // 硬门槛是**相对画像**判的：没有 grad_year 就判不出「仅限 2027 届」挡人
+      profile: { full_name: '杨同学', grade: '2028届', grad_year: '2028', major: '计算机', resume_summary: '做过 React + TypeScript 前端与 Node 服务端，写过 Vitest 单测' },
+      focus: { jd: '岗位职责：后端开发。硬性要求：仅限 2027 届毕业生', title: '后端实习', company: '某厂' },
+    })
+    const pf = AGENT_TOOLS.find((t) => t.name === 'prefilterJob')
+    const out = pf.fn(ctx, {})
+    expect(out.error, 'prefilterJob 没能用上 ctx.focus.jd').toBeUndefined()
+    // 命中硬门槛必须挡下来，这正是省额度那一道的价值
+    expect(out.pass).toBe(false)
+    expect(out.hard.total).toBeGreaterThan(0)
+
+    const kw = AGENT_TOOLS.find((t) => t.name === 'keywordCoverage')
+    const kwOut = kw.fn(ctx, {})
+    expect(kwOut.error, 'keywordCoverage 没能用上 ctx.focus.jd').toBeUndefined()
+    expect(kwOut.total).toBeGreaterThan(0)
+
+    const ch = AGENT_TOOLS.find((t) => t.name === 'companyHistory')
+    const chOut = ch.fn(ctx, {})
+    expect(chOut.company).toBe('某厂')
+  })
+
+  it('args 显式给了就用 args（同一轮里比多个岗位时不能被 focus 绑死）', () => {
+    const ctx = emptyContext({ focus: { jd: ' focus 里的 JD', company: 'A厂' } })
+    const ch = AGENT_TOOLS.find((t) => t.name === 'companyHistory')
+    expect(ch.fn(ctx, { company: 'B厂' }).company).toBe('B厂')
+  })
+
+  it('没有 focus 也没 args：照旧返回错误文本而不是崩', () => {
+    const pf = AGENT_TOOLS.find((t) => t.name === 'prefilterJob')
+    expect(pf.fn(emptyContext(), {})).toMatchObject({ error: expect.any(String) })
   })
 })
 

@@ -14,12 +14,14 @@
  *    不能让智能体把「前 20 条」当成全部去下结论。
  */
 import type { Profile, Row } from '../types'
+import { companyHistory } from './companyHistory'
 import { todayPicks } from './daily'
 import { calibration, funnelStats } from './funnel'
 import { followupDue } from './followup'
 import { keywordCoverage } from './keywordCoverage'
 import { interviewFactGate } from './factGate'
 import { DEFAULT_PACE, paceStatus, staleApplications } from './pace'
+import { prefilterJob } from './score'
 
 /** 智能体可见的数据面。由调用处（Overview 页）把已加载的行喂进来，工具自己**不查库**。 */
 export interface AgentContext {
@@ -34,6 +36,13 @@ export interface AgentContext {
   today: string
   /** pace 类判断需要「现在几点」 */
   now: Date
+  /**
+   * 正在被评估的那个岗位（投递决策场景）。工具在 args 缺省时回落到这里——
+   * **别让模型把 JD 原文抄回 args**：几百字抄一遍必然抄错、抄漏，而它抄错之后
+   * prefilter 算的是另一段文本，结论就挂在了一个不存在的岗位上。
+   * 原始 JD 也因此不必进 prompt：进对话的只有工具返回的派生结果与被包进数据区的引句。
+   */
+  focus?: { jd?: string; title?: string; company?: string }
 }
 
 export function emptyContext(overrides: Partial<AgentContext> = {}): AgentContext {
@@ -101,6 +110,15 @@ function argNumber(args: Record<string, unknown>, key: string): number | null {
   const v = args?.[key]
   const n = Number(v)
   return v === undefined || v === null || v === '' ? null : Number.isFinite(n) ? n : null
+}
+
+/** JD：args 优先，其次上下文里正在被评估的那个岗位 */
+function jdFor(ctx: AgentContext, args: Record<string, unknown>): string {
+  return argString(args, 'jd') || String(ctx.focus?.jd ?? '').trim()
+}
+
+function companyFor(ctx: AgentContext, args: Record<string, unknown>): string {
+  return argString(args, 'company') || String(ctx.focus?.company ?? '').trim()
 }
 
 /** 简历全文：优先取 args 指定的，其次取最新一份带纯文本的简历，最后退到画像摘要 */
@@ -197,7 +215,7 @@ export const AGENT_TOOLS: AgentTool[] = [
     schema: 'jd: 字符串，必填，JD 原文。resume_text: 可选，指定用哪份简历文本。',
     implementedIn: 'keywordCoverage',
     fn: (ctx, args) => {
-      const jd = argString(args, 'jd')
+      const jd = jdFor(ctx, args)
       if (!jd) return { error: '缺少参数 jd（JD 原文）。请把要评估的那段 JD 放进 args.jd 再调一次。' }
       const resumeText = resumeTextFor(ctx, args)
       if (!resumeText) return { error: '没有可用的简历文本：resumes 表里没有正文，画像里也没有项目与事实摘要。' }
@@ -225,6 +243,36 @@ export const AGENT_TOOLS: AgentTool[] = [
       }))
       return { ...capped(items), checked: items.length }
     },
+  },
+  {
+    name: 'prefilterJob',
+    description: '当用户问「这个岗位值不值得投、我够不够格」时先用我：本地预筛分数 + 硬门槛（届数/学历/证书/年限/院校/地点）。硬门槛命中就不该再花模型额度深评。',
+    schema: 'jd: JD 原文（调用方已放进上下文时可省略）。title: 岗位名，可选。ignore_blockers: true 表示用户已知晓硬门槛仍要评。',
+    implementedIn: 'score',
+    fn: (ctx, args) => {
+      const jd = jdFor(ctx, args)
+      if (!jd) return { error: '缺少 JD 原文：放进 args.jd，或由调用方把岗位放进 ctx.focus.jd。' }
+      const title = argString(args, 'title') || String(ctx.focus?.title ?? '')
+      const r = prefilterJob(jd, title, ctx.profile, undefined, args.ignore_blockers === true)
+      return {
+        pass: r.pass,
+        score: r.score,
+        reason: r.reason,
+        hits: r.hits,
+        missing: r.missing,
+        // 门槛条目是决策的关键证据，JD 原句一起带上，用户可以自己复核对不对
+        hard: capped(r.blockers.hard.map((b) => ({ label: b.label, quote: b.quote, advice: b.advice }))),
+        soft: capped(r.blockers.soft.map((b) => ({ label: b.label, quote: b.quote }))),
+        verdict: r.blockers.verdict,
+      }
+    },
+  },
+  {
+    name: 'companyHistory',
+    description: '当判断「这家公司还要不要再投」时用我：它在我岗位池里挂了几条、投过几条、走到哪一步、平均匹配分、最近一次沟通是什么时候。单看一个 JD 看不出这家公司已经拒过你三次。',
+    schema: 'company: 公司名（调用方已放进上下文时可省略）。',
+    implementedIn: 'companyHistory',
+    fn: (ctx, args) => companyHistory(ctx.jobs, ctx.applications, companyFor(ctx, args), ctx.messages, ctx.today),
   },
 ]
 

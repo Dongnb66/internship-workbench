@@ -59,7 +59,7 @@ const stub = {
 
 const { DEFAULT_QUOTA } = await import('../quota')
 const { todayISO } = await import('../format')
-const { DAILY_TASK_LABEL, runDailyInspection } = await import('../agentRun')
+const { DAILY_TASK_LABEL, runApplyDecision, runDailyInspection } = await import('../agentRun')
 import type { AgentContext } from '../agentTools'
 
 const quotaKey = `wb_quota_${todayISO()}`
@@ -165,5 +165,66 @@ describe('一轮巡检', () => {
     expect(secondRound).toContain('今天该投什么')
     // 只包一层：外部数据区应该恰好一个（观察结果），别把整段对话都塞进去
     expect(secondRound.split('<<<UNTRUSTED_DATA')).toHaveLength(2)
+  })
+})
+
+describe('投递决策（第三步）', () => {
+  const PF = JSON.stringify({ thought: '先本地判硬门槛，省额度', tool: 'prefilterJob', args: {} })
+  const CH = JSON.stringify({ thought: '看这家公司的历史', tool: 'companyHistory', args: {} })
+  const DECISION = JSON.stringify({ thought: '证据够了', final_answer: '不建议投：JD 写死 2027 届，你是 2028 届。' })
+  // 尾行带一个只出现在 JD 原文里的标记，用来验证「原始 JD 没被整段塞进 prompt」
+  const JD = `岗位职责：后端开发。硬性要求：仅限 2027 届毕业生\nRAW_JD_TAIL_MARKER`
+
+  function focusCtx(): AgentContext {
+    return ctxWith({
+      profile: { full_name: '杨同学', grade: '2028届', grad_year: '2028', major: '计算机', resume_summary: 'React 与 Node 项目' } as never,
+      jobs: [{ id: 1, company: '某厂', title: '后端实习', match_score: 52 }],
+      applications: [{ id: 2, company: '某厂', title: '后端实习', stage: 'rejected', applied_at: '2026-09-01' }],
+      focus: { jd: JD, title: '后端实习', company: '某厂' },
+    })
+  }
+
+  it('标签带「投递决策」前缀：一件岗位一件事，但同一件事内的圈数受熔断', async () => {
+    replies = [PF, CH, DECISION]
+    const r = await runApplyDecision(focusCtx(), {})
+    expect(r.answer).toContain('2028 届')
+    expect(r.steps).toHaveLength(3)
+    expect(r.finished).toBe(true)
+    for (const entry of ledger()) expect(entry).toContain('投递决策')
+    // 标签必须带岗位身份：只写「投递决策」的话，比 20 个岗位会被当成一个转了 160 圈的循环
+    expect(ledger()[0]).toContain('某厂')
+    expect(ledger()).toHaveLength(3)
+  })
+
+  it('决策要用的两件事都在工具目录里：本地硬门槛 + 同一家公司的历史', async () => {
+    replies = [DECISION]
+    await runApplyDecision(focusCtx(), {})
+    const system = sent[0].messages[0].content
+    expect(system).toContain('prefilterJob')
+    expect(system).toContain('companyHistory')
+  })
+
+  it('原始 JD 整段不进 prompt：模型只能靠工具读它，注入面因此只剩被包装的观察结果', async () => {
+    replies = [PF, CH, DECISION]
+    await runApplyDecision(focusCtx(), {})
+    const everything = sent.map((s) => s.messages.map((m) => m.content).join('\n')).join('\n')
+    expect(everything).not.toContain('RAW_JD_TAIL_MARKER')
+    // 而工具确实读到了 JD（硬门槛判出来了），说明 JD 走的是 ctx 而不是 prompt
+    expect(sent[1].messages.map((m) => m.content).join('\n')).toContain('2027')
+  })
+
+  it('没有 JD 就直接拒绝，一次模型请求都不发', async () => {
+    replies = [DECISION]
+    const ctx = ctxWith({ focus: { company: '某厂', title: '后端实习' } })
+    await expect(runApplyDecision(ctx, {})).rejects.toThrow(/JD/)
+    expect(sent).toHaveLength(0)
+  })
+
+  it('页面只传 company/title/jd 也能跑：JD 落进 ctx.focus 而不是对话', async () => {
+    replies = [PF, DECISION]
+    const r = await runApplyDecision(ctxWith(), { jd: JD, company: '某厂', title: '后端实习' })
+    expect(r.finished).toBe(true)
+    const everything = sent.map((s) => s.messages.map((m) => m.content).join('\n')).join('\n')
+    expect(everything).not.toContain('RAW_JD_TAIL_MARKER')
   })
 })

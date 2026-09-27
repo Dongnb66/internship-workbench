@@ -1,10 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { errText } from '../cloud'
+import AgentSteps from '../components/AgentSteps'
 import { Empty, Field, Modal, ScoreDonut } from '../components/ui'
-import { evaluateJD, type Evaluated } from '../lib/ai'
+import { evaluateJD, getQuotaSnapshot, type Evaluated } from '../lib/ai'
 import { deleteRow, insertRow, listRows, updateRow } from '../lib/api'
+import { decisionLabel, runApplyDecision } from '../lib/agentRun'
+import type { ActionStep, StopReason } from '../lib/agentLoop'
 import { DIMS } from '../lib/constants'
-import { fmtDateTime } from '../lib/format'
+import { fmtDateTime, todayISO } from '../lib/format'
 import { gapPlan } from '../lib/gapPlan'
 import { keywordCoverage } from '../lib/keywordCoverage'
 import { notifyErr, notifyOk } from '../lib/toast'
@@ -25,6 +28,16 @@ export default function AiLab({ profile, onChanged, go }: PageProps) {
   const [resultJd, setResultJd] = useState('')
   const [history, setHistory] = useState<Row[]>([])
   const [detail, setDetail] = useState<Row | null>(null)
+
+  // 投递决策智能体（AGENT_PLAN 第三步）：它要横向对照「这家公司在我池子里的历史」，
+  // 那些行评估页平时不加载，所以点按钮时才拉一次，不进这个页面就不打一堆查询。
+  const [decision, setDecision] = useState<{ running: boolean; steps: ActionStep[]; answer: string; stop: StopReason | '' }>({
+    running: false,
+    steps: [],
+    answer: '',
+    stop: '',
+  })
+  const decisionAbort = useRef<AbortController | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -83,6 +96,57 @@ export default function AiLab({ profile, onChanged, go }: PageProps) {
     } finally {
       setBusy(false)
       setRaw('')
+    }
+  }
+
+  async function runDecision() {
+    if (jd.trim().length < 20) {
+      notifyErr('JD 太短了：智能体要靠它查硬门槛与技术词覆盖')
+      return
+    }
+    if (decision.running) return
+    // 先问额度再拉数据：挡住了就不该白跑六条查询
+    const quota = getQuotaSnapshot(decisionLabel(company, title))
+    if (!quota.allowed) {
+      notifyErr(quota.reasons.join('；'))
+      return
+    }
+    const controller = new AbortController()
+    decisionAbort.current = controller
+    setDecision({ running: true, steps: [], answer: '', stop: '' })
+    try {
+      const [j, a, m, i, o, r] = await Promise.all([
+        listRows('jobs', { limit: 500 }),
+        listRows('applications', { limit: 500 }),
+        listRows('messages', { limit: 1000, order: 'sent_at', ascending: false }),
+        listRows('interviews', { limit: 500 }),
+        listRows('offers', { limit: 200 }),
+        listRows('resumes', { limit: 100 }),
+      ])
+      const res = await runApplyDecision(
+        {
+          jobs: j,
+          applications: a,
+          messages: m,
+          interviews: i,
+          offers: o,
+          resumes: r,
+          profile,
+          today: todayISO(),
+          now: new Date(),
+        },
+        {
+          jd,
+          company,
+          title,
+          signal: controller.signal,
+          onStep: (s) => setDecision((prev) => ({ ...prev, steps: [...prev.steps, s] })),
+        },
+      )
+      setDecision({ running: false, steps: res.steps, answer: res.answer, stop: res.stopReason })
+    } catch (error) {
+      setDecision((prev) => ({ ...prev, running: false }))
+      notifyErr(errText(error))
     }
   }
 
@@ -188,6 +252,37 @@ export default function AiLab({ profile, onChanged, go }: PageProps) {
               </button>
               <span className="small muted">评估会写入历史，可用于对比同类岗位</span>
             </div>
+            <div className="row mt8">
+              {decision.running ? (
+                <button
+                  className="btn"
+                  onClick={() => {
+                    decisionAbort.current?.abort()
+                  }}
+                >
+                  停止判断
+                </button>
+              ) : (
+                <button className="btn" onClick={() => void runDecision()}>
+                  让智能体判断投不投
+                </button>
+              )}
+              <span className="small muted">
+                它自己查硬门槛、这家公司的历史与技术词覆盖（JD 原文不进对话），只给建议不替你投
+              </span>
+            </div>
+            {decision.steps.length || decision.answer ? (
+              <div className="hint mt8">
+                <div className="cell-main">投递决策 · 过程与结论</div>
+                <AgentSteps steps={decision.steps} />
+                {decision.answer ? <div className="small mt4" style={{ whiteSpace: 'pre-wrap' }}>{decision.answer}</div> : null}
+                {decision.stop ? (
+                  <div className="small muted mt4">
+                    停止原因：{decision.stop === 'final_answer' ? '已完成' : `未跑完（${decision.stop}）——结论是部分分析，别当成完整判断`}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
             {busy && raw ? (
               <div className="small muted mt16" style={{ maxHeight: 90, overflow: 'hidden' }}>
                 模型正在输出…（已接收 {raw.length} 字）

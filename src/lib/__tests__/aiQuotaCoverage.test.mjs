@@ -91,6 +91,26 @@ describe('模型调用点的额度归属标记覆盖率（推导式）', () => {
     expect(empty, `这些调用点的 task 是空串：${empty.join('、')}`).toEqual([])
   })
 
+  it('页面问额度时必须用同一个标签来源（自己拼一遍就会问错桶）', () => {
+    // 护栏按「任务名」计数：页面预检用的标签和 streamChat 记账用的标签
+    // 只要是各拼一次，迟早对不上——症状是「明明提示还能用，一调就被熔断」。
+    const pagesDir = path.join(SRC, 'pages')
+    const offenders = []
+    for (const name of readdirSync(pagesDir)) {
+      if (!name.endsWith('.tsx')) continue
+      const source = readFileSync(path.join(pagesDir, name), 'utf8')
+      for (const m of source.matchAll(/getQuotaSnapshot\s*\(/g)) {
+        const openParen = m.index + m[0].length - 1
+        const text = callText(source, openParen)
+        // 两种写法合法：不带参数 = 问整体剩余额度（设置页那种汇总视图）；
+        // 带参数则必须用共享标签来源，否则预检查的那一桶和记账的那一桶不是同一个
+        if (/^\(\s*\)/.test(text)) continue
+        if (!/DAILY_TASK_LABEL|decisionLabel\(/.test(text)) offenders.push(`${name}：${text.slice(0, 60)}`)
+      }
+    }
+    expect(offenders, `这些页面自己拼了额度标签：${offenders.join('　')}`).toEqual([])
+  })
+
   it('streamChat 自己内部真的查了额度闸（否则调用点标了名也没人挡）', () => {
     const ai = readFileSync(path.join(SRC, 'lib', 'ai.ts'), 'utf8')
     // 三件事缺一不可：拿到 store、问额度、被拒时**抛错**、花过就记账
