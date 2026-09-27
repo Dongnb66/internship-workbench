@@ -109,9 +109,13 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
 - **计费与通道改造落地**：AI 默认走「用户自备 Key」，且是**浏览器直发**（用户的 Key 不过本项目任何服务端）；
   公网开放注册收口成邀请码；小程序那一端挂了同名计费门（默认拒绝）。
 - 测试：**50 个文件 / 672 条断言全绿**；`tsc -b`、`oxlint`（0 error）、`vite build` 均通过。
-- 最近 5 个提交（倒序）：试用开关只认创建者账号 → 小程序计费门 → 注册收口 → 设置页配 Key → 自备 Key 直发器接上唯一入口。
-- **这些已推到私有仓** `origin/master`（2026-09-27，`058ba0d..c8b4301`，普通 fast-forward）。**但线上站还没发新版**——推送只让 GitHub 跟上，改不了别人点开的那个域名。
-- 线上站已发布过 13 次，最近一次与 `ba5c7c7` 对应——**线上还是改造前的代码**，这一轮的效果要点出去才看得见。
+- 最近提交（倒序）：推送状态更正 → 注册改回默认开放（推翻同日那版收口）→ 唯一入口两端守卫 → 自查修两个真 bug → 小程序三道上限 → 本地交付（邀请码生成器 + 文档）→ 试用开关只认创建者账号 → 小程序计费门 → 注册收口 → 设置页配 Key → 自备 Key 直发器。
+- **已推到私有仓** `origin/master`（`058ba0d..7feb9a7`，普通 fast-forward），并已按第 6 节发布到线上（第 14 次，内容 = `7feb9a7`）。
+- **线上站已发到第 14 次，内容 = `7feb9a7`**（2026-09-27 由 WorkBuddy 发布，仍是原域名 `-47024`）。
+   核对方式不是听它说成功：线上 HTML 引的 bundle 是 `assets/index-Dg4AeK0-.js`（585,961 字节），
+   我在本目录按 `7feb9a7` 重新构建出的**文件名与字节数完全相同**，且线上包里
+   `api.deepseek.com` / `openrouter.ai` / `127.0.0.1:11434` / `/v1/models` 从「搜不到」变成「有」，
+   「新邮箱不再自行注册」这句旧文案变成 0 命中、「新邮箱会自动开一个」出现 —— 版本、口径两件事都对上了。
 - 已知缺口与优先级在 `docs/BENCHMARK.md` 第二节（P0：渠道能力边界表、漏斗转化统计、跟进节奏）。
 
 ### 5b. 只有创建者本人能做的四件事（代码到不了的那一半）
@@ -240,7 +244,14 @@ cd internship-workbench && npm install && npm run typecheck && npm test   # 基�
 
 线上地址：**https://internship-workbench-47024.app.workbuddy.host/**（以 `http-service` 形式部署，非静态页）。
 
-发布入口：用平台的 App 发布能力，`directory` 指向本目录、`language: node`、`startCmd: npm run serve`。
+发布入口：用平台的 App 发布能力，`language: node`、`startCmd: npm run serve`。
+
+> **发布源不是本工作目录，而是 `C:\Users\dong\Documents\GitHub\internship-workbench`。**
+> 这条 2026-09-27 实测踩出来的：**应用与目录的绑定由发布记录决定，`deploy` 传 `appId` 改不了目标 ——
+> 目录说了算。** 拿本目录（`.zcode\workspace\default\...`）去发，会**新建一个应用并换域名**
+> （当时误建出 `wbapp_50AxPC0AsXe0Rerg5kQXZ8` / `-64125`，已下线，那域名现在返回 404）。
+> 所以发布前先把本目录的内容推到私有仓，再到 `Documents\GitHub` 那份 clone 里 `git merge --ff-only` 快进过去，
+> 然后**从那份目录发**。两份内容可以这样确认一致：两边 `git status` 都 clean + 同一个 HEAD。
 
 ### 为什么必须用 `npm run serve` 而不是 `vite preview`
 
