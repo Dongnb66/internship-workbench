@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { cloud, errText } from '../cloud'
 import { Field } from '../components/ui'
-import { codesAreConfigured, signupGate } from '../lib/registration'
+import { registrationMode, signupGate } from '../lib/registration'
 
 type Mode = 'otp' | 'password' | 'reset'
 
@@ -13,7 +13,7 @@ let pending: { email: string; verificationId: string; isExistingUser: boolean } 
 let resetPending = false
 
 export default function Login() {
-  // 默认落在「验证码登录」：已有账号一步到位；新邮箱还要邀请码（见 registration.ts）
+  // 默认落在「验证码登录」：已有账号与新邮箱共用这一步（口径与开关见 registration.ts）
   const [mode, setMode] = useState<Mode>('otp')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -73,7 +73,7 @@ export default function Login() {
       setIsNewEmail(sent.data.isExistingUser === false)
       setInfo(
         sent.data.isExistingUser === false
-          ? `验证码已发送到 ${email}。这个邮箱还没有账号：新邮箱要凭邀请码开账号（下一步会用到）。`
+          ? `验证码已发送到 ${email}。这个邮箱还没有账号，验完码会自动开一个。`
           : `验证码已发送到 ${email}，请查收（含垃圾箱）`,
       )
       setCodeSent(true)
@@ -200,8 +200,12 @@ export default function Login() {
   ]
 
   const needPasswordField = mode === 'otp'
-  /** 新邮箱且名单还没配置：这不是用户的错，界面要说什么就是什么 */
-  const signupClosed = codesAreConfigured() === false
+  /**
+   * 要不要问邀请码，读的是 `registrationMode()` 这一个事实源：名单里有真码才要。
+   * 出厂是开放状态 —— 这时候页面上还写着「需要邀请码」就是在骗人，
+   * 所以这句话跟判定共用同一个来源，不各写一遍。
+   */
+  const inviteNeeded = mode === 'otp' && isNewEmail && registrationMode() === 'invite'
 
   return (
     <div className="login-wrap">
@@ -214,8 +218,9 @@ export default function Login() {
           </div>
         </div>
         <p className="login-sub">
-          已有账号：用验证码或密码登录。<strong>新邮箱不再自行注册</strong>——需要应用创建者给的邀请码。
-          {signupClosed ? '（当前这台站还没设置邀请码，所以新账号一律开不出来。）' : ''}
+          填邮箱收验证码即可：已有账号就登录，新邮箱会自动开一个。
+          <strong>AI 功能需要你自己的模型 Key（或本机模型）</strong>——本应用的额度记在创建者账号上，不默认替使用者承担。
+          {inviteNeeded ? '这个站现在按邀请码开账号，新邮箱记得带上创建者给你的码。' : ''}
         </p>
 
         <div className="row wrap mb16" style={{ gap: 6 }}>
@@ -270,7 +275,7 @@ export default function Login() {
           </Field>
         ) : null}
 
-        {mode === 'otp' && isNewEmail ? (
+        {inviteNeeded ? (
           <Field label="邀请码" hint="向应用创建者要一个。这一步之后才会真的创建账号；已有账号不需要它">
             <input
               className="input"

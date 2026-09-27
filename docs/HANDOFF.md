@@ -15,7 +15,7 @@
 | 线上地址 | https://internship-workbench-47024.app.workbuddy.host/ （发布方式见第 12 节） |
 | 远程仓库 | **`git@github.com:Dongnb66/internship-workbench.git`（私有，已推送）** |
 | 分支 | `master`，跟踪 `origin/master`，工作树干净 |
-| 规模 | 247 个已跟踪文件 / 1.6 MB / 50 个测试文件 / 669 条断言（全绿，2026-09-27 实测） |
+| 规模 | 249 个已跟踪文件 / 1.6 MB / 50 个测试文件 / 672 条断言（全绿，2026-09-27 实测） |
 
 ## 1. 五分钟上手
 
@@ -84,8 +84,9 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
      执行点在 `streamChat`，由 `aiQuotaCoverage.test.mjs` 从源码推导守着 + `aiBilling.test.ts` 从行为守着。
    - **用户的 Key 只在「用户设备 ↔ 厂商」之间流动**：不进 URL、不进日志、不进错误文案、不进界面 DOM。
      读取点被 `byoHygiene.test.mjs` 推导成白名单（多一处读取点就红），掩码必须在读到它的同一处完成。
-   - **默认值一律是"关"**：邀请码名单、试用开关、创建者邮箱、存储读失败——没配置就拒绝，
-     而不是"先按能用处理"。花钱的授权不能靠"反正没人会去勾"。
+   - **"花钱"的默认值一律是关**：试用开关、创建者邮箱、存储读失败——没配置就拒绝，而不是先按能用处理。
+     花钱的授权不能靠"反正没人会去勾"。**注册不是这一类**：它默认开放，因为自备 Key 落地之后
+     开号本身不再产生创建者的成本（这条当天被推翻过一次，理由见 5b 第 1 条）。
 
 ## 4. 工程纪律（本仓库最值钱的部分，别降低标准）
 
@@ -99,7 +100,7 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
 4. **扫描/解析类断言要先「钉住扫描本身」**（如「至少扫到 N 个且包含已知文件」），
    否则扫描逻辑一失效，下游断言全部假绿。
 5. **改完必须跑 `npm run typecheck && npm test && npm run lint && npm run build` 四件套**，
-   并把测试数变化写进提交信息（当前基线 **669**，50 个测试文件）。
+   并把测试数变化写进提交信息（当前基线 **672**，50 个测试文件）。
 6. **提交信息写「为什么」**，不写「改了什么」。历次提交都遵循这个风格，可以 `git log` 看。
 
 ## 5. 当前状态快照（2026-09-27）
@@ -107,7 +108,7 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
 - **`docs/AGENT_PLAN.md` 四步全部落地**：限额护栏 → ReAct 循环 → 投递决策智能体 → 项目教练。
 - **计费与通道改造落地**：AI 默认走「用户自备 Key」，且是**浏览器直发**（用户的 Key 不过本项目任何服务端）；
   公网开放注册收口成邀请码；小程序那一端挂了同名计费门（默认拒绝）。
-- 测试：**50 个文件 / 669 条断言全绿**；`tsc -b`、`oxlint`（0 error）、`vite build` 均通过。
+- 测试：**50 个文件 / 672 条断言全绿**；`tsc -b`、`oxlint`（0 error）、`vite build` 均通过。
 - 最近 5 个提交（倒序）：试用开关只认创建者账号 → 小程序计费门 → 注册收口 → 设置页配 Key → 自备 Key 直发器接上唯一入口。
 - **这些都只在本地提交**，没有推送到 `origin`（推送由人决定，见第 11 节）。
 - 线上站已发布过 13 次，最近一次与 `ba5c7c7` 对应——**线上还是改造前的代码**，这一轮的效果要点出去才看得见。
@@ -117,10 +118,13 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
 
 这一轮把"默认不花创建者的钱"做进了代码，但下面四条**必须由人来点**，我做不了：
 
-1. **决定站要不要开新注册**：`src/lib/registration.ts` 的 `INVITE_CODES` 出厂只有占位符，
-   意思是**现在谁都注册不进来（包括你自己）**。要用自己的账号，先把那串换成你定的码再发布。
-   服务端那一半（认证服务的 sign-up 开关）在云控制台，代码够不着——本构建连数据库管理工具都没挂载，
-   所以名单只能放源码。这条限制在 README / FAQ / 界面上都写着，没有假装关严。
+1. **要不要给注册上锁**（默认**开放**，不做什么就能让人进）：想锁就在 `src/lib/registration.ts` 的
+   `INVITE_CODES` 里填一枚真码（`npm run invites 6` 造），登录页会自动开始要码。
+   这条当天被推翻过一次：第一版是"一律要码"，理由是防陌生人烧创建者额度；自备 Key + 计费门落地后
+   那个前提没了（AI 花使用者自己的钱，创建者那一档默认关且只认创建者账号），而码的代价是
+   **每加一个用户你都要亲自发一次码**——正好挡住你想吸引的人。
+   仍然开着的两个真实成本都不花钱但会脏：验证邮件额度（套餐上限，代码查不到）、
+   岗位广场公共库的写入（注册者就能投稿）。真被灌了就先上锁、再清表，可逆。
 2. **决定要不要"本应用额度"这一档**：`src/lib/ownerAccount.ts` 的 `OWNER_EMAIL` 出厂是空串 = 谁都不算创建者，
    所以试用开关对谁都不显示。填成你自己的登录邮箱、用该账号登录，设置页才会出现那道勾。
 3. **发布**：见第 6 节（先把 `miniprogram/` 移出目录）。
@@ -188,7 +192,7 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
 
 按顺序做，别跳：
 
-1. `npm install && npm run typecheck && npm test` —— 确认基线是 669 全绿（不是就先查环境）。
+1. `npm install && npm run typecheck && npm test` —— 确认基线是 672 全绿（不是就先查环境）。
 2. `git log --oneline -15` 读提交信息，理解近期决策的「为什么」。
 3. 读 `AGENTS.md` 的硬约束 + 本文件第 3 节的不变量。
 4. 从 `docs/BENCHMARK.md` 第二节挑一个 P0 缺口开工，并在动手前先写会变红的断言。
@@ -199,7 +203,7 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
 
 ```bash
 git clone git@github.com:Dongnb66/internship-workbench.git
-cd internship-workbench && npm install && npm run typecheck && npm test   # 基线 669 全绿
+cd internship-workbench && npm install && npm run typecheck && npm test   # 基线 672 全绿
 ```
 
 **私有仓意味着接手方必须先能认证**，两条路：

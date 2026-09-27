@@ -1,101 +1,100 @@
 import { describe, expect, it } from 'vitest'
 
 /**
- * 注册收口的断言。
+ * 注册口径的断言。
  *
- * 现状（实测过的事实）：登录页原先写着「无需单独注册：填邮箱收验证码，首次使用会自动创建账号」，
- * 而这个站的地址是公网可达的——任何人拿到链接都能开一个账号，然后每一个 AI 调用都记在
- * 应用创建者的额度上（Creator quota）。这次要把它关掉。
+ * **这一条被改过一次，改的原因是账算错了，值得留在文件里。**
+ * 第一版（同一天早些时候）是「新邮箱一律要邀请码」，理由是"陌生人注册进来就能烧创建者的额度"。
+ * 但自备 Key 与计费门落地之后那句话不成立了：AI 默认花使用者自己的钱，创建者那一档
+ * 既默认关着、开关又只认创建者账号 —— 一个陌生人注册进来，他在 AI 上花这个站 0 元。
+ * 邀请码买到的东西变了（只剩验证邮件额度、公共库脏数据、以及"每加一个用户我要亲自发一次码"），
+ * 而最后那条正好砸在做这个产品的目的上。所以默认改成**开放注册**。
  *
- * **这条门能做到什么、做不到什么，必须写清楚，否则文档就成了假话**：
- * - 做得到：让**这个应用自己**不再创建账号——验证码那一页拿不到邀请码就不调 `verifyOtp`，
- *   而账号只有那一步会产生。所以从界面进来的路人被挡在外面。
- * - 做不到：挡住绕过界面、直接拿应用标识去调认证接口的人。真正的服务端开关
- *   （认证服务的 sign-up 设置）不在代码可达范围内，而且本机构的建表工具没挂载，
- *   连「邀请码名单放数据库」这条路都走不了。所以名单只能是源码里的一份常量，
- *   而这句话必须显示在界面上，让人知道边界在哪。
+ * 只有一个旋钮，不留两个会互相矛盾的开关：
+ * `INVITE_CODES` 里**有真码 = 上锁**，只有占位符 = **开放**。
+ * 想彻底不让人进，填一枚只有你自己知道的码即可（不需要额外模式位）。
  */
-import { INVITE_CODES, PLACEHOLDER_CODE, codesAreConfigured, normalizeCode, signupGate } from '../registration'
+import {
+  INVITE_CODES,
+  PLACEHOLDER_CODE,
+  codesAreConfigured,
+  normalizeCode,
+  registrationMode,
+  signupGate,
+} from '../registration'
 
-/** 一份「已经配置好」的名单：判定读的是名单本身，不是某个全局布尔 */
-const OPEN = ['WB-2026-ab12', 'WB-2026-cd34']
+/** 一份「已经配好码」的名单 = 上锁状态 */
+const LOCKED = ['WB-2026-ab12', 'WB-2026-cd34']
 
-describe('老用户不受影响', () => {
-  for (const code of ['', '对的码', '错的码']) {
-    it(`已存在的账号，邀请码是「${code || '空'}」也照样能登录`, () => {
-      const g = signupGate({ isExistingUser: true, code, list: OPEN })
+describe('出厂状态：开放注册', () => {
+  it('名单里只有占位符 → 模式是 open，新邮箱不需要码', () => {
+    expect(INVITE_CODES).toEqual([PLACEHOLDER_CODE])
+    expect(registrationMode()).toBe('open')
+    const g = signupGate({ isExistingUser: false, code: '' })
+    expect(g.allowed).toBe(true)
+    // 放行且**明说这一步会创建账号**：不许悄悄建号，这条从第一版留着没动
+    expect(g.createsAccount).toBe(true)
+  })
+
+  it('开放模式下提交的码一律不参与判定（半截的锁比没锁更误导人）', () => {
+    expect(signupGate({ isExistingUser: false, code: '随便什么' }).allowed).toBe(true)
+    expect(signupGate({ isExistingUser: false, code: PLACEHOLDER_CODE }).allowed).toBe(true)
+  })
+})
+
+describe('老用户从来不该被门挡', () => {
+  for (const list of [LOCKED, [PLACEHOLDER_CODE], []]) {
+    it(`名单是 ${JSON.stringify(list)} 时，已存在的账号都能登录`, () => {
+      const g = signupGate({ isExistingUser: true, code: '', list })
       expect(g.allowed).toBe(true)
       expect(g.createsAccount).toBe(false)
     })
   }
-
-  it('名单还没配置时也不拿这个为难老用户（门只管新增）', () => {
-    expect(signupGate({ isExistingUser: true, code: '', list: [PLACEHOLDER_CODE] }).allowed).toBe(true)
-  })
 })
 
-describe('新注册一律先要邀请码', () => {
-  it('没填码 → 拒绝，并把「去哪弄码」说清楚', () => {
-    const g = signupGate({ isExistingUser: false, code: '', list: OPEN })
+describe('填了真码 = 上锁（这就是"随时锁回去"那一行）', () => {
+  it('有真码时模式变 invite，没码的新邮箱被拒', () => {
+    expect(registrationMode(LOCKED)).toBe('invite')
+    const g = signupGate({ isExistingUser: false, code: '', list: LOCKED })
     expect(g.allowed).toBe(false)
     expect(g.reason).toMatch(/邀请码/)
     expect(g.reason).toMatch(/创建者|要/)
   })
 
-  it('码对得上 → 放行，并明说这一步会真的创建账号（不许悄悄建号）', () => {
-    const g = signupGate({ isExistingUser: false, code: OPEN[0], list: OPEN })
-    expect(g.allowed).toBe(true)
-    expect(g.createsAccount).toBe(true)
+  it('锁上之后码按全等比：猜短码、加后缀、都不算通过', () => {
+    expect(signupGate({ isExistingUser: false, code: LOCKED[0], list: LOCKED }).allowed).toBe(true)
+    expect(signupGate({ isExistingUser: false, code: `  ${LOCKED[0].toLowerCase()}  `, list: LOCKED }).allowed).toBe(true)
+    expect(signupGate({ isExistingUser: false, code: `${LOCKED[0]}EXTRA`, list: LOCKED }).allowed).toBe(false)
+    expect(signupGate({ isExistingUser: false, code: LOCKED[0].slice(0, 6), list: LOCKED }).allowed).toBe(false)
+    expect(signupGate({ isExistingUser: false, code: 'WB', list: LOCKED }).allowed).toBe(false)
   })
 
-  it('大小写与前后空格不影响（人抄码会抄成各种样子）', () => {
-    expect(signupGate({ isExistingUser: false, code: `  ${OPEN[0].toLowerCase()}  `, list: OPEN }).allowed).toBe(true)
+  it('占位符永远不算可用码（它写在源码里，公开可读）', () => {
+    // 只有占位符 = 没上锁 = 开放（这是出厂状态，不是"码错了"）
+    expect(registrationMode([PLACEHOLDER_CODE])).toBe('open')
+    // 上锁之后拿占位符来当码，必须被拒 —— 这才是这条守卫真正管的东西
+    expect(signupGate({ isExistingUser: false, code: PLACEHOLDER_CODE, list: [PLACEHOLDER_CODE, ...LOCKED] }).allowed).toBe(false)
   })
 
-  it('后缀花招不算通过：按全等比，不按「以…开头」', () => {
-    expect(signupGate({ isExistingUser: false, code: `${OPEN[0]}EXTRA`, list: OPEN }).allowed).toBe(false)
-    expect(signupGate({ isExistingUser: false, code: `X${OPEN[0]}`, list: OPEN }).allowed).toBe(false)
-    // 这一条是变异检查逼出来的：只测「前后加字符」杀不掉 `startsWith(code)` 那种写法——
-    // 而那种写法真正的漏洞在**猜短码**：只要猜对前几位就进来了。
-    expect(signupGate({ isExistingUser: false, code: OPEN[0].slice(0, 6), list: OPEN }).allowed).toBe(false)
-    expect(signupGate({ isExistingUser: false, code: 'WB', list: OPEN }).allowed).toBe(false)
+  it('空名单不等于"什么码都行"：那还是没锁', () => {
+    expect(codesAreConfigured([])).toBe(false)
+    expect(registrationMode([])).toBe('open')
   })
 
-  it('名单里只有占位符 = 关闭；而占位符本身永远不算可用码（它就写在源码里，公开可读）', () => {
-    expect(signupGate({ isExistingUser: false, code: PLACEHOLDER_CODE, list: [PLACEHOLDER_CODE] }).allowed).toBe(false)
-    // 哪怕别人在名单里另外加了真码，抄来的占位符也进不来
-    expect(signupGate({ isExistingUser: false, code: PLACEHOLDER_CODE, list: [PLACEHOLDER_CODE, ...OPEN] }).allowed).toBe(false)
-  })
-
-  it('两种拒绝说得清是两种原因：站没配置，与用户码不对（合并成一句就会误导人）', () => {
-    expect(signupGate({ isExistingUser: false, code: PLACEHOLDER_CODE, list: [PLACEHOLDER_CODE] }).reason).toMatch(
-      /还没设置邀请码|谁都注册不进来/,
-    )
-    expect(signupGate({ isExistingUser: false, code: '瞎猜的', list: OPEN }).reason).toMatch(/邀请码不对/)
-    expect(signupGate({ isExistingUser: false, code: '', list: OPEN }).reason).toMatch(/向应用创建者要/)
-  })
-
-  it('拒绝理由里不回显提交上来的码（截图与日志里会留下它）', () => {
-    const g = signupGate({ isExistingUser: false, code: 'some-guessed-code', list: OPEN })
+  it('拒绝理由里不回显提交上来的码（截图与日志会留下它）', () => {
+    const g = signupGate({ isExistingUser: false, code: 'some-guessed-code', list: LOCKED })
     expect(g.reason).not.toContain('some-guessed-code')
   })
 
-  it('名单为空数组时按未配置处理（空名单不该等于「什么码都行」）', () => {
-    expect(normalizeCode('')).toBe('')
-    expect(signupGate({ isExistingUser: false, code: 'anything', list: [] }).allowed).toBe(false)
+  it('两种拒绝要分得清：没填码 vs 码不对（合并成一句会让人重复试）', () => {
+    expect(signupGate({ isExistingUser: false, code: '', list: LOCKED }).reason).toMatch(/向应用创建者要/)
+    expect(signupGate({ isExistingUser: false, code: '瞎猜的', list: LOCKED }).reason).toMatch(/邀请码不对/)
   })
 })
 
-describe('默认状态：这个仓库现在到底开不开', () => {
-  it('出厂名单只有占位符 → 站上是关闭状态（新注册进不来）', () => {
-    expect(INVITE_CODES).toEqual([PLACEHOLDER_CODE])
-    expect(codesAreConfigured(INVITE_CODES)).toBe(false)
-    expect(signupGate({ isExistingUser: false, code: '任何人猜得到的码' }).allowed).toBe(false)
-  })
-
-  it('创建者换成真码之后才算「配置好了」——判定只有一份，不在测试里另写一遍规则', () => {
-    expect(codesAreConfigured([PLACEHOLDER_CODE, ' WB-2026-ab12 '])).toBe(true)
-    expect(codesAreConfigured([])).toBe(false)
-    expect(codesAreConfigured([PLACEHOLDER_CODE])).toBe(false)
+describe('归一化', () => {
+  it('只做去空格与小写', () => {
+    expect(normalizeCode('  A-B1 ')).toBe('a-b1')
+    expect(normalizeCode(null)).toBe('')
   })
 })
