@@ -44,6 +44,29 @@ describe('小程序 streamChat 上的计费门', () => {
     expect(aiSource).not.toMatch(/streamByoChat|readUserKey|byoSend/)
   })
 
+  it('限额护栏也在这条路上：查闸、被拒就抛、发过就记账', () => {
+    expect(aiSource, '没挂限额护栏：开了试用档就是不限次烧创建者额度').toMatch(/createQuotaStore\(/)
+    expect(aiSource, '查了闸却没拦住请求').toMatch(/if\s*\(!gate\.allowed\)\s*throw/)
+    expect(aiSource, '请求发出去了没记账：护栏数不到就是没挡').toMatch(/store\.record\(/)
+  })
+
+  it('两道门的顺序：计费门 → 限额闸 → 才轮到大模型与目录请求', () => {
+    const atBilling = aiSource.search(/currentAccess\(/)
+    const atQuota = aiSource.search(/createQuotaStore\(/)
+    const atPick = aiSource.search(/await pickModel\(\)/)
+    expect(atBilling).toBeGreaterThanOrEqual(0)
+    expect(atQuota, '限额闸找不到').toBeGreaterThanOrEqual(0)
+    expect(atBilling, '计费门挂在限额闸之后：先查额度再问谁付钱，白耗一次台账读').toBeLessThan(atQuota)
+    expect(atQuota, '限额闸挂在挑模型之后：被挡住时目录请求已经发出去了').toBeLessThan(atPick)
+  })
+
+  it('两个调用点都带了任务名（不带就全挤进「未标注」那一个桶）', () => {
+    const atEvaluate = aiSource.slice(aiSource.search(/async function evaluateJD/))
+    const atGreeting = aiSource.slice(aiSource.search(/async function generateGreeting/))
+    expect(atEvaluate.slice(0, 700), 'evaluateJD 没标 task').toMatch(/task:\s*taskSubject\(/)
+    expect(atGreeting.slice(0, 700), 'generateGreeting 没标 task').toMatch(/task:\s*taskSubject\(/)
+  })
+
   it('抛出去的就是门给的那句话（页面直接把 errText(error) 显示给用户）', () => {
     expect(aiSource).toMatch(/throw new Error\(\s*access\.reason\s*\)/)
   })

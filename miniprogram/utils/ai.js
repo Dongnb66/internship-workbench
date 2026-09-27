@@ -1,6 +1,11 @@
 const { cloud } = require('./cloud')
 const constants = require('./constants')
-const { currentAccess } = require('./billing')
+const { createMiniStorage, currentAccess } = require('./billing')
+const { createQuotaStore, DEFAULT_QUOTA, taskSubject, todayKey } = require('./quota')
+
+function storageForMini() {
+  return createMiniStorage(typeof wx === 'undefined' ? undefined : wx)
+}
 
 let cachedModel = null
 
@@ -19,17 +24,28 @@ async function pickModel() {
  * 小程序里同样用 for await 消费 SSE —— 分块由 SDK 的 wx.request 传输层负责，
  * 不要改用 wx.request，也不要去找 EventSource（那个运行时里没有）。
  *
- * 计费门挂在挑模型之前：这一端没有自备 Key 那条路（见 `utils/billing.js`），
- * 所以门默认关着；被挡住时连 `models.list()` 那次目录请求都不该发出去。
+ * 两道门叠加，顺序不能反：
+ * 1. **计费门**在挑模型之前：这一端没有自备 Key 那条路，默认不放行；
+ *    被挡住时连 `models.list()` 那次目录请求都不该发出去。
+ * 2. **限额护栏**：创建者一旦在开发者工具里开了试用档，这一端就是创建者付钱，
+ *    所以日限/每任务步数/每日总数三道上限照样要挡（口径与网页端同一套数字）。
  */
 async function streamChat(opts) {
-  const access = currentAccess()
+  const access = currentAccess(storageForMini())
   if (!access.allowed) throw new Error(access.reason)
+
+  const store = createQuotaStore(storageForMini(), DEFAULT_QUOTA)
+  const day = todayKey()
+  const task = (opts && opts.task) || '未标注'
+  const gate = store.status(day, task)
+  if (!gate.allowed) throw new Error(gate.reasons.join('；'))
 
   const model = await pickModel()
   if (!model) throw new Error('当前没有可用模型，请稍后重试')
 
   let text = ''
+  // 请求发出去过就算一次（含随后失败）：小程序没有取消按钮，失败也是真花了钱
+  store.record(task, day)
   const stream = await cloud.llm.chat.completions.create({
     model: model,
     messages: [
@@ -86,6 +102,8 @@ async function evaluateJD(jd, profile, onDelta) {
   const raw = await streamChat({
     system: EVAL_SYSTEM,
     user: '【候选人画像】\n' + profileBrief(profile) + '\n\n【目标岗位 JD】\n' + String(jd || '').slice(0, 8000),
+    // 额度按「事」算：任务名带对象，批量看几个岗位时不会共用一个 8 步桶被误杀
+    task: taskSubject('JD 评估', jd),
     json: true,
     onDelta: onDelta
   })
@@ -120,6 +138,7 @@ async function generateGreeting(company, title, jd, profile, onDelta) {
     system: '你在帮一名中国大学生写发给 HR / 技术负责人 的第一条打招呼消息。输出只有消息正文本身，不要标题、不要解释、不要引号包裹。\n' +
       constants.GREETING_RULES,
     user: '【候选人画像】\n' + profileBrief(profile) + '\n\n【公司与岗位】' + company + ' · ' + title + '\n\n【JD 原文】\n' + String(jd || '').slice(0, 6000),
+    task: taskSubject('打招呼', company + title + jd),
     onDelta: onDelta
   })
 }

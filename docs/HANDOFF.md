@@ -15,7 +15,7 @@
 | 线上地址 | https://internship-workbench-47024.app.workbuddy.host/ （发布方式见第 12 节） |
 | 远程仓库 | **`git@github.com:Dongnb66/internship-workbench.git`（私有，已推送）** |
 | 分支 | `master`，跟踪 `origin/master`，工作树干净 |
-| 规模 | 244 个已跟踪文件 / 1.6 MB / 48 个测试文件 / 640 条断言（全绿，2026-09-27 实测） |
+| 规模 | 247 个已跟踪文件 / 1.6 MB / 50 个测试文件 / 669 条断言（全绿，2026-09-27 实测） |
 
 ## 1. 五分钟上手
 
@@ -63,7 +63,7 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
 | `gateway/server.mjs` | 本地网关（`npm run gateway`） | 与部署无关，别当成后端 |
 | `db/` | 迁移 SQL + `db/exec/` 可粘贴执行的拆分脚本 | schema 工具当前不可用，新增表要手工执行并同步文档 |
 | `src/lib/mentor.ts` · `githubVerify.ts` · `pages/Coach.tsx` | 项目教练：四周任务包生成 + 公开仓库只读验收 | 两者都**不打模型**（不消耗创建者额度）；验收读不到的东西一律说「无法确认」，不编判定 |
-| `miniprogram/` | 微信小程序端 | **发布时要先移出目录**，见第 6 节。AI 层（quota / agentLoop / agentTools / agentRun / mentor / githubVerify）**只在网页端**，没有小程序移植，别去 `miniprogram/utils/` 找同名模块 |
+| `miniprogram/` | 微信小程序端 | **发布时要先移出目录**，见第 6 节。`utils/billing.js`（计费门）与 `utils/quota.js`（三道上限）是网页端同名规则的**端口**，数字由跨端契约测试钉住；agent 循环 / 工具表 / 项目教练**只在网页端**，别去 `miniprogram/utils/` 找它们 |
 
 ## 3. 不可违反的不变量
 
@@ -99,7 +99,7 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
 4. **扫描/解析类断言要先「钉住扫描本身」**（如「至少扫到 N 个且包含已知文件」），
    否则扫描逻辑一失效，下游断言全部假绿。
 5. **改完必须跑 `npm run typecheck && npm test && npm run lint && npm run build` 四件套**，
-   并把测试数变化写进提交信息（当前基线 **640**，48 个测试文件）。
+   并把测试数变化写进提交信息（当前基线 **669**，50 个测试文件）。
 6. **提交信息写「为什么」**，不写「改了什么」。历次提交都遵循这个风格，可以 `git log` 看。
 
 ## 5. 当前状态快照（2026-09-27）
@@ -107,7 +107,7 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
 - **`docs/AGENT_PLAN.md` 四步全部落地**：限额护栏 → ReAct 循环 → 投递决策智能体 → 项目教练。
 - **计费与通道改造落地**：AI 默认走「用户自备 Key」，且是**浏览器直发**（用户的 Key 不过本项目任何服务端）；
   公网开放注册收口成邀请码；小程序那一端挂了同名计费门（默认拒绝）。
-- 测试：**48 个文件 / 640 条断言全绿**；`tsc -b`、`oxlint`（0 error）、`vite build` 均通过。
+- 测试：**50 个文件 / 669 条断言全绿**；`tsc -b`、`oxlint`（0 error）、`vite build` 均通过。
 - 最近 5 个提交（倒序）：试用开关只认创建者账号 → 小程序计费门 → 注册收口 → 设置页配 Key → 自备 Key 直发器接上唯一入口。
 - **这些都只在本地提交**，没有推送到 `origin`（推送由人决定，见第 11 节）。
 - 线上站已发布过 13 次，最近一次与 `ba5c7c7` 对应——**线上还是改造前的代码**，这一轮的效果要点出去才看得见。
@@ -188,7 +188,7 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
 
 按顺序做，别跳：
 
-1. `npm install && npm run typecheck && npm test` —— 确认基线是 640 全绿（不是就先查环境）。
+1. `npm install && npm run typecheck && npm test` —— 确认基线是 669 全绿（不是就先查环境）。
 2. `git log --oneline -15` 读提交信息，理解近期决策的「为什么」。
 3. 读 `AGENTS.md` 的硬约束 + 本文件第 3 节的不变量。
 4. 从 `docs/BENCHMARK.md` 第二节挑一个 P0 缺口开工，并在动手前先写会变红的断言。
@@ -199,7 +199,7 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
 
 ```bash
 git clone git@github.com:Dongnb66/internship-workbench.git
-cd internship-workbench && npm install && npm run typecheck && npm test   # 基线 640 全绿
+cd internship-workbench && npm install && npm run typecheck && npm test   # 基线 669 全绿
 ```
 
 **私有仓意味着接手方必须先能认证**，两条路：
