@@ -79,7 +79,7 @@ export function byoErrorText(preset: ChannelPreset, status: number, body: string
 }
 
 /** 请求根本没发出去：多半是 CORS 或断网。**这句话不许赖用户的 Key**——那是最贵的一种误诊。 */
-function byoNetworkText(preset: ChannelPreset): string {
+export function byoNetworkText(preset: ChannelPreset): string {
   return (
     `${preset.label}：浏览器没能把请求发出去（网络或跨域被挡）。` +
     '这与你的 Key 无关，不用重填。可以换一个能直发的厂商，或改用本机 Ollama。'

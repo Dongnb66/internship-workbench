@@ -3,6 +3,19 @@ import { cloud, errText } from '../cloud'
 import { Field, Modal } from '../components/ui'
 import { getModelChoice, getQuotaSnapshot, getTokenStats, listUsableModels, modelCostLabel, pickModel, setModelChoice, type TokenStats, type UsableModel } from '../lib/ai'
 import { listRows, saveProfile } from '../lib/api'
+import { BYO_PRESETS } from '../lib/aiChannels'
+import {
+  getByoModel,
+  hasUserKey,
+  isLocalServiceReady,
+  currentPreset,
+  setByoModel,
+  setByoPresetId,
+  setOwnerTrialEnabled,
+  getOwnerTrialEnabled,
+  setUserKey,
+} from '../lib/billing'
+import { channelCard, checkConnection, keyHint } from '../lib/byoSetup'
 import { PROFILE_TEMPLATE } from '../lib/constants'
 import { healthSummary, profileHealth } from '../lib/healthCheck'
 import { textToArray } from '../lib/format'
@@ -59,10 +72,32 @@ export default function Settings({ profile, onChanged }: PageProps) {
   // 今日额度（设备级 localStorage 台账）：和上面那个「本会话消耗」是两件事——
   // 会话统计关了就归零，额度台账按日历日算，是护栏实际依据的那份。
   const [quota, setQuota] = useState<QuotaStatus | null>(null)
+  /**
+   * AI 通道这块的状态全部是**设备级**的（localStorage）：Key 与所选厂商只属于这台浏览器。
+   * 刻意没有「回填 Key」这一步——输入框永远从空开始，存进去之后界面只剩掩码。
+   */
+  const [channel, setChannel] = useState(() => currentPreset())
+  const [keyDraft, setKeyDraft] = useState('')
+  const [hasKey, setHasKey] = useState(() => hasUserKey())
+  const [localReady, setLocalReady] = useState(() => isLocalServiceReady())
+  const [modelDraft, setModelDraft] = useState('')
+  const [checking, setChecking] = useState(false)
+  const [checkResult, setCheckResult] = useState<{ ok: boolean; text: string } | null>(null)
+  const [trial, setTrial] = useState(() => getOwnerTrialEnabled())
+
+  const card = channelCard(channel, { hasKey, localReady })
 
   useEffect(() => {
     setStats(getTokenStats())
     setQuota(getQuotaSnapshot())
+  }, [])
+
+  useEffect(() => {
+    // 选了本机档就先默默探一次：卡片上那句「能不能用」得有事实依据，而不是等用户点自检
+    if (!currentPreset().httpLocal) return
+    checkConnection({ preset: currentPreset(), model: getByoModel() })
+      .then(() => setLocalReady(isLocalServiceReady()))
+      .catch(() => setLocalReady(false))
   }, [])
 
   useEffect(() => {
@@ -193,6 +228,67 @@ export default function Settings({ profile, onChanged }: PageProps) {
       min_interval_min: '30',
     })
     notifyOk('已填入模板，请补手机号与邮箱后保存（数字口径需与简历一致）')
+  }
+
+  /** 换厂商：档位是显式选择，所以选完立刻把「谁付钱」与就绪状态换过来 */
+  function pickVendor(id: string) {
+    setByoPresetId(id)
+    const next = currentPreset()
+    setChannel(next)
+    setKeyDraft('')
+    setHasKey(hasUserKey())
+    setModelDraft('')
+    setCheckResult(null)
+    if (next.httpLocal) {
+      setLocalReady(false)
+      checkConnection({ preset: next, model: getByoModel(next) })
+        .then(() => setLocalReady(isLocalServiceReady()))
+        .catch(() => setLocalReady(false))
+    }
+  }
+
+  function saveKey() {
+    const v = keyDraft.trim()
+    if (!v) {
+      notifyErr('先粘贴 Key 再保存')
+      return
+    }
+    setUserKey(v)
+    // 存完立刻清空输入框：留在 state 里就多一处能被翻出来的地方
+    setKeyDraft('')
+    setHasKey(hasUserKey())
+    notifyOk('已保存到这台设备的浏览器里；本应用没有服务端保管它')
+  }
+
+  function forgetKey() {
+    setUserKey(null)
+    setHasKey(false)
+    notifyOk('已删除本机保存的 Key')
+  }
+
+  function saveByoModel() {
+    setByoModel(channel.id, modelDraft)
+    notifyOk(`已记下：${channel.label} 用 ${getByoModel(channel)}`)
+  }
+
+  async function selfCheck() {
+    setChecking(true)
+    setCheckResult(null)
+    try {
+      const r = await checkConnection({ preset: channel, model: getByoModel(channel) })
+      setCheckResult(r)
+      setLocalReady(isLocalServiceReady())
+    } catch (error) {
+      setCheckResult({ ok: false, text: errText(error) })
+    } finally {
+      setChecking(false)
+    }
+  }
+
+  function toggleTrial(next: boolean) {
+    setOwnerTrialEnabled(next)
+    setTrial(next)
+    notifyOk(next ? '已开启「用本应用的额度试用」：这一档花的是应用创建者的额度' : '已关闭试用档：AI 只走你自己自备的通道')
   }
 
   async function saveModel() {
@@ -363,14 +459,105 @@ export default function Settings({ profile, onChanged }: PageProps) {
 
         <section className="card">
           <div className="card-head">
+            <h3>AI 通道</h3>
+            <span className="spacer" />
+            <span className="badge">{card.configured && card.sendable ? '可用' : card.configured ? '待就绪' : '未配置'}</span>
+          </div>
+          <div className="card-body">
+            <div className="hint mb16">
+              AI 只走你在这里选的那一条通道，而且<strong>默认是自备 Key</strong>——花你自己账户的余额。
+              下面这个「本应用的额度」记在<strong>应用创建者的账号</strong>上，所以它默认关着，不会替使用者垫钱。
+            </div>
+
+            <Field label="通道" hint="厂商白名单是写死在代码里的：这里列不出来的地址，本应用一律不发（那等于做一个谁都能借的转发器）">
+              <div className="row wrap" style={{ gap: 6 }}>
+                {BYO_PRESETS.map((p) => (
+                  <button key={p.id} type="button" className={channel.id === p.id ? 'chip on' : 'chip'} onClick={() => pickVendor(p.id)}>
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </Field>
+
+            <div className="small mt8">
+              谁付钱：<strong>{card.whoPays}</strong>
+            </div>
+            <div className={card.configured && card.sendable ? 'small muted mt8' : 'hint mt8'}>{card.status}</div>
+
+            {card.needsKey ? (
+              <Field label="你的 Key" hint={keyHint()}>
+                <div className="row" style={{ gap: 6 }}>
+                  <input
+                    className="input"
+                    type="password"
+                    autoComplete="off"
+                    value={keyDraft}
+                    onChange={(e) => setKeyDraft(e.target.value)}
+                    placeholder="粘贴一次即可；保存后输入框立刻清空，界面只显示头尾掩码"
+                  />
+                  <button className="btn primary" type="button" onClick={saveKey} disabled={!keyDraft.trim()}>
+                    保存 Key
+                  </button>
+                  {hasKey ? (
+                    <button className="btn" type="button" onClick={forgetKey}>
+                      删除
+                    </button>
+                  ) : null}
+                </div>
+              </Field>
+            ) : (
+              <div className="hint mt8">
+                这一档不需要 Key：模型跑在你自己的电脑上，不花任何人的钱。装法：官网装 Ollama，命令行
+                <code> ollama pull qwen3:4b </code>，再 <code>ollama serve</code>（默认端口 11434）。
+                慢一些，但没有额度、限流与账单这回事。
+              </div>
+            )}
+
+            <Field label="模型名" hint={`直接发给 ${channel.label}；表里列了 ${channel.models.join(' / ') || '（本机模型的名称在 Ollama 里看）'}，也可以填这一家的其他模型名`}>
+              <div className="row" style={{ gap: 6 }}>
+                <input className="input" value={modelDraft} onChange={(e) => setModelDraft(e.target.value)} placeholder={getByoModel(channel)} />
+                <button className="btn" type="button" onClick={saveByoModel} disabled={!modelDraft.trim()}>
+                  记住模型名
+                </button>
+              </div>
+            </Field>
+            <div className="small muted mt8">当前会用：{modelDraft.trim() || getByoModel(channel)}</div>
+
+            <div className="row mt16" style={{ gap: 8 }}>
+              <button className="btn" type="button" onClick={selfCheck} disabled={checking}>
+                {checking ? '自检中…' : '自检一下'}
+              </button>
+              <span className="spacer" />
+              <span className="small muted">{card.note}</span>
+            </div>
+            {checkResult ? (
+              <div className="hint mt8" style={{ color: checkResult.ok ? '#16a34a' : '#d97706' }}>
+                {checkResult.text}
+              </div>
+            ) : null}
+
+            <div className="mt16">
+              <label className="row" style={{ gap: 8 }}>
+                <input type="checkbox" checked={trial} onChange={(e) => toggleTrial(e.target.checked)} />
+                <span>
+                  允许「用本应用的额度试用」<span className="small muted">（这一档花的是应用创建者的额度，且仍受下面的日限与步数护栏约束）</span>
+                </span>
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <section className="card">
+          <div className="card-head">
             <h3>AI 模型</h3>
             <span className="spacer" />
             <span className="badge">{effective ? `当前生效：${effective}` : '未就绪'}</span>
           </div>
           <div className="card-body">
             <div className="hint mb16">
-              JD 评估、打招呼话术、面试题、简历分析、上传后的字段提炼都走这里选的模型。不选就用平台默认模型；
-              所选模型被平台禁用时会自动回退到默认，不会报错中断。这个选择只存在本设备（换设备要重选）。
+              这一节只管<strong>「用本应用的额度」那一档</strong>：JD 评估、打招呼话术、面试题、简历分析、上传后的字段提炼，
+              在哪一档就用哪一档的模型——自备 Key 与本机模型用的是上面那张卡里填的模型名，跟这里无关。
+              不选就用平台默认模型；所选模型被平台禁用时会自动回退到默认，不会报错中断。这个选择只存在本设备（换设备要重选）。
             </div>
             {modelsErr ? (
               <div className="small" style={{ color: '#d97706' }}>模型目录加载失败：{modelsErr}（不影响其他功能）</div>
@@ -407,7 +594,8 @@ export default function Settings({ profile, onChanged }: PageProps) {
                   <br />
                   <strong>账单落在应用创建者账号上</strong>：平台的额度错误码前缀是 <code>quota_</code>，
                   语义明确是 <em>Creator quota</em>（创建者额度）——<strong>不是每个终端用户扣自己的</strong>。
-                  也就是说这个站是开放注册的，任何注册用户调 AI 花的都是创建者的额度。
+                  因此它<strong>不是默认通道</strong>：上面那张卡里的「用本应用的额度试用」关着时，AI 一律不调用；
+                  使用者要自备 Key 或改用本机模型。护栏也照样生效（下面的日限与步数）。
                   <br />
                   <strong>本应用已经上了限额护栏</strong>：每天最多 {DEFAULT_QUOTA.dailyTasks} 件 AI 任务、
                   单件事最多 {DEFAULT_QUOTA.maxCallsPerTask} 步、全天最多 {DEFAULT_QUOTA.maxCallsPerDay} 次调用，
