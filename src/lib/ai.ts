@@ -1,5 +1,6 @@
 import { cloud } from '../cloud'
-import { currentAccess } from './billing'
+import { currentAccess, currentPreset, getByoModel, readUserKey } from './billing'
+import { streamByoChat } from './byoSend'
 import { DIMS, GREETING_RULES } from './constants'
 import { todayISO } from './format'
 import { createQuotaStore, DEFAULT_QUOTA, type QuotaStatus, type QuotaStorage } from './quota'
@@ -305,19 +306,11 @@ export function taskSubject(prefix: string, text: string): string {
   return key ? `${prefix}：${key.slice(0, 60)}(${key.length})` : prefix
 }
 
-/** 唯一的模型调用入口：只支持流式，逐帧累积文本。额度护栏就挡在这里。 */
+/** 唯一的模型调用入口：只支持流式，逐帧累积文本。计费门与额度护栏都挡在这里。 */
 export async function streamChat(opts: StreamOptions): Promise<string> {
   // 计费门在额度门之前：没付钱资格时连「今天还剩几次」都不该被消耗掉
   const access = currentAccess()
   if (!access.allowed) throw new Error(access.reason)
-  /**
-   * 走到 byo 就必须真的走 byo。**这里绝不允许"先用平台额度顶着"**：
-   * 那种"临时回落"正是本次改动要消灭的东西，而且它一旦发生就没人会察觉——
-   * 用户以为花的是自己的钱，实际记在你账上。BYO 发送器接上之前，这一档直接拒绝。
-   */
-  if (access.access === 'byo') {
-    throw new Error('自备 Key 通道的发送器还没接上（网关侧未完成），本功能暂不可用。不会改用本应用的额度。')
-  }
 
   const store = quotaStore()
   const day = todayISO()
@@ -325,8 +318,18 @@ export async function streamChat(opts: StreamOptions): Promise<string> {
   const gate = store.status(day, opts.task)
   if (!gate.allowed) throw new Error(gate.reasons.join('；'))
 
-  const model = await pickModel(opts.cheap === true)
-  if (!model) throw new Error('当前没有可用模型，请稍后重试')
+  /**
+   * 走到 byo 就**只**走 byo。这里绝不允许"先发不出去就改用平台额度顶着"：
+   * 那种临时回落正是本次改动要消灭的东西，而且它一旦发生没人会察觉——
+   * 用户以为花的是自己的钱，实际记在创建者账上。发送器失败时同样直接抛出去。
+   */
+  const byo = access.access === 'byo'
+  let model = ''
+  if (!byo) {
+    const picked = await pickModel(opts.cheap === true)
+    if (!picked) throw new Error('当前没有可用模型，请稍后重试')
+    model = picked
+  }
 
   let text = ''
   // 末帧才带 usage；逐帧记「最后一次」，循环结束后统一入账，避免重复计数
@@ -335,28 +338,46 @@ export async function streamChat(opts: StreamOptions): Promise<string> {
   let aborted = false
   let failure: unknown = null
   try {
-    // 置在 create 之前：create 自己抛错时请求也已经发出去了，额度是真花掉了
+    // 置在真正发请求之前：预检失败（没 Key、白名单不认）会多记一格额度。
+    // 宁可多记不可少记——这一档烧的是使用者自己的钱。
     started = true
-    const stream = await cloud.llm.chat.completions.create({
-      model,
-      messages: [
-        { role: 'system', content: opts.system },
-        { role: 'user', content: opts.user },
-      ],
-      stream: true,
-      stream_options: { include_usage: true },
-      ...(opts.json ? { response_format: { type: 'json_object' } } : {}),
-      ...(opts.signal ? { signal: opts.signal } : {}),
-    } as any)
+    if (byo) {
+      text = await streamByoChat({
+        preset: currentPreset(),
+        key: readUserKey(),
+        model: getByoModel(),
+        system: opts.system,
+        user: opts.user,
+        json: opts.json,
+        signal: opts.signal,
+        onDelta: opts.onDelta,
+        onReasoning: opts.onReasoning,
+        onUsage: (u) => {
+          lastUsage = u
+        },
+      })
+    } else {
+      const stream = await cloud.llm.chat.completions.create({
+        model,
+        messages: [
+          { role: 'system', content: opts.system },
+          { role: 'user', content: opts.user },
+        ],
+        stream: true,
+        stream_options: { include_usage: true },
+        ...(opts.json ? { response_format: { type: 'json_object' } } : {}),
+        ...(opts.signal ? { signal: opts.signal } : {}),
+      } as any)
 
-    for await (const chunk of stream as any) {
-      const delta = chunk?.choices?.[0]?.delta
-      if (delta?.reasoning_content) opts.onReasoning?.(delta.reasoning_content)
-      if (delta?.content) {
-        text += delta.content
-        opts.onDelta?.(delta.content)
+      for await (const chunk of stream as any) {
+        const delta = chunk?.choices?.[0]?.delta
+        if (delta?.reasoning_content) opts.onReasoning?.(delta.reasoning_content)
+        if (delta?.content) {
+          text += delta.content
+          opts.onDelta?.(delta.content)
+        }
+        if (chunk?.usage) lastUsage = chunk.usage
       }
-      if (chunk?.usage) lastUsage = chunk.usage
     }
   } catch (error) {
     aborted = (error as any)?.name === 'AbortError'

@@ -6,8 +6,9 @@
  * 这道门把这件事反过来：没有用户自己的 Key、也没人显式开试用开关，AI 一律不调用。
  *
  * 三条判定的顺序是刻意的：
- * 1. 有用户 Key → 走 byo（用户付）。
- * 2. 有 Key 但通道没接通 → **宁可拒绝，也不回落到平台额度**。
+ * 1. 自备通道**配置好了** → 走 byo（用户付）。
+ *    「配置好」跟着选的那一档走：要 Key 的厂商得有 Key，本机模型不需要 Key。
+ * 2. 配置好了但那一档**现在发不出去** → 宁可拒绝，也不回落到平台额度。
  *    静默回落是这里最坏的失败模式：不报错、不提示，只有账单在涨，
  *    而且涨的是别人的钱。测试里专门有一条钉住它。
  * 3. 只有创建者试用开关打开 → 走平台额度，明确标出 paidBy='creator'，
@@ -16,6 +17,7 @@
  * 默认值必须是「关」：读不到、存储坏了、抛异常，一律按关闭处理——
  * 宁可 AI 功能不能用，也不能悄悄花钱。
  */
+import { BYO_PRESETS, localPresets, type ChannelPreset } from './aiChannels'
 
 /** 创建者试用开关（默认关） */
 export const OWNER_TRIAL_KEY = 'wb_owner_trial'
@@ -23,15 +25,18 @@ export const OWNER_TRIAL_KEY = 'wb_owner_trial'
 export const BYO_KEY_KEY = 'wb_byo_key'
 /** 选了哪家厂商（与 Key 配套，同样是设备级） */
 export const BYO_PRESET_KEY = 'wb_byo_preset'
+/** 模型名按厂商分别记：换了厂商还留着上一家的模型名，只会得到一个莫名其妙的 404 */
+export const BYO_MODEL_PREFIX = 'wb_byo_model_'
 
 export type AiAccess = 'byo' | 'owner-trial' | 'none'
 export type PaidBy = 'user' | 'creator' | 'nobody'
 
 export interface AccessInput {
-  hasUserKey: boolean
+  /** 选的那一档要的东西齐了（要 Key 的有 Key，本机档不需要） */
+  byoConfigured: boolean
+  /** 选的那一档真的发得出去：实测能被浏览器直发，或本机服务探到了 */
+  byoSendable: boolean
   ownerTrial: boolean
-  /** 自备 Key 通道是否真的能发请求（本地网关在跑） */
-  byoReady: boolean
 }
 
 export interface AccessDecision {
@@ -47,16 +52,17 @@ export interface AccessDecision {
  * （同一个仓库里「谁能用 AI」写两遍，迟早一处严一处松。）
  */
 export function decideAccess(input: AccessInput): AccessDecision {
-  if (input.hasUserKey) {
-    if (input.byoReady) return { allowed: true, access: 'byo', paidBy: 'user', reason: '' }
+  if (input.byoConfigured) {
+    if (input.byoSendable) return { allowed: true, access: 'byo', paidBy: 'user', reason: '' }
     return {
       allowed: false,
       access: 'none',
       // 付款方写成 nobody 而不是 creator：这句话本身就是承诺——绝不悄悄记到创建者头上
       paidBy: 'nobody',
       reason:
-        '你填了自备 Key，但自备 Key 通道现在没接通（需要在自己电脑上跑本地网关）。' +
-        '这里**不会改用本应用的额度**——那等于让应用创建者替你付钱。请启动本地网关后重试。',
+        '你选的自备 Key 通道现在发不出去：那一家厂商实测不能被浏览器直发，或者本机模型服务还没启动。' +
+        '这里不会改用本应用的额度——那等于让应用创建者替你付钱。' +
+        '换一家能直发的厂商（DeepSeek / Kimi / OpenRouter / 阿里云百炼），或把本机 Ollama 跑起来。',
     }
   }
   if (input.ownerTrial) return { allowed: true, access: 'owner-trial', paidBy: 'creator', reason: '' }
@@ -65,25 +71,28 @@ export function decideAccess(input: AccessInput): AccessDecision {
     access: 'none',
     paidBy: 'nobody',
     reason:
-      'AI 功能需要自备模型 Key（DeepSeek / 智谱 / Kimi，花你自己账户的余额），' +
+      'AI 功能需要自备模型 Key（DeepSeek / Kimi / OpenRouter / 阿里云百炼，花你自己账户的余额），' +
+      '或者选「本机 Ollama」（不花钱，但要自己在电脑上装好并启动），' +
       '或由应用创建者在「设置 — AI 通道」里开启「用本应用的额度试用」。' +
       '本应用的额度记在创建者账号上，不默认替使用者承担。',
   }
 }
 
 /**
- * byo 通道的就绪状态。
- * 由接线层（本地网关探活 / 网关路由注册）显式置位，**默认 false**：
- * 未接通就等价于「不能发」，而不是「发不出去就换一条路」。
+ * 本机模型服务（Ollama）的探活结果。
+ *
+ * 为什么默认是「没在跑」：没探到就发，用户看到的是一句「网络错误」，
+ * 然后去反复重填 Key——那是把工程问题伪装成用户的错。探一次就知道了。
+ * 远端厂商不吃这个标志：它们的可达性由 CORS 实测决定（见 `aiChannels.ts`）。
  */
-let byoReady = false
+let localServiceReady = false
 
-export function setByoReady(v: boolean): void {
-  byoReady = v === true
+export function setLocalServiceReady(v: boolean): void {
+  localServiceReady = v === true
 }
 
-export function isByoReady(): boolean {
-  return byoReady
+export function isLocalServiceReady(): boolean {
+  return localServiceReady
 }
 
 function read(key: string): string | null {
@@ -112,12 +121,65 @@ export function setOwnerTrialEnabled(v: boolean): void {
   write(OWNER_TRIAL_KEY, v ? '1' : null)
 }
 
-/** 只看「有没有填」，不返回 Key 本身：调用方拿到 Key 的路径只有发请求那一处 */
+/** 只看「有没有填」，不返回 Key 本身：界面判断该不该显示「已配置」用这句就够了 */
 export function hasUserKey(): boolean {
   return String(read(BYO_KEY_KEY) ?? '').trim().length > 0
 }
 
-/** 把三处状态合成一个判定，供 streamChat 与界面共用 */
+/**
+ * 读 Key 本体。**唯一的调用方是自备通道的发送器**（发请求那一刻）。
+ * 界面上任何地方都不许用它显示原文——回填一次就等于把 Key 交给了截图、DOM 与日志。
+ */
+export function readUserKey(): string {
+  return String(read(BYO_KEY_KEY) ?? '').trim()
+}
+
+export function setUserKey(value: string | null): void {
+  const v = String(value ?? '').trim()
+  write(BYO_KEY_KEY, v ? v : null)
+}
+
+/** 当前选的是哪一档。脏值（旧版本残留、手改）一律回落到默认厂商，而不是随机挑一家。 */
+export function currentPreset(): ChannelPreset {
+  const id = String(read(BYO_PRESET_KEY) ?? '').trim()
+  return BYO_PRESETS.find((p) => p.id === id) ?? BYO_PRESETS[0]
+}
+
+/** 只认表里存在的档位：存进一个不认识的 id，下次读出来还是默认档 */
+export function setByoPresetId(id: string): void {
+  const hit = BYO_PRESETS.find((p) => p.id === id)
+  write(BYO_PRESET_KEY, hit ? hit.id : null)
+}
+
+/** 这一档要用的模型名；没选过就用厂商表里的第一个 */
+export function getByoModel(preset: ChannelPreset = currentPreset()): string {
+  const stored = String(read(BYO_MODEL_PREFIX + preset.id) ?? '').trim()
+  return stored || preset.models[0] || ''
+}
+
+export function setByoModel(presetId: string, model: string): void {
+  const v = String(model ?? '').trim()
+  write(BYO_MODEL_PREFIX + String(presetId ?? '').trim(), v || null)
+}
+
+/** 「自备通道配好了没」：要 Key 的厂商看有没有 Key，本机档没有 Key 这回事 */
+export function isByoConfigured(preset: ChannelPreset = currentPreset()): boolean {
+  return preset.requiresKey ? hasUserKey() : true
+}
+
+/** 「这一档现在发得出吗」：CORS 实测 + 本机探活，两个都是事实而不是愿望 */
+export function isByoSendable(preset: ChannelPreset = currentPreset()): boolean {
+  if (!preset.browserDirect) return false
+  if (localPresets().includes(preset)) return isLocalServiceReady()
+  return true
+}
+
+/** 把几处状态合成一个判定，供 streamChat 与界面共用 */
 export function currentAccess(): AccessDecision {
-  return decideAccess({ hasUserKey: hasUserKey(), ownerTrial: getOwnerTrialEnabled(), byoReady: isByoReady() })
+  const preset = currentPreset()
+  return decideAccess({
+    byoConfigured: isByoConfigured(preset),
+    byoSendable: isByoSendable(preset),
+    ownerTrial: getOwnerTrialEnabled(),
+  })
 }
