@@ -208,6 +208,31 @@ describe('流式回包', () => {
     expect(captured.signal).toBe(ctrl.signal)
   })
 
+  it('[DONE] 之后要把流关掉（不然连接挂着，agent 一轮八圈就是八个没关的流）', async () => {
+    // 注意：这里**故意不 close()** —— 厂商给完 [DONE] 之后把连接留着是真实存在的形态。
+    // 流要是已经自然关闭，cancel() 按规范就是空操作，那样写这条断言等于自证假绿。
+    let cancelled = false
+    const body = new ReadableStream<Uint8Array>({
+      start(c) {
+        c.enqueue(enc.encode(frame({ choices: [{ delta: { content: 'x' } }] })))
+        c.enqueue(enc.encode('data: [DONE]\n\n'))
+      },
+      cancel() {
+        cancelled = true
+      },
+    })
+    const out = await streamByoChat({
+      preset: preset('deepseek'),
+      key: KEY,
+      model: 'm',
+      system: 's',
+      user: 'u',
+      fetchImpl: (async () => response(200, body)) as never,
+    })
+    expect(out).toBe('x')
+    expect(cancelled).toBe(true)
+  })
+
   it('末帧的 token 数要交回给调用方（自费那一档，花的钱得能还给人家看）', async () => {
     let usage: any = null
     const body = sseBody([

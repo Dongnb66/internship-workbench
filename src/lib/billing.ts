@@ -17,7 +17,7 @@
  * 默认值必须是「关」：读不到、存储坏了、抛异常，一律按关闭处理——
  * 宁可 AI 功能不能用，也不能悄悄花钱。
  */
-import { BYO_PRESETS, localPresets, type ChannelPreset } from './aiChannels'
+import { BYO_PRESETS, type ChannelPreset } from './aiChannels'
 
 /** 创建者试用开关（默认关） */
 export const OWNER_TRIAL_KEY = 'wb_owner_trial'
@@ -170,7 +170,9 @@ export function isByoConfigured(preset: ChannelPreset = currentPreset()): boolea
 /** 「这一档现在发得出吗」：CORS 实测 + 本机探活，两个都是事实而不是愿望 */
 export function isByoSendable(preset: ChannelPreset = currentPreset()): boolean {
   if (!preset.browserDirect) return false
-  if (localPresets().includes(preset)) return isLocalServiceReady()
+  // 判的是**属性**不是对象身份：调用方递一份档位副本过来（组视图模型时很常见），
+  // 按身份比就会漏判成本机档以外的那一类，探活那道闸就白设了
+  if (preset.httpLocal === true) return isLocalServiceReady()
   return true
 }
 

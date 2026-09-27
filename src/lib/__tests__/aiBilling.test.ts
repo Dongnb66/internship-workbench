@@ -180,6 +180,15 @@ describe('「配置好了」跟着选的那一档走', () => {
     expect(currentPreset().id).toBe('deepseek')
   })
 
+  it('判定看的是档位自己的属性，不是对象身份（传一份副本也得认本机档）', async () => {
+    const { BYO_PRESETS } = await import('../aiChannels')
+    const copy = { ...BYO_PRESETS.find((p) => p.httpLocal === true)! }
+    setLocalServiceReady(false)
+    expect(isByoSendable(copy)).toBe(false)
+    setLocalServiceReady(true)
+    expect(isByoSendable(copy)).toBe(true)
+  })
+
   it('存储坏掉时读到的是「没配置」，AI 宁可不能用（不抛错也不猜测）', () => {
     const real = (globalThis as any).localStorage
     ;(globalThis as any).localStorage = {

@@ -143,9 +143,16 @@ async function readSse(
     }
   }
   try {
-    reader.releaseLock()
+    // [DONE] 之后必须真的把流关掉。不关的话连接一直挂着：智能体一件事要转 8 圈，
+    // 一圈一个没关的响应流，八个标签页来回点几次就是几十个悬着的连接。
+    await reader.cancel()
   } catch {
     // 已经关掉了不必再管
+  }
+  try {
+    reader.releaseLock()
+  } catch {
+    // 同上
   }
   if (usage) onUsage?.(usage)
   return text

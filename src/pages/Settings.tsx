@@ -618,7 +618,7 @@ export default function Settings({ profile, onChanged }: PageProps) {
                   调用链路是「本应用前端 → 本应用的云服务端 → 模型提供方」。
                   厂商 Key 存在<strong>云服务端</strong>，前端只出示应用标识 + 你的登录态
                   （SDK 明确不自己构造 Authorization/厂商请求头），
-                  所以<strong>不需要你填任何 API Key</strong>。
+                  所以走这一档<strong>不用你自己填 Key</strong>——也正因为不用你填，这笔钱不会记在你头上。
                   <br />
                   <strong>账单落在应用创建者账号上</strong>：平台的额度错误码前缀是 <code>quota_</code>，
                   语义明确是 <em>Creator quota</em>（创建者额度）——<strong>不是每个终端用户扣自己的</strong>。
