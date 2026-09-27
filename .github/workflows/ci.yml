@@ -2,9 +2,12 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # 本仓库远端只有 master，原先只写 main ⇒ push 永远不触发，四道门一次都没在 CI 上跑过，
+    # 而且症状是静默的（Actions 页面不会红，只会一直空着）。两个名字都列上，理由见
+    # src/lib/__tests__/ciTrigger.test.mjs。
+    branches: [main, master]
   pull_request:
-    branches: [main]
+    branches: [main, master]
   workflow_dispatch:
 
 concurrency:

@@ -30,6 +30,8 @@
 - 测试基线 **538 → 669**（40 → 50 个测试文件），提交信息里逐轮记录增量与变异检查实况。**顺手修了一个真的洞**：`vitest.config.ts` 的 include 里原本不含 `miniprogram/**`，也就是那个目录下的测试**从来没被执行过**。
 
 ### Fixed
+- **CI 一次都没跑过，而症状是静默的**（`.github/workflows/ci.yml` + 新 `src/lib/__tests__/ciTrigger.test.mjs` 3 条断言）。触发器写的是 `branches: [main]`，而这个仓库远端**只有 `master`**（`git ls-remote --heads origin` 只有一条 `refs/heads/master`，`origin/HEAD → origin/master`）—— 于是 push 永远不命中触发器，四道门从未在 CI 上执行过，而 Actions 页面不会变红、只会一直空着，本地全绿把这个洞盖得严严实实。改成 `branches: [main, master]`（不改分支名：改名会牵动发布源目录与已分享链接，收益不抵代价）。断言用 YAML 解析式取列表并**先剔注释行**（第一版没剔，我自己加的那段解释注释把解析器挡死了，报的是"没解析出分支列表"而不是假绿 —— 那条 `length > 0` 自检就是为了这一刻存在的）。4 个变异体（去掉 test 步骤 / 产物缺失不报错 / push 只留 main / 分支列表解析为空）全部被杀。**这条修复本身能不能让 CI 真跑起来，我读不到**：私有仓匿名 API 返 404、会话里没有 `gh`，所以只能由他到 Actions 页面确认首次运行。
+
 
 - **抓取器真跑之后才暴露的三件事**（`crawler/run.mjs` / `crawler/sources/offerbiu.mjs` / `extension/collector.js`）。这三条都是「离线全绿、一跑真站点就露馅」的type，所以每条都留了一个能反复跑的证据：
   1. **CLI 入口不可测**：`run.mjs` 结尾是无条件的 `main()`，测试文件一 `import` 它就把浏览器拉起来跑一遍真抓取。改成 `pathToFileURL(process.argv[1]).href` 比对的入口守卫（不手拼 `file://`，Windows 上会少一道斜杠变成静默不执行），`writeOutput` 一并导出，日报的 4 条断言因此能恢复回来。
