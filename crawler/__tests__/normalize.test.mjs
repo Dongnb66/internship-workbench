@@ -184,6 +184,33 @@ describe('mergeDetail', () => {
   it('没有详情时原样返回', () => {
     expect(mergeDetail(job(), null).title).toBe('后端开发实习生')
   })
+
+  it('列表页那个值带字体反爬的私有区字符 → 用详情页的干净值，不再是「列表优先」', () => {
+    // 实习僧实测：列表标题是 6 个 U+E000 段字符 + 「策略实习」，公司名读成「互联网/游戏/软件/…以上」，
+    // 而同一岗位详情页那份是 `Agent策略实习生` + `百度`，一个乱码字符都没有。
+    // 私有区字符一律写成 \u 转义而不是直接粘进源码：那类码位经编辑器/终端一转手就会被吞掉，
+    // 吞掉的后果是这条断言**悄悄变成在测「列表优先」**，红绿都不说明问题。
+    const GARBLED = '\uE600\uE620\uE640\uE660\uE680\uE6A0'  // 6 个私有区码位，刻意写成转义而不是粘真字符：那类码位经编辑器/终端一转手就被吞掉，吞掉之后这条断言就悄悄变成在测「列表优先」
+    const merged = mergeDetail(
+      job({ title: `${GARBLED}策略实习`, company: `互联网/游戏/软件/${GARBLED.slice(0, 3)}以上`, salary: '' }),
+      { title: 'Agent策略实习生', company: '百度', salary: '250-400/天', raw: '完整 JD' },
+    )
+    expect(merged.title).toBe('Agent策略实习生')
+    expect(merged.company).toBe('百度')
+    expect(merged.salary).toBe('250-400/天')
+  })
+
+  it('两边都脏时保留列表那份（不做「谁长取谁」那种没根据的猜测）', () => {
+    const dirtyList = '\uE600前端实习生'
+    const dirtyDetail = '\uE600后端实习生'
+    expect(mergeDetail(job({ title: dirtyList }), { title: dirtyDetail }).title).toBe(dirtyList)
+    // 反向也钉住：详情侧干净时它才该赢
+    expect(mergeDetail(job({ title: dirtyList }), { title: '前端实习生' }).title).toBe('前端实习生')
+  })
+
+  it('列表值干净时仍然列表优先（别的站靠这条不回退）', () => {
+    expect(mergeDetail(job({ title: '后端开发实习生' }), { title: '招聘信息详情页' }).title).toBe('后端开发实习生')
+  })
 })
 
 describe('adoptDetail：详情页那份正文到底要不要采纳', () => {

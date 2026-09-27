@@ -69,6 +69,14 @@ async function main() {
   try {
     const page = await context.newPage()
 
+    /** 打开一个详情页夹具，返回它采到的那一条（⑥⑦⑧ 三组共用） */
+    const detailJob = async (file) => {
+      await page.goto(pathToFileURL(path.join(FIXTURES, file)).href, { waitUntil: 'domcontentloaded' })
+      await page.waitForTimeout(300)
+      const res = await collect(page, { mode: 'detail' })
+      return (res?.jobs ?? [])[0] ?? {}
+    }
+
     // ① 列表页：6 张重复卡片，字段必须逐条对上
     const listUrl = pathToFileURL(path.join(FIXTURES, 'mock-job-list.html')).href
     await page.goto(listUrl, { waitUntil: 'domcontentloaded' })
@@ -130,6 +138,23 @@ async function main() {
     check('多容器页 raw 没退到整页（无推荐位）', multiRaw.includes('相关推荐'), false)
     check('多容器页 city', multiOne.city, '上海')
     check('多容器页 salary', multiOne.salary, '250-350元/天')
+
+    // ⑥ 页面里没有 <h1>、岗位名与公司名只在 <title> 上（实习僧详情页的真实形状）
+    const titleOne = await detailJob('mock-job-detail-title.html')
+    check('标题页 company（从「百度实习生招聘」那段里剥出来）', titleOne.company, '百度')
+    check('标题页 title（剥掉尾部「实习招聘」）', titleOne.title, 'Agent策略实习生')
+    check('标题页 salary', titleOne.salary, '250-400元/天')
+    check('标题页 city', titleOne.city, '北京')
+
+    // ⑦ 反向：`<title>` 是「公司招聘 - 岗位」，公司段在前，不能把公司名当岗位
+    const brandOne = await detailJob('mock-job-detail-brandtitle.html')
+    check('公司名在前的 title 页 · title', brandOne.title, '大模型算法实习生')
+    check('公司名在前的 title 页 · company', brandOne.company, '星野科技')
+
+    // ⑧ 页面上压根没有公司名（托管平台自己的页面）：宁可不给，也不把平台名写进公司字段
+    const platOne = await detailJob('mock-job-detail-platform.html')
+    check('平台页 company（不能写成「智联」）', platOne.company, '')
+    check('平台页 title', platOne.title, 'UI设计实习生')
   } finally {
     await context.close()
     await rm(profileDir, { recursive: true, force: true }).catch(() => {})

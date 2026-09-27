@@ -33,6 +33,13 @@ export const INTERN_RE = /(实习|见习|Intern|intern|暑期|日常实习)/
 /** 明确的非目标标记（社招 / 年限要求），用于 --mode intern 时反向排除 */
 export const SENIOR_RE = /(社招|社会招聘|资深|高级专家|总监|VP|负责人|10年以上)/
 
+/**
+ * 自定义字体反爬落在文本里的痕迹：站点把数字/常用字映射到 Unicode 私有区再用自己的字体渲染，
+ * DOM 里拿到的就是 U+E000–U+F8FF 这些码位（页面上看是个方框）。
+ * 抓取器**不去解这层映射**（那要逆向对方的字体文件），只把它当成「这一侧的值不可信」的标记。
+ */
+const OBFUSCATED = /[\uE000-\uF8FF]/
+
 export function cleanText(value) {
   return String(value ?? '')
     .replace(/\u00a0/g, ' ')
@@ -153,11 +160,20 @@ export function mergeJobs(seenKeys, jobs) {
 
 /**
  * 列表页的短摘要 + 详情页的完整 JD 合成一条。
- * 详情页缺的字段用列表页的补，列表页缺的用详情页的补；JD 正文一律以详情页为准。
+ * JD 正文一律以详情页为准；其余字段**先挑干净的那一侧**：
+ * 带自定义字体反爬留下的私有区字符（U+E000–U+F8FF，页面上是个空框）的值一律不可信。
+ * 实习僧实测：列表标题是 ``（6 个私有区字符）+ 公司名读成「互联网/游戏/软件/…以上」，
+ * 而同一岗位详情页那份是 `Agent策略实习生` + `百度`、一个乱码字符都没有。
+ * 老规则「列表优先」等于让乱码压掉干净数据 —— 产出看着像抓到了，导进岗位池就是一堆空框。
+ * 两边都脏时保留列表那份，不做「谁长取谁」这种没根据的猜测。
  */
 export function mergeDetail(listJob, detailJob) {
+  const usable = (value) => {
+    const s = cleanText(value)
+    return s && !OBFUSCATED.test(s) ? s : ''
+  }
+  const pick = (a, b) => usable(a) || usable(b) || cleanText(a) || cleanText(b)
   if (!detailJob) return { ...listJob }
-  const pick = (a, b) => cleanText(a) || cleanText(b)
   return {
     company: pick(listJob?.company, detailJob?.company),
     title: pick(listJob?.title, detailJob?.title),

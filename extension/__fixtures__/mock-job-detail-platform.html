@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <!-- 托管平台自己的页面：`<title>` 里只有「岗位-平台」，公司名压根不在页面上。
+         这一页钉住「宁可不给公司名，也不把平台名写进去」——写错的字段比空字段更难发现，
+         它会一路跟着导入岗位池、进匹配评分、进投递看板。 -->
+    <title>UI设计实习生-智联招聘</title>
+  </head>
+  <body>
+    <div class="job">
+      岗位职责：负责移动端与后台管理界面的视觉设计，参与组件规范与走查；
+      任职要求：设计相关专业在读，熟悉 Figma，每周到岗 3 天以上，实习 3 个月起。
+      工作地点：深圳 · 薪资 150-200元/天
+    </div>
+
+    <script src="../collector.js"></script>
+    <script>
+      const out = document.createElement('pre')
+      out.id = 'iwb-out'
+      try {
+        const r = window.__iwbCollectJobs()
+        out.textContent = 'COUNT=' + r.count + '\n' + JSON.stringify(r.jobs, null, 1)
+      } catch (e) {
+        out.textContent = 'ERROR ' + e.message
+      }
+      document.body.appendChild(out)
+    </script>
+  </body>
+</html>

@@ -310,13 +310,39 @@
     return bestLen >= MIN_JD_CHARS ? best : document.body
   }
 
+  /** `<title>` 段尾的招聘样板词，剥掉才是干净的公司名 / 岗位名（刻意不含裸「实习」二字：那是岗位名的一部分） */
+  const TITLE_BOILER = /(?:校园招聘|社会招聘|应届生招聘|实习生招聘|实习招聘|招聘|校招|社招)+$/
+
+  /** 平台自己的名字混在 `<title>` 里，绝不能当公司名 */
+  const PLATFORM_WORD = /(实习僧|BOSS直聘|boss直聘|牛客|猎聘|智联|前程无忧|51job|Moka|官网|首页|广告|推荐|登录|注册)/
+
+  /** 「{短品牌}招聘」这种段是站点招牌，不是岗位名 */
+  const BRAND_SEGMENT = /^.{2,10}(?:招聘|校招|社招)$/
+
+  /** 「{X}实习生招聘」这一种段：X 就是公司名，可它带着「招聘」，会被 TITLE_WORDS 一把挡掉 */
+  const COMPANY_TAIL = /^(.{2,20}?)(?:实习生?|应届生?|校园)?(?:招聘|校招|社招)$/
+
+  /** 详情页 `<title>` 的分段，多数站点是「{岗位}-{公司}-{平台}」或「{公司}招聘 - {岗位}」 */
+  function titleParts() {
+    return String(document.title || '')
+      .split(/[-_|｜—–]/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+  }
+
   /** 详情页兜底：整页只有一个岗位时，卡片检测会因为「少于 4 个」而失效 */
   function extractDetailPage(maxJd) {
     const limit = maxJd > 0 ? maxJd : 12000
     const h1 = document.querySelector('h1')
-    const title = (h1 ? txt(h1) : '') || document.title
-    const raw = txt(pickDetailBody()).slice(0, limit)
-    if (!raw || raw.length < MIN_JD_CHARS) return []
+    const parts = titleParts()
+    // 没有 <h1> 的站点（实习僧详情页就是这样）只能从 <title> 里挑「像岗位」的那一段；
+    // 整串 document.title 直接当岗位名会写成「…-…实习生招聘-实习僧」，那是三个字段挤在一格里。
+    const fromTitle = parts.find((p) => TITLE_WORDS.test(p) && !BRAND_SEGMENT.test(p) && !PLATFORM_WORD.test(p))
+    const rawTitle = (h1 ? txt(h1) : '') || fromTitle || document.title
+    const title = rawTitle.replace(TITLE_BOILER, '') || rawTitle
+    const body = txt(pickDetailBody()).slice(0, limit)
+    if (!body || body.length < MIN_JD_CHARS) return []
+    const raw = body
 
     // 城市与薪资往往在正文容器之外（页面头部的信息条），所以探测范围要放宽到
     // 「h1 所在容器 + 正文」，而不是只搜正文。
@@ -325,11 +351,25 @@
 
     // 公司名从 <title> 里捞：常见格式是「岗位 - 公司 - 平台」
     let company = ''
-    for (const part of String(document.title || '').split(/[-_|｜—–]/)) {
-      const p = part.trim()
+    for (const part of parts) {
+      const p = part.replace(TITLE_BOILER, '')
+      // 这一段刻意**不**再挡平台名：能走到这里说明它已同时满足「含公司特征词」和「不含岗位词」，
+      // 而各家平台的招牌名（实习僧 / BOSS直聘 / 牛客 / 智联招聘 / 前程无忧）一条都进不来 —— 变异测试
+      // 证明这个守卫在这条分支上永远不被触发。真正会撞上平台名的是下面那条兜底分支，那边有挡。
       if (p.length >= 2 && p.length <= 30 && COMPANY_HINT.test(p) && !TITLE_WORDS.test(p)) {
         company = p
         break
+      }
+    }
+    if (!company) {
+      // 第一段是岗位，不参与「公司名」判定，否则「XX招聘」这种招牌会被当成岗位、
+      // 而真正的公司段带着「招聘」二字反而过不了 TITLE_WORDS 那关。
+      for (const part of parts.slice(1)) {
+        const m = COMPANY_TAIL.exec(part)
+        if (m && !PLATFORM_WORD.test(m[1]) && !TITLE_WORDS.test(m[1])) {
+          company = m[1]
+          break
+        }
       }
     }
 
