@@ -13,7 +13,8 @@ import type { Profile } from '../types'
  */
 const MODEL_CHOICE_KEY = 'wb_model_choice'
 
-let cachedModel: string | null = null
+// 按档分开缓存：见 pickModel 的注释
+let cachedModel = new Map<boolean, string>()
 let cachedModels: UsableModel[] | null = null
 
 export interface UsableModel {
@@ -65,6 +66,40 @@ export function modelCostLabel(m?: Pick<UsableModel, 'id' | 'credits' | 'reasoni
   return m.reasoning ? `${base} · 思考型，更慢` : base
 }
 
+/**
+ * 目录倍率文案 → 数字（纯解析，便于断言）。实测目录里有「x0.06 credits」与「x0.05」两种写法。
+ *
+ * **不可解析时返回 null，绝不返回 0**：0 会被当成「免费」而永远当选，
+ * 而 `auto` 那类「按任务浮动」是根本没下发倍率——那是**未知价格**，不是便宜。
+ *
+ * 注意 `modelCostLabel` 走的是另一条路：它要**原样显示平台给的文本**
+ * （`x0.60` 不该被我们打印成 `x0.6`），只有做数值比较时才用这个解析。
+ */
+export function modelRate(m: Pick<UsableModel, 'credits'>): number | null {
+  const text = String(m.credits ?? '').replace(/credits?/i, '').trim().replace(/^x/i, '')
+  if (!text) return null
+  const n = Number(text)
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
+/**
+ * 挑目录里**倍率最低**的模型 id；一个倍率都没下发时返回 null（调用方回退默认）。
+ * 并列时偏向非思考型：同样便宜，慢的那个别拿去转循环——巡检一圈要打 1–8 次模型，
+ * 而默认档 `auto` 恰好是 `onlyReasoning` 的思考型（实测），所以这条不是洁癖。
+ */
+export function pickCheapModel(models: Array<Pick<UsableModel, 'id' | 'credits' | 'reasoning'>>): string | null {
+  let best: { id: string; rate: number; reasoning: boolean } | null = null
+  for (const m of models) {
+    const rate = modelRate(m)
+    if (rate === null) continue
+    const reasoning = m.reasoning === true
+    const better =
+      !best || rate < best.rate || (rate === best.rate && best.reasoning && !reasoning)
+    if (better) best = { id: m.id, rate, reasoning }
+  }
+  return best?.id ?? null
+}
+
 export function getModelChoice(): string | null {
   try {
     return localStorage.getItem(MODEL_CHOICE_KEY)
@@ -81,23 +116,38 @@ export function setModelChoice(id: string | null): void {
   } catch {
     // localStorage 不可用（隐私模式等）：本次会话内仍可通过 pickModel 兜底
   }
-  cachedModel = null
+  cachedModel = new Map()
 }
 
 /**
  * 决定本次调用用哪个模型：
- * 1. 用户在设置页选过的模型，且它仍在可用目录里 → 用它；
- * 2. 否则回退到目录第一个可用模型（旧行为，保证永远有模型可调）。
+ * 1. `cheap=true`（智能体循环）→ 目录里倍率最低的那个；一个倍率都没下发时回退到下面的默认逻辑，
+ *    而不是「没有模型可用」；
+ * 2. 用户在设置页选过的模型，且它仍在可用目录里 → 用它；
+ * 3. 否则回退到目录第一个可用模型（旧行为，保证永远有模型可调）。
  * 所选模型被平台下架/禁用时不报错，静默回退——评估失败比换模型更糟。
+ *
+ * 缓存**按档分开**（`Map<boolean, string>`）而不是一个变量：巡检走便宜档、
+ * 单次评估走用户档，如果共用一个格子，谁先调用就把另一个也冻在那个答案上——
+ * 症状是「用户在设置页换了模型，但跑过一次巡检之后又变回便宜档」，极难归因。
  */
-export async function pickModel(): Promise<string | null> {
-  if (cachedModel) return cachedModel
+export async function pickModel(cheap = false): Promise<string | null> {
+  const hit = cachedModel.get(cheap)
+  if (hit) return hit
   const models = await listUsableModels()
   if (!models.length) return null
+  if (cheap) {
+    const cheapest = pickCheapModel(models)
+    if (cheapest) {
+      cachedModel.set(cheap, cheapest)
+      return cheapest
+    }
+  }
   const choice = getModelChoice()
   const chosen = choice ? models.find((m) => m.id === choice) : null
-  cachedModel = (chosen ?? models[0]).id
-  return cachedModel
+  const picked = (chosen ?? models[0]).id
+  cachedModel.set(cheap, picked)
+  return picked
 }
 
 export interface StreamOptions {
@@ -118,6 +168,13 @@ export interface StreamOptions {
    * 只用于「它还在动」的进度提示，绝不混进正文——推理内容不是给用户看的结论。
    */
   onReasoning?: (text: string) => void
+  /**
+   * 走目录里倍率最低的模型。**智能体循环必须带它**：一圈一次调用、最多 8 圈，
+   * 选错档不是一点点差价，而额度记在**创建者**账号上（AGENT_PLAN §3.4）。
+   * 单次评估/话术不传——那是用户自己在设置页选的档。
+   * 目录一个倍率都没下发时回退到默认逻辑，不会「因为没有倍率而调不到模型」。
+   */
+  cheap?: boolean
 }
 
 /**
@@ -255,7 +312,7 @@ export async function streamChat(opts: StreamOptions): Promise<string> {
   const gate = store.status(day, opts.task)
   if (!gate.allowed) throw new Error(gate.reasons.join('；'))
 
-  const model = await pickModel()
+  const model = await pickModel(opts.cheap === true)
   if (!model) throw new Error('当前没有可用模型，请稍后重试')
 
   let text = ''

@@ -111,6 +111,23 @@ describe('模型调用点的额度归属标记覆盖率（推导式）', () => {
     expect(offenders, `这些页面自己拼了额度标签：${offenders.join('　')}`).toEqual([])
   })
 
+  it('智能体循环的调用点必须走便宜档（§3.4：一圈一次调用，默认档是思考型）', () => {
+    // 循环是唯一「一件事打多次模型」的调用方，所以它每次调用都该带 cheap: true。
+    // 这条检查是推导式的：将来新增一个循环场景（投递决策之外的），漏标就红。
+    const runFile = path.join(SRC, 'lib', 'agentRun.ts')
+    const source = readFileSync(runFile, 'utf8')
+    const missing = []
+    let index = 0
+    for (const m of source.matchAll(/\bstreamChat\s*\(/g)) {
+      const openParen = m.index + m[0].length - 1
+      const text = callText(source, openParen)
+      if (!/cheap:\s*true/.test(text)) missing.push(`agentRun.ts#${index}`)
+      index += 1
+    }
+    expect(index, 'agentRun.ts 里没扫到 streamChat 调用点，说明接线被改掉了').toBeGreaterThan(0)
+    expect(missing, `这些循环调用点没走便宜档：${missing.join('、')}`).toEqual([])
+  })
+
   it('streamChat 自己内部真的查了额度闸（否则调用点标了名也没人挡）', () => {
     const ai = readFileSync(path.join(SRC, 'lib', 'ai.ts'), 'utf8')
     // 三件事缺一不可：拿到 store、问额度、被拒时**抛错**、花过就记账

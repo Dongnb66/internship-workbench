@@ -62,6 +62,9 @@ function askFor(taskLabel: string, signal?: AbortSignal) {
       user: buildAgentUserMessage(messages),
       // JSON 模式：循环靠「每轮一个 JSON 对象」驱动，模型跑题输出散文时宁可失败也不要猜
       json: true,
+      // 循环是这里唯一「一件事打多次模型」的调用方：强制走目录里倍率最低的一档（§3.4）。
+      // 漏标由推导式断言兜底（aiQuotaCoverage），不是靠人记得。
+      cheap: true,
       signal,
     })
 }
