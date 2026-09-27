@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from 'node:fs'
+import { readFileSync, readdirSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -77,5 +77,25 @@ describe('Key 的可见性（源码级）', () => {
     const src = readFileSync(path.join(SRC, 'lib', 'ai.ts'), 'utf8')
     expect((src.match(/streamByoChat\(/g) ?? []).length).toBe(1)
     expect((src.match(/cloud\.llm\.chat\.completions\.create\(/g) ?? []).length).toBe(1)
+  })
+
+  it('整个前端只有一处能碰平台模型接口（"唯一入口"这件事必须有人守）', () => {
+    // 所有门都挂在 streamChat 上：只要有人新开一处 `cloud.llm.chat`，计费门、额度台账、
+    // 脱敏就全部绕过了，而**代码不会报错、测试也不会红**——所以这一条必须钉住。
+    const walk = (dir, acc = []) => {
+      for (const name of readdirSync(path.join(SRC, dir))) {
+        if (name === '__tests__' || name === 'node_modules') continue
+        const rel = `${dir}/${name}`
+        if (statSync(path.join(SRC, rel)).isDirectory()) acc.push(...walk(rel))
+        else if (/\.(ts|tsx)$/.test(name)) acc.push(rel.replace(/^\.\//, ''))
+      }
+      return acc
+    }
+    const hits = walk('.')
+      .filter((rel) => /cloud\.llm\.chat/.test(readFileSync(path.join(SRC, rel), 'utf8')))
+      .sort()
+    expect(hits, `平台模型接口的调用点必须只有 lib/ai.ts，多一处就是一条绕过所有门的门路：${hits.join('、')}`).toEqual([
+      'lib/ai.ts',
+    ])
   })
 })

@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -69,5 +69,23 @@ describe('小程序 streamChat 上的计费门', () => {
 
   it('抛出去的就是门给的那句话（页面直接把 errText(error) 显示给用户）', () => {
     expect(aiSource).toMatch(/throw new Error\(\s*access\.reason\s*\)/)
+  })
+
+  it('小程序里也只有一处能碰平台模型接口（同一条"唯一入口"要两端都守）', () => {
+    const root = path.resolve(here, '..') // miniprogram/
+    const walk = (dir, acc = []) => {
+      for (const name of readdirSync(path.join(root, dir))) {
+        if (name === '__tests__' || name === 'node_modules') continue
+        const rel = `${dir}/${name}`
+        const full = path.join(root, rel)
+        if (statSync(full).isDirectory()) walk(rel, acc)
+        else if (/\.js$/.test(name)) acc.push(rel.replace(/^\.\//, ''))
+      }
+      return acc
+    }
+    const hits = walk('.')
+      .filter((rel) => /cloud\.llm\.chat/.test(readFileSync(path.join(root, rel), 'utf8')))
+      .sort()
+    expect(hits, `小程序侧的平台模型调用点必须只有 utils/ai.js：${hits.join('、')}`).toEqual(['utils/ai.js'])
   })
 })
