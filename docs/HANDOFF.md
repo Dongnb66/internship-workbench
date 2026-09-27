@@ -110,12 +110,15 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
   公网开放注册收口成邀请码；小程序那一端挂了同名计费门（默认拒绝）。
 - 测试：**50 个文件 / 672 条断言全绿**；`tsc -b`、`oxlint`（0 error）、`vite build` 均通过。
 - 最近提交（倒序）：推送状态更正 → 注册改回默认开放（推翻同日那版收口）→ 唯一入口两端守卫 → 自查修两个真 bug → 小程序三道上限 → 本地交付（邀请码生成器 + 文档）→ 试用开关只认创建者账号 → 小程序计费门 → 注册收口 → 设置页配 Key → 自备 Key 直发器。
-- **已推到私有仓** `origin/master`（`058ba0d..7feb9a7`，普通 fast-forward），并已按第 6 节发布到线上（第 14 次，内容 = `7feb9a7`）。
-- **线上站已发到第 14 次，内容 = `7feb9a7`**（2026-09-27 由 WorkBuddy 发布，仍是原域名 `-47024`）。
+- **已推到私有仓** `origin/master`（截至 `5f2a30e`），并已按第 6 节发布到线上（内容 = `5f2a30e`；**第几次发布我读不到平台记录，不写这个序号**）。
+- **线上站内容 = `5f2a30e` 的前端构建**（2026-09-27 由 WorkBuddy 发布，仍是原域名 `-47024`；发布源是 `Documents\GitHub` 那份 clone，我实测其 `HEAD=5f2a30e`、`git status` 0 项）。
    核对方式不是听它说成功：线上 HTML 引的 bundle 是 `assets/index-Dg4AeK0-.js`（585,961 字节），
-   我在本目录按 `7feb9a7` 重新构建出的**文件名与字节数完全相同**，且线上包里
-   `api.deepseek.com` / `openrouter.ai` / `127.0.0.1:11434` / `/v1/models` 从「搜不到」变成「有」，
-   「新邮箱不再自行注册」这句旧文案变成 0 命中、「新邮箱会自动开一个」出现 —— 版本、口径两件事都对上了。
+   我在本目录按 `5f2a30e` 重新构建出的产物 **sha256 与线上逐字节相同**（`fd80e6f2…`），且线上包里
+   `api.deepseek.com` / `127.0.0.1:11434` / `/v1/models` 有、旧文案「新邮箱不再自行注册」0 命中。
+   ⚠️ **但"第 15 次发布成功"这件事在线上产物层面是不可证明的**：`7feb9a7 → 5f2a30e` 只动了
+   `crawler/ · extension/ · CHANGELOG · docs`，前端源码一行没动，所以文件名、字节数、内容全与上一次相同。
+   能区分二者的只有平台侧部署记录。从下一次发布起用内容型判别器：
+   `curl -s <线上>/ | grep app-version`（标记由 `scripts/appVersionPlugin.mjs` 注入，见第 6 节第 4 条）。
 - 已知缺口与优先级在 `docs/BENCHMARK.md` 第二节（P0：渠道能力边界表、漏斗转化统计、跟进节奏）。
 
 ### 5b. 只有创建者本人能做的四件事（代码到不了的那一半）
@@ -148,6 +151,15 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
    ```
 2. 发布后**让用户强刷（Ctrl+F5）**。本项目多次出现「功能没生效」的误报，首因都是浏览器拿着旧 bundle。
 3. 改完文案/UI 必须真打开线上链接确认，不能只看发布工具返回的 `verified`。
+4. **判断"线上是哪一版"只能看内容证据，不能看时间证据。** 这条 2026-09-27 实测踩过：
+   发 `5f2a30e` 时前端源码一行没动（`git diff --name-only <旧>..<新> -- src public index.html vite.config.ts` 输出为空），
+   于是产物文件名、字节数、内容全与上次相同 —— "已发新码"和"还在跑旧产物"从线上**无法区分**。
+   当时唯一像证据的是 `ETag` / `Last-Modified`，而我抓到 mtime 在**没有任何新提交**的情况下自己往前走了 12 分钟
+   （沙箱重启同样改它，连抓 3 次值稳定，说明那是一次真的重建）。所以时间戳会被重启推前，**不能**当发布判别器。
+   现在有了内容型判别器：`scripts/appVersionPlugin.mjs` 把 `package.json` 的 version 注进 `dist/index.html`，
+   一句话可问 —— `curl -s https://internship-workbench-47024.app.workbuddy.host/ | grep app-version`。
+   版本号只有 package.json 一个来源，任何地方都不许写死字面量（写死的标记升级后就是假话，比没标记更坏），
+   这条由 `scripts/__tests__/appVersion.test.mjs` 双向钉住：既反查配置文件里有没有字面量，也反查插件是否真的挂进 `plugins`。
 
 ## 7. 接手方拿不到的东西（交接时最容易被忽略的一节）
 
