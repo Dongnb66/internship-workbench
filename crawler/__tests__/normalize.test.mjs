@@ -19,6 +19,8 @@ import {
   screenTitle,
   stamp,
   toText,
+  adoptDetail,
+  hydrateReport,
 } from '../lib/normalize.mjs'
 import { SITES, detectSiteByUrl, findSite } from '../sites.mjs'
 
@@ -181,6 +183,96 @@ describe('mergeDetail', () => {
 
   it('没有详情时原样返回', () => {
     expect(mergeDetail(job(), null).title).toBe('后端开发实习生')
+  })
+})
+
+describe('adoptDetail：详情页那份正文到底要不要采纳', () => {
+  it('详情正文更长才采纳', () => {
+    const v = adoptDetail(job({ raw: '列表摘要' }), { raw: '这是一份明显更长的详情页岗位正文' })
+    expect(v.adopt).toBe(true)
+  })
+
+  it('详情正文比列表摘要还短 → 不采纳，且必须给出带上两个长度的原因（旧行为是静默丢掉）', () => {
+    const v = adoptDetail(job({ raw: 'x'.repeat(125) }), { raw: 'y'.repeat(19) })
+    expect(v.adopt).toBe(false)
+    expect(v.reason).toContain('19')
+    expect(v.reason).toContain('125')
+  })
+
+  it('长度相等不重写成自己，原因也不能是空的', () => {
+    const v = adoptDetail(job({ raw: 'abcdef' }), { raw: 'abcdef' })
+    expect(v.adopt).toBe(false)
+    expect(v.reason.length).toBeGreaterThan(0)
+  })
+
+  it('详情页压根没读到正文（没返回条目 / 返回空白）→ 原因要说「没读到」，别和「太短」混成一条', () => {
+    expect(adoptDetail(job(), { raw: '   ' }).reason).toContain('没读到')
+    expect(adoptDetail(job(), { raw: '' }).reason).toContain('没读到')
+    expect(adoptDetail(job(), null).reason).toContain('没读到')
+    expect(adoptDetail(job(), undefined).reason).toContain('没读到')
+  })
+})
+
+describe('hydrateReport：补 JD 这一步不许静默', () => {
+  it('有采纳就照常报数', () => {
+    const lines = hydrateReport({ plan: 2, adopted: 2, refusals: [] })
+    expect(lines.join('\n')).toContain('补全 2 条')
+    expect(lines.join('\n')).not.toContain('⚠️')
+  })
+
+  it('一条都没补上但确实计划要补 → 必须报 ⚠️（这就是实习僧当时的症状：日志只说「补全 0 条」）', () => {
+    const lines = hydrateReport({ plan: 3, adopted: 0, refusals: [{ at: 1, reason: '详情页正文比列表摘要短（19<125）' }] })
+    expect(lines.length).toBeGreaterThan(1)
+    expect(lines.some((l) => l.includes('⚠️') && l.includes('0/3'))).toBe(true)
+  })
+
+  it('每种落空原因各报一行，带上条数', () => {
+    const lines = hydrateReport({
+      plan: 4,
+      adopted: 1,
+      refusals: [
+        { at: 2, reason: 'R1' },
+        { at: 3, reason: 'R1' },
+        { at: 4, reason: 'R2' },
+      ],
+    })
+    const text = lines.join('\n')
+    expect(text).toContain('R1')
+    expect(text).toContain('2 条')
+    expect(text).toContain('R2')
+  })
+
+  it('压根没计划补（--detail 0）时不当成异常', () => {
+    expect(hydrateReport({ plan: 0, adopted: 0, refusals: [] })).toEqual([])
+  })
+})
+
+describe('hydrate 真的接上了这套判定（纯函数写得再好，没人调用等于没有）', () => {
+  // 先把换行归一化：仓库在 Windows 上 checkout 成 CRLF，直接找 `'\n}\n'` 会永远找不到，
+  // 于是「切出函数体」变成「切到文件尾」，函数体外面的调用也能让断言假绿。
+  const runSource = readFileSync(path.join(here, '..', 'run.mjs'), 'utf8').replace(/\r\n/g, '\n')
+  const start = runSource.indexOf('async function hydrate(')
+  const body = runSource.slice(start, runSource.indexOf('\n}\n', start))
+
+  it('能切出 hydrate 函数体（切错了下面几条会假绿）', () => {
+    expect(start).toBeGreaterThan(0)
+    expect(body.length).toBeGreaterThan(200)
+    expect(body).toContain('context.newPage()')
+    // 尾巴上不能出现 hydrate 之后的东西：这一条才是「切对了」的证据
+    expect(body).not.toContain('function main(')
+  })
+
+  it('采纳与否走 adoptDetail，汇报走 hydrateReport', () => {
+    expect(body).toContain('adoptDetail(')
+    expect(body).toContain('hydrateReport(')
+  })
+
+  it('不采纳的那条要留下原因记录，而不是 continue 掉', () => {
+    expect(body).toContain('refusals.push')
+  })
+
+  it('旧的静默比较不许回来（inline 长度判断 = 又变回「补全 0 条」不解释）', () => {
+    expect(body).not.toMatch(/String\(first\.raw[^)]*\.length\s*>\s*String\(job\.raw/)
   })
 })
 

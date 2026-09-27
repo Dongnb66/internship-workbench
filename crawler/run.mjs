@@ -18,13 +18,16 @@
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 import { MORE_TEXTS, NEXT_TEXTS, SITES, STRATEGIES, companyFor, detectSiteByUrl, findSite } from './sites.mjs'
 import { COLLECTOR, CRAWLER_DIR, OUT_DIR, PROFILE_DIR, launchBrowser, msgOf, politeDelay } from './lib/browser.mjs'
 import { dailyReportMd, detectStopWall } from './lib/stopRules.mjs'
 import {
+  adoptDetail,
   dedupeKey,
   expandTemplate,
+  hydrateReport,
   makePayload,
   mergeDetail,
   mergeJobs,
@@ -391,22 +394,36 @@ async function crawlTarget({ context, target, opts, log }) {
 async function hydrate({ context, jobs, plan, opts, log }) {
   const page = await context.newPage()
   const filled = [...jobs]
-  let done = 0
+  const refusals = []
+  let adopted = 0
   try {
     for (let i = 0; i < plan; i += 1) {
       const job = filled[i]
       if (!job?.url || !/^https?:/i.test(job.url)) continue
+      let first = null
+      let failed = false
       try {
         await page.goto(job.url, { waitUntil: 'domcontentloaded', timeout: 40000 })
         await settle(page, 1200)
         const detail = await collectPage(page, { mode: 'detail', maxJd: 12000 })
-        const first = (detail?.jobs ?? [])[0]
-        if (first && String(first.raw ?? '').length > String(job.raw ?? '').length) {
-          filled[i] = mergeDetail(job, first)
-          done += 1
-        }
+        first = (detail?.jobs ?? [])[0] ?? null
       } catch (error) {
+        // 失败要照常走后面的进度与节流：出错的那一次同样访问了站点，
+        // 跳过 politeDelay 等于把「连续两次点击」的间隔省掉了。
+        failed = true
         log(`    ${i + 1}/${plan} 补 JD 失败：${msgOf(error)}`)
+      }
+      if (!failed) {
+        // 判定与汇报都在 normalize 里（adoptDetail / hydrateReport），这里只管跑页面。
+        // 以前是 here 一句 `detail.raw.length > job.raw.length` 的静默比较：
+        // 详情页读砸了就用列表摘要，日志只说「补全 0 条 JD」，看不出来是站点没正文还是选择器坏了。
+        const verdict = adoptDetail(job, first)
+        if (verdict.adopt) {
+          filled[i] = mergeDetail(job, first)
+          adopted += 1
+        } else {
+          refusals.push({ at: i + 1, reason: verdict.reason })
+        }
       }
       if ((i + 1) % 5 === 0 || i + 1 === plan) log(`    进度 ${i + 1}/${plan}`)
       await politeDelay(opts.delay * 0.6)
@@ -414,7 +431,7 @@ async function hydrate({ context, jobs, plan, opts, log }) {
   } finally {
     await page.close()
   }
-  log(`  补全 ${done} 条 JD`)
+  for (const line of hydrateReport({ plan, adopted, refusals })) log(line)
   return filled
 }
 
@@ -614,12 +631,24 @@ async function main() {
   return 0
 }
 
-main()
-  .then((code) => process.exit(code))
-  .catch((error) => {
-    console.error(`\n抓取器异常退出：${msgOf(error)}`)
-    if (String(error?.message ?? '').includes('Cannot find package')) {
-      console.error('依赖没装。先执行：cd crawler && npm install')
-    }
-    process.exit(2)
-  })
+/**
+ * 入口守卫。
+ *
+ * 这里原本是无条件 `main()` —— 于是**任何 import 这个文件的人都会把 CLI 真跑一遍**
+ * （没参数就打印帮助再 `process.exit(0)`）。后果不是难看，是**抓取器整个没法写单测**：
+ * 2026-09-27 我第一次给它加测试时，测试进程直接被这个 exit 干掉，全绿也拿不到退出码。
+ * 判断方式跟 `sources/offerbiu.mjs` 里那条一致（同一个仓库里两把尺子，早晚有一处不对）。
+ */
+const invokedDirectly = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href
+
+if (invokedDirectly) {
+  main()
+    .then((code) => process.exit(code))
+    .catch((error) => {
+      console.error(`\n抓取器异常退出：${msgOf(error)}`)
+      if (String(error?.message ?? '').includes('Cannot find package')) {
+        console.error('依赖没装。先执行：cd crawler && npm install')
+      }
+      process.exit(2)
+    })
+}

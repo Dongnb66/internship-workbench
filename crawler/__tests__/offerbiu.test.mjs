@@ -15,7 +15,7 @@ import { describe, expect, it } from 'vitest'
 
 import { parseCollectorJson } from '../../src/lib/import.ts'
 import { dateOnlyOf, makePayload } from '../lib/normalize.mjs'
-import { mapOfferbiuItem, toOfferbiuPayload } from '../sources/offerbiu.mjs'
+import { mapOfferbiuItem, splitPositions, toOfferbiuPayload } from '../sources/offerbiu.mjs'
 
 /** 一条真实返回（已删去长 URL 的查询串，字段名与取值形态保持原样） */
 const REAL_ITEM = {
@@ -136,5 +136,55 @@ describe('OfferBiu → 采集器 payload → 工作台导入（端到端契约�
     const drafts = parseCollectorJson(JSON.stringify(legacy))
     expect(drafts[0].company).toBe('腾讯')
     expect(drafts[0].deadline).toBe('')
+  })
+})
+describe('一家公司的整串岗位 → 一条一岗（2026-09-27 真跑后的修正）', () => {
+  const row = (positionsText, extra = {}) => ({
+    company: '某科技公司',
+    title: positionsText,
+    city: '北京',
+    salary: '',
+    url: 'https://app.mokahr.com/campus-recruitment/demo/1',
+    deadline: '2026-10-08',
+    raw: positionsText,
+    ...extra,
+  })
+
+  it('顿号/逗号分开的岗位各自成一条，公司、入口、截止日跟着走', () => {
+    const out = splitPositions([row('大模型算法工程师、Agent 开发工程师，测试开发')])
+    expect(out.map((j) => j.title)).toEqual(['大模型算法工程师', 'Agent 开发工程师', '测试开发'])
+    for (const j of out) {
+      expect(j.company).toBe('某科技公司')
+      expect(j.url).toContain('mokahr.com')
+      expect(j.deadline).toBe('2026-10-08')
+    }
+  })
+
+  it('斜杠不拆 —— 同一个岗位的两个叫法不是两个岗位', () => {
+    const out = splitPositions([row('算法工程师/机器学习工程师')])
+    expect(out.length).toBe(1)
+    expect(out[0].title).toBe('算法工程师/机器学习工程师')
+  })
+
+  it('单岗位的公司不因为拆分改变条数（旧契约不许漂）', () => {
+    expect(splitPositions([row('系统操作员')]).length).toBe(1)
+  })
+
+  it('空标题与只有标点的标题不产生空行', () => {
+    expect(splitPositions([row(''), row('、、；')]).map((j) => j.title)).toEqual(['', '、、；'])
+  })
+
+  it('同一家公司里重复的岗位名只留一条', () => {
+    expect(splitPositions([row('后端开发、后端开发、算法')]).map((j) => j.title)).toEqual(['后端开发', '算法'])
+  })
+
+  it('拆分后的 payload 仍然能被工作台导入接住，且截止日不丢', () => {
+    const payload = toOfferbiuPayload([mapOfferbiuItem({ ...REAL_ITEM, positionsText: '前端开发、大模型算法工程师' })], { seasonYear: 2027 })
+    expect(payload.count).toBe(2)
+    const drafts = parseCollectorJson(JSON.stringify(payload))
+    expect(drafts).not.toBeNull()
+    expect(drafts.map((d) => d.title)).toEqual(['前端开发', '大模型算法工程师'])
+    expect(drafts.every((d) => d.deadline === '2026-10-08')).toBe(true)
+    expect(drafts.every((d) => d.source === '岗位广场' || d.channel === '岗位广场')).toBe(true)
   })
 })

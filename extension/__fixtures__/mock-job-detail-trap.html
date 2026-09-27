@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>Agent策略实习生 - 示例·巨搜智能科技 - 实习僧</title>
+  </head>
+  <body>
+    <!--
+      详情页「陷阱」夹具：真实踩到的形态（实习僧详情页实测）。
+      合规的 main 容器只有 19 个字（一个面包屑壳子），完整 JD 挂在 class 名
+      不在候选表里的 div 上。旧实现用 `querySelector('main, article, ...')`
+      —— 第一个命中就用 —— 于是 raw 只有 19 个字，比列表页那条 125 个字的摘要还短，
+      抓取器的合并规则把它判给列表摘要，最后表现为「补全 0 条 JD」且不报错。
+
+      预期：raw 必须拿到下面的 JD 正文（含 LangGraph），而不是那个 19 字的壳子。
+      导航/推荐位仍在整页文本里 —— 这一条夹具只管「别漏正文」，
+      「别把导航收进来」由 mock-job-detail.html 那条守住（那个页面 main 是够长的）。
+    -->
+    <header>首页 实习 校招 企业 我的</header>
+    <h1>Agent策略实习生</h1>
+    <div class="meta">北京 | 5天/周 | 6个月</div>
+    <div class="salary">300-400元/天</div>
+    <main>首页 &gt; 实习列表</main>
+    <div class="inn_detail">
+      <div class="job-section">
+        <h2>岗位职责：</h2>
+        <p>1. 参与智能体产品的策略设计与落地，基于 LangGraph 编排工具调用与多轮对话；</p>
+        <p>2. 负责检索增强链路的效果评估，包括文档切分、混合召回、重排与答案引用；</p>
+        <p>3. 跟进大模型评测基准，编写评测脚本并输出可复现的结论与改进建议；</p>
+        <p>4. 与后端、算法团队配合，把方案服务化并在线上灰度验证。</p>
+      </div>
+      <div class="job-section">
+        <h2>任职要求：</h2>
+        <p>1. 本科及以上在读，计算机 / 数学 / 电子等相关专业；</p>
+        <p>2. 熟悉 Python，了解 FastAPI 或同类 Web 框架；</p>
+        <p>3. 每周到岗 5 天，实习期 6 个月以上，北京现场优先；</p>
+        <p>4. 有大模型应用、Agent 相关项目经验优先，有开源贡献优先。</p>
+      </div>
+      <div class="job-section">
+        <h2>福利待遇：</h2>
+        <p>免费班车、餐补、转正机会、大牛 mentor、定期技术分享。</p>
+      </div>
+    </div>
+    <footer>相关推荐 猜你喜欢 广告</footer>
+
+    <script src="../collector.js"></script>
+    <script>
+      const out = document.createElement('pre')
+      out.id = 'iwb-out'
+      try {
+        const r = window.__iwbCollectJobs()
+        out.textContent = 'COUNT=' + r.count + '\n' + JSON.stringify(r.jobs, null, 1)
+      } catch (e) {
+        out.textContent = 'ERROR ' + e.message
+      }
+      document.body.appendChild(out)
+    </script>
+  </body>
+</html>

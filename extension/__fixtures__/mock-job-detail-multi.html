@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>大模型应用实习生 - 示例·长桥智能科技 - 招聘详情</title>
+  </head>
+  <body>
+    <!--
+      详情页「多容器」夹具：页面上同时有两个合规容器，而且**排在前面那个是短的**。
+      这一条专门钉住「候选里取最长」这一半 —— 逗号选择器 + querySelector 的
+      「第一个命中就用」会选中 article（SHORTBLOCK），JD 就此丢掉；
+      反过来「干脆读整页」会把 footer 的推荐位收进来。两头都要挡住。
+    -->
+    <header>首页 实习 校招 我的</header>
+    <h1>大模型应用实习生</h1>
+    <div class="meta">上海 | 4天/周 | 3个月</div>
+    <div class="salary">250-350元/天</div>
+    <article>SHORTBLOCK 本区块仅是页面顶部的招聘须知占位文案，不含岗位描述正文内容。</article>
+    <main>
+      <h2>岗位职责：</h2>
+      <p>1. 参与大模型应用的数据合成与评测，基于 LangGraph 搭建多轮工具调用链路；</p>
+      <p>2. 负责 RAG 检索质量优化，覆盖文档切分、混合召回、重排与引用；</p>
+      <p>3. 与算法、后端协作完成服务化上线与线上效果跟进。</p>
+      <h2>任职要求：</h2>
+      <p>1. 计算机相关专业本科及以上在读；2. 熟悉 Python 与常见 Web 框架；3. 每周到岗 4 天以上。</p>
+    </main>
+    <footer>相关推荐 猜你喜欢 广告</footer>
+
+    <script src="../collector.js"></script>
+    <script>
+      const out = document.createElement('pre')
+      out.id = 'iwb-out'
+      try {
+        const r = window.__iwbCollectJobs()
+        out.textContent = 'COUNT=' + r.count + '\n' + JSON.stringify(r.jobs, null, 1)
+      } catch (e) {
+        out.textContent = 'ERROR ' + e.message
+      }
+      document.body.appendChild(out)
+    </script>
+  </body>
+</html>

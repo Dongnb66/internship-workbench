@@ -47,6 +47,10 @@ function check(name, actual, expected) {
 
 async function collect(page, options) {
   await page.addScriptTag({ content: await readFile(COLLECTOR, 'utf8') })
+  // 夹具会把自己的采集结果打印成 <pre id="iwb-out"> 挂在 body 末尾。
+  // 量之前得先把这把尺子拿掉：否则「退到整页」那条分支读到的会是
+  // 一份包含了 JD 的 JSON，断言看着过了，其实测的是自己上一次的输出。
+  await page.evaluate(() => document.getElementById('iwb-out')?.remove())
   return await page.evaluate(
     (opts) => (typeof window.__iwbCollectJobs === 'function' ? window.__iwbCollectJobs(opts) : null),
     options,
@@ -97,6 +101,35 @@ async function main() {
     // ③ 详情页在自动模式下也应该退化成 1 条（兜底分支不能坏）
     const auto = await collect(page, {})
     check('详情页自动模式条数', auto?.count, 1)
+
+    // ④ 陷阱页：合规容器（main）只有 19 个字，正文挂在不认识的 class 上。
+    //    真实症状是「补全 0 条 JD」且不报错 —— 所以这里必须断言拿到了正文。
+    const trapUrl = pathToFileURL(path.join(FIXTURES, 'mock-job-detail-trap.html')).href
+    await page.goto(trapUrl, { waitUntil: 'domcontentloaded' })
+    await page.waitForTimeout(300)
+    const trap = await collect(page, { mode: 'detail' })
+    const trapOne = trap?.jobs?.[0] ?? {}
+    const trapRaw = String(trapOne.raw ?? '')
+    check('陷阱页条数', trap?.count, 1)
+    check('陷阱页 raw 收进了正文', trapRaw.includes('LangGraph'), true)
+    check('陷阱页 raw 没停在面包屑', trapRaw.length > 200, true)
+    check('陷阱页 city', trapOne.city, '北京')
+    check('陷阱页 salary', trapOne.salary, '300-400元/天')
+
+    // ⑤ 多容器页：合规容器有两个，排前面的是短占位块。
+    //    「取最长」才对：命中即停会读到 SHORTBLOCK，退到整页会读到推荐位。
+    const multiUrl = pathToFileURL(path.join(FIXTURES, 'mock-job-detail-multi.html')).href
+    await page.goto(multiUrl, { waitUntil: 'domcontentloaded' })
+    await page.waitForTimeout(300)
+    const multi = await collect(page, { mode: 'detail' })
+    const multiOne = multi?.jobs?.[0] ?? {}
+    const multiRaw = String(multiOne.raw ?? '')
+    check('多容器页条数', multi?.count, 1)
+    check('多容器页 raw 取的是最长容器（含正文）', multiRaw.includes('LangGraph'), true)
+    check('多容器页 raw 没停在第一个容器', multiRaw.includes('SHORTBLOCK'), false)
+    check('多容器页 raw 没退到整页（无推荐位）', multiRaw.includes('相关推荐'), false)
+    check('多容器页 city', multiOne.city, '上海')
+    check('多容器页 salary', multiOne.salary, '250-350元/天')
   } finally {
     await context.close()
     await rm(profileDir, { recursive: true, force: true }).catch(() => {})

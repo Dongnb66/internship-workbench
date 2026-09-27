@@ -192,6 +192,38 @@ export async function collectOfferbiu({
 }
 
 /** 组装成工作台能直接吃的采集器 payload（复用既有 makePayload，不发明新格式） */
+/**
+ * 岗位标题之间的分隔符。**刻意不含斜杠**：`Agent 开发工程师/AI 产品经理` 是一个岗位
+ * （同岗两个叫法），按斜杠切会凭空多出"岗位"来 —— 拆分的目的是一条记录一个岗位，
+ * 不是把字数当条数。
+ */
+const POSITION_SEPARATORS = /[,，、;；\n]/
+
+/**
+ * 把「一家公司的整串岗位」拆成一条一岗。
+ *
+ * 2026-09-27 第一次真跑实测：OfferBiu 一条记录的 `positionsText` 里岗位数的中位数是 7、
+ * 最多 38，全挤在一个 title 字段里。直接导入岗位池会出现一张卡片挂着 38 个岗位名，
+ * 而且"含算法的有多少条"这种统计会虚高（表面 44 条，逐条切开只有 9 条真相关）。
+ * 公司、入口地址、截止日跟着每个岗位走 —— 它们本来就是这一条投递入口的属性。
+ */
+export function splitPositions(jobs) {
+  const out = []
+  for (const job of jobs ?? []) {
+    const parts = [...new Set(String(job?.title ?? '').split(POSITION_SEPARATORS).map((s) => s.trim()).filter((s) => s.length >= 2))]
+    if (!parts.length) {
+      out.push(job) // 切不出任何东西（空标题、只有标点）：原样留着，别造空行
+      continue
+    }
+    if (parts.length === 1) {
+      out.push({ ...job, title: parts[0] })
+      continue
+    }
+    for (const one of parts) out.push({ ...job, title: one })
+  }
+  return out
+}
+
 export function toOfferbiuPayload(jobs, { seasonYear, now = new Date() } = {}) {
   return makePayload({
     siteId: 'offerbiu',
@@ -200,7 +232,7 @@ export function toOfferbiuPayload(jobs, { seasonYear, now = new Date() } = {}) {
     channel: '岗位广场',
     pageUrl: COMPANIES_URL,
     pageTitle: `OfferBiu ${seasonYear} 届秋招公司库`,
-    jobs,
+    jobs: splitPositions(jobs),
     now,
   })
 }

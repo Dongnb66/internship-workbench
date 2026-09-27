@@ -168,6 +168,53 @@ export function mergeDetail(listJob, detailJob) {
   }
 }
 
+/**
+ * 详情页那份正文要不要采纳。
+ *
+ * 单看「合并」是 mergeDetail 的事，但**要不要合**必须先判：详情页读砸的时候
+ * （容器选错、页面要登录、正文被字体反爬替成空白字符）拿回来的往往比列表摘要还短，
+ * 直接 merge 会把好数据换成垃圾。这一层判掉之后，剩下的问题只是「判掉的时候要吭一声」——
+ * 抓取器过去这里是静默的，症状就是日志一句「补全 0 条 JD」，用户分不清是站点没正文
+ * 还是我们的选择器坏了。真实踩过：实习僧详情页 main 只有 19 字。
+ *
+ * @param {{raw?: string}} listJob
+ * @param {{raw?: string}|null|undefined} detailJob
+ * @returns {{adopt: boolean, reason: string}} reason 在不采纳时一定非空
+ */
+export function adoptDetail(listJob, detailJob) {
+  const listLen = cleanText(listJob?.raw).length
+  const detailLen = cleanText(detailJob?.raw).length
+  if (detailLen === 0) return { adopt: false, reason: '详情页没读到正文' }
+  if (detailLen <= listLen) {
+    return { adopt: false, reason: `详情页正文比列表摘要还短（${detailLen}<=${listLen}）` }
+  }
+  return { adopt: true, reason: '' }
+}
+
+/**
+ * 「补 JD」这一步的人话汇报：把采纳数与各种落空原因摊开说。
+ * 纯函数是为了让「不许静默」这件事本身可断言，而不是靠某次真跑时盯日志。
+ *
+ * @param {{plan: number, adopted: number, refusals?: Array<{at: number, reason: string}>}} stats
+ * @returns {string[]} 要往用户面前打的行，一条一行
+ */
+export function hydrateReport({ plan = 0, adopted = 0, refusals = [] } = {}) {
+  if (plan <= 0) return []
+  const lines = [`  补全 ${adopted} 条 JD`]
+  const byReason = new Map()
+  for (const r of refusals ?? []) {
+    const key = r?.reason || '未说明'
+    byReason.set(key, (byReason.get(key) ?? 0) + 1)
+  }
+  for (const [reason, count] of byReason) {
+    lines.push(`    ⚠️ ${count} 条白跑：${reason}`)
+  }
+  if (adopted === 0) {
+    lines.push(`  ⚠️ 0/${plan} 一条都没补上：多半是详情页正文容器没选对或该页需要登录，不是站点没有 JD`)
+  }
+  return lines
+}
+
 export function hostOf(url) {
   try {
     return new URL(String(url)).hostname

@@ -275,14 +275,48 @@
     return { company, title, city, salary, url, raw }
   }
 
+  /**
+   * 详情页正文容器候选。
+   *
+   * ⚠️ 这里是「候选里挑文本最长的」，不是「第一个命中的」。
+   * 逗号选择器配 querySelector 的语义是命中即停，而招聘详情页最喜欢把
+   * `main` / `.content` 这类合规名字给一个装饰性壳子：实习僧实测 `main` 只有 19 个字
+   * （一条面包屑），JD 挂在不认识的 `div.inn_detail` 上。命中即停的结果是 raw 只有 19 字，
+   * 比列表页那条摘要（125 字）还短，抓取器的合并规则反过来判给列表摘要，
+   * 于是症状是「补全 0 条 JD、不报错」。由 extension/__fixtures__/mock-job-detail-trap.html
+   * 与 crawler/selftest.mjs 的 ④ 钉住。
+   */
+  const DETAIL_CONTAINERS = 'main, article, .content, #content, #job-detail, .job-detail'
+
+  /** 少到这个数就不算「读到正文了」——既用来决定要不要退回整页，也用来决定这一条要不要 */
+  const MIN_JD_CHARS = 40
+
+  /**
+   * 选正文容器：合规候选里取文本最长的；一个都装不下足够文字时才退到整页。
+   *
+   * 刻意不与整页比长度：夹具和扩展会在 `document.body` 末尾挂一段采集结果 JSON，
+   * 一比倍数就永远选整页，导航和推荐位全被收进 JD（第一版就是这么翻车的）。
+   */
+  function pickDetailBody() {
+    let best = null
+    let bestLen = 0
+    for (const el of Array.from(document.querySelectorAll(DETAIL_CONTAINERS))) {
+      const len = txt(el).length
+      if (len > bestLen) {
+        best = el
+        bestLen = len
+      }
+    }
+    return bestLen >= MIN_JD_CHARS ? best : document.body
+  }
+
   /** 详情页兜底：整页只有一个岗位时，卡片检测会因为「少于 4 个」而失效 */
   function extractDetailPage(maxJd) {
     const limit = maxJd > 0 ? maxJd : 12000
     const h1 = document.querySelector('h1')
     const title = (h1 ? txt(h1) : '') || document.title
-    const body = document.querySelector('main, article, .content, #content, #job-detail, .job-detail') || document.body
-    const raw = txt(body).slice(0, limit)
-    if (!raw || raw.length < 40) return []
+    const raw = txt(pickDetailBody()).slice(0, limit)
+    if (!raw || raw.length < MIN_JD_CHARS) return []
 
     // 城市与薪资往往在正文容器之外（页面头部的信息条），所以探测范围要放宽到
     // 「h1 所在容器 + 正文」，而不是只搜正文。
