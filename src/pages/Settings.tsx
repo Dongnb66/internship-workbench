@@ -16,7 +16,9 @@ import {
   setUserKey,
 } from '../lib/billing'
 import { channelCard, checkConnection, keyHint } from '../lib/byoSetup'
+import { OWNER_EMAIL, isOwnerAccount } from '../lib/ownerAccount'
 import { PROFILE_TEMPLATE } from '../lib/constants'
+import { useSession } from '../lib/hooks'
 import { healthSummary, profileHealth } from '../lib/healthCheck'
 import { textToArray } from '../lib/format'
 import { DEFAULT_PACE, GREET_CHECKLIST } from '../lib/pace'
@@ -84,6 +86,10 @@ export default function Settings({ profile, onChanged }: PageProps) {
   const [checking, setChecking] = useState(false)
   const [checkResult, setCheckResult] = useState<{ ok: boolean; text: string } | null>(null)
   const [trial, setTrial] = useState(() => getOwnerTrialEnabled())
+  // 会话身份：试用开关只认创建者本人的账号（判定只有一处，见 lib/ownerAccount.ts）
+  const { session } = useSession()
+  const sessionEmail = () => (session as any)?.user?.email ?? ''
+  const isOwner = isOwnerAccount(sessionEmail())
 
   const card = channelCard(channel, { hasKey, localReady })
 
@@ -285,7 +291,15 @@ export default function Settings({ profile, onChanged }: PageProps) {
     }
   }
 
+  /**
+   * 开关只是入口，不是授权：写存储这一处再过一次身份判定。
+   * 不然任何人从控制台、或将来别的调用点，都能绕过界面把创建者的钱包打开。
+   */
   function toggleTrial(next: boolean) {
+    if (!isOwnerAccount(sessionEmail())) {
+      notifyErr('这道开关只有应用创建者的账号能用')
+      return
+    }
     setOwnerTrialEnabled(next)
     setTrial(next)
     notifyOk(next ? '已开启「用本应用的额度试用」：这一档花的是应用创建者的额度' : '已关闭试用档：AI 只走你自己自备的通道')
@@ -536,14 +550,28 @@ export default function Settings({ profile, onChanged }: PageProps) {
               </div>
             ) : null}
 
-            <div className="mt16">
-              <label className="row" style={{ gap: 8 }}>
-                <input type="checkbox" checked={trial} onChange={(e) => toggleTrial(e.target.checked)} />
-                <span>
-                  允许「用本应用的额度试用」<span className="small muted">（这一档花的是应用创建者的额度，且仍受下面的日限与步数护栏约束）</span>
-                </span>
-              </label>
-            </div>
+            {isOwner ? (
+              <div className="mt16">
+                <label className="row" style={{ gap: 8 }}>
+                  <input type="checkbox" checked={trial} onChange={(e) => toggleTrial(e.target.checked)} />
+                  <span>
+                    允许「用本应用的额度试用」
+                    <span className="small muted">（这一档花的是应用创建者的额度，且仍受下面的日限与步数护栏约束）</span>
+                  </span>
+                </label>
+              </div>
+            ) : OWNER_EMAIL ? (
+              <div className="small muted mt16">
+                「用本应用的额度试用」这道开关只对<strong>应用创建者的账号</strong>显示——当前登录的不是创建者账号，所以这里看不到它。
+                AI 请自备 Key，或选本机模型。
+              </div>
+            ) : (
+              <div className="hint mt16">
+                还没有「用本应用的额度」这一档可用：创建者邮箱没在 <code>src/lib/ownerAccount.ts</code> 的
+                <code> OWNER_EMAIL </code>里设置，所以<strong>谁都不算创建者</strong>，这道开关对谁都不显示。
+                留空是刻意的默认关闭——要开这一档，先填上你自己的登录邮箱，再用该账号来这里勾选。
+              </div>
+            )}
           </div>
         </section>
 
