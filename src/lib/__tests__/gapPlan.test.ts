@@ -56,6 +56,17 @@ describe('gapPlan · 三档结构', () => {
     expect(gapPlan([], [], '本岗位面向2026年应届毕业生').confirm.some((c) => c.includes('届数'))).toBe(true)
   })
 
+  it('待确认文案不替用户断言具体届数（这是多租户站，别人不是 2028 届）', () => {
+    // 六条规则全部命中，保证每条文案都被这条断言看到
+    const jd = ['本科及以上学历', '每周 4 天，实习 6 个月', '面向 2028 届毕业生', '尽快到岗，入职时间可谈', '坐班，不接受远程', '有转正机会'].join('，')
+    const plan = gapPlan([], [], jd)
+    // 规则条数变了就更新这里：数量本身就是「有没有漏测」的判据
+    expect(plan.confirm.length).toBe(6)
+    for (const c of plan.confirm) {
+      expect(c, `待确认文案替用户断言了具体届数：${c}`).not.toMatch(/20\d{2}\s*届/)
+    }
+  })
+
   it('待确认不重复', () => {
     const jd = '本科及以上，本科学历，每周 4 天，实习 6 个月'
     const plan = gapPlan([], [], jd)
