@@ -58,6 +58,15 @@ describe('CI 触发器', () => {
     expect(ci).toContain('if-no-files-found: error')
   })
 
+  it('日期口径的断言必须在非 UTC 时区再跑一遍（UTC+8 会把两端偏差抵消成假绿）', () => {
+    // 2026-09-28 实抓到：契约测试「Web ↔ 小程序 daysLeft 两端同结果」在 CI（UTC）红，
+    // 而本机（UTC+8）绿 —— 8 小时偏移正好让两侧各错半天、四舍五入后相等。
+    // 所以「本地全绿」对这类断言没有证明力，必须换时区复跑；反过来，
+    // 「纯日期串被当成 UTC 解释」那一类只在西半球出错，所以两个方向都要覆盖。
+    expect(ci, 'CI 少了负偏移时区的复跑（西半球才会暴露 UTC 解释问题）').toMatch(/TZ=America\/New_York/)
+    expect(ci, 'CI 少了 UTC+8 的复跑（本机默认时区，假绿就发生在这里）').toMatch(/TZ=Asia\/Shanghai/)
+  })
+
   it('package-lock 与 package.json 同步 —— 否则 npm ci 第一步就把整条流水线打红', () => {
     // 真实踩到（2026-09-27）：升版本只改了 package.json，锁里还停在旧版本号，
     // CI 的 `npm ci` 在校验一致性时就退出，lint/typecheck/test/build 一步没跑到，

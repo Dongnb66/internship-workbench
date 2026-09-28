@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { daysFrom, todayPicks } from '../daily'
+import { daysLeft, pad, todayISO } from '../format'
 import type { Row } from '../../types'
 
 const TODAY = '2026-09-23'
@@ -25,9 +26,21 @@ describe('daysFrom', () => {
     expect(daysFrom(TODAY, '2026-09-20')).toBe(-3)
   })
 
-  it('带时间的时间戳取日期部分（不会因时分秒差出 0.5 天）', () => {
-    expect(daysFrom(TODAY, '2026-09-25T16:00:00.000Z')).toBe(2)
-    expect(daysFrom(TODAY, '2026-09-23T00:00:00.000Z')).toBe(0)
+  it('带时间的时间戳按**本地日历日**取，不取 UTC 日期部分', () => {
+    // 老实现是 `slice(0, 10)`（取时间戳的 UTC 日期），UTC+8 下与列表页差一天：
+    // 同一份 deadline 在「今日优先」算 2 天、在岗位池列表算 3 天，且不报错。
+    for (const instant of ['2026-09-25T16:00:00.000Z', '2026-09-23T12:00:00.000Z']) {
+      const t = new Date(instant)
+      const localDay = `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}`
+      expect(daysFrom(TODAY, instant), `daysFrom(${instant})`).toBe(daysFrom(TODAY, localDay))
+    }
+    expect(daysFrom(TODAY, '2026-09-23T12:00:00.000Z')).toBe(0)
+  })
+
+  it('与岗位池列表同一条规则：同一截止日两处算出的天数必须一致', () => {
+    for (const value of ['2026-09-25', '2026-09-25T16:00:00.000Z', '2026-12-31T23:59:59.999Z']) {
+      expect(daysFrom(todayISO(), value), `daysFrom(${value})`).toBe(daysLeft(value))
+    }
   })
 
   it('空值与非日期返回 null，不抛异常', () => {

@@ -41,6 +41,17 @@ jobs:
       - name: Unit tests (Vitest)
         run: npm run test
 
+      # 时区守卫：上面那条在 ubuntu-latest 上跑的是 UTC。本项目两次踩到的日期偏差都只在
+      # 特定时区现形 —— 「Web ↔ 小程序 daysLeft 差一天」在 UTC+8 会被 8 小时偏移抵消成假绿
+      # （本机 `.zsh`/`.bash` 默认正是 UTC+8，716 条全绿），UTC 才暴露；而「纯日期串按 UTC
+      # 解释」那类相反，只在整个西半球出错。同一组断言换两个时区再跑一遍，代价几秒，
+      # 挡的是「本机全绿、用户那边差一天」这种永远不报错的错。断言本身在
+      # src/lib/__tests__/ciTrigger.test.mjs 里钉住（删掉这一步会红）。
+      - name: Unit tests (Vitest)，换非 UTC 时区再跑一遍
+        run: |
+          TZ=America/New_York npm run test
+          TZ=Asia/Shanghai npm run test
+
       - name: Build
         run: npm run build
 

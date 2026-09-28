@@ -1,3 +1,4 @@
+import { parseDate } from './format'
 import { localScore } from './score'
 import type { Profile, Row } from '../types'
 
@@ -35,16 +36,20 @@ function urgencyRank(u: Urgency): number {
 }
 
 /**
- * 截止日距今几天（按本地日历日）。date-only 串按本地时区构造，
- * 与 format.ts 的 daysLeft 口径一致；独立实现是为了能注入 today 做确定性测试。
+ * 截止日距今几天（按本地日历日）。**解析规则取自 `format.ts#parseDate`**，
+ * 也就是与列表页、小程序端同一条 —— 独立实现是为了能注入 today 做确定性测试，
+ * 但规则不能有第二份：原先这里 `slice(0, 10)` 取的是时间戳的 **UTC** 日期部分，
+ * 于是 `2026-09-25T16:00:00.000Z`（UTC+8 已是 09-26）在「今日优先」页算 2 天、
+ * 在岗位池列表算 3 天，同一份数据两处紧急度不一样，谁都不报错。
  */
 export function daysFrom(today: string, value: unknown): number | null {
   const s = String(value ?? '').trim()
   if (!/^\d{4}-\d{2}-\d{2}/.test(s)) return null
-  const [y1, m1, d1] = s.slice(0, 10).split('-').map(Number)
+  const d = parseDate(s)
+  if (Number.isNaN(d.getTime())) return null
   const [y2, m2, d2] = today.slice(0, 10).split('-').map(Number)
-  if ([y1, m1, d1, y2, m2, d2].some((n) => !Number.isFinite(n))) return null
-  const a = new Date(y1, m1 - 1, d1).getTime()
+  if ([y2, m2, d2].some((n) => !Number.isFinite(n))) return null
+  const a = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
   const b = new Date(y2, m2 - 1, d2).getTime()
   return Math.round((a - b) / 86400000)
 }
