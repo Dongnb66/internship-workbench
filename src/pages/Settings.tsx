@@ -95,8 +95,9 @@ export default function Settings({ profile, onChanged }: PageProps) {
 
   useEffect(() => {
     setStats(getTokenStats())
-    setQuota(getQuotaSnapshot())
-  }, [])
+    // 额度台账只服务「用本应用的额度」那一档；看不到那张卡的人不必去读它
+    if (isOwner) setQuota(getQuotaSnapshot())
+  }, [isOwner])
 
   useEffect(() => {
     // 选了本机档就先默默探一次：卡片上那句「能不能用」得有事实依据，而不是等用户点自检
@@ -107,21 +108,23 @@ export default function Settings({ profile, onChanged }: PageProps) {
   }, [])
 
   useEffect(() => {
-    // 模型目录：拉取失败不阻塞主表单（AI 页仍会用默认模型兜底）
+    // 模型目录只服务「用本应用的额度」那一档。看不到那张卡的人（非创建者）不必白拉一次目录
+    if (!isOwner) return
     listUsableModels()
       .then((list) => {
         setModels(list)
         setChosen(getModelChoice() ?? '')
       })
       .catch((error) => setModelsErr(errText(error)))
-  }, [])
+  }, [isOwner])
 
   useEffect(() => {
     // 显示「当前生效」的实际落点：可能因所选模型被禁用而回退到默认
+    if (!isOwner) return
     pickModel()
       .then((m) => setEffective(m ?? ''))
       .catch(() => setEffective(''))
-  }, [models, chosen])
+  }, [isOwner, models, chosen])
 
   useEffect(() => {
     // 体检需要知道简历库有几份；失败不影响主表单（按 0 处理，体检会提示去录简历）
@@ -458,7 +461,7 @@ export default function Settings({ profile, onChanged }: PageProps) {
           <div className="card-body">
             <div className="hint mb16">
               AI 只走你在这里选的那一条通道，而且<strong>默认是自备 Key</strong>，花的是你自己账户的余额。
-              下面这个「本应用的额度」记在<strong>应用创建者的账号</strong>上，所以它默认关着，不会替使用者垫钱。
+              「用本应用的额度」那一档记在<strong>应用创建者的账号</strong>上，所以它默认关着，不会替使用者垫钱。
             </div>
 
             <Field label="通道" hint="厂商白名单是写死在代码里的：这里列不出来的地址，本应用一律不发（那等于做一个谁都能借的转发器）">
@@ -550,75 +553,77 @@ export default function Settings({ profile, onChanged }: PageProps) {
                 留空是刻意的默认关闭。要开这一档，先填上你自己的登录邮箱，再用该账号来这里勾选。
               </div>
             )}
+
+            <div className="small muted mt16">
+              本次会话（当前标签页，关闭即归零）：已调用 {stats.calls} 次 · 输入 {stats.prompt} tokens · 输出 {stats.completion} tokens
+            </div>
           </div>
         </section>
 
-        <section className="card">
-          <div className="card-head">
-            <h3>AI 模型</h3>
-            <span className="spacer" />
-            <span className="badge">{effective ? `当前生效：${effective}` : '未就绪'}</span>
-          </div>
-          <div className="card-body">
-            <div className="hint mb16">
-              这一节只管<strong>「用本应用的额度」那一档</strong>的模型。自备 Key 与本机模型用上面那张卡里的模型名，跟这里无关。
+        {isOwner ? (
+          <section className="card">
+            <div className="card-head">
+              <h3>AI 模型</h3>
+              <span className="spacer" />
+              <span className="badge">{effective ? `当前生效：${effective}` : '未就绪'}</span>
             </div>
-            {modelsErr ? (
-              <div className="small" style={{ color: '#d97706' }}>模型目录加载失败：{modelsErr}（不影响其他功能）</div>
+            <div className="card-body">
+              <div className="hint mb16">
+                这一节只配<strong>「用本应用的额度」那一档</strong>的模型。自备 Key 与本机模型的模型名填在「AI 通道」卡里，与这里无关。
+              </div>
+              {modelsErr ? (
+                <div className="small" style={{ color: '#d97706' }}>模型目录加载失败：{modelsErr}（不影响其他功能）</div>
             ) : models.length === 0 ? (
-              <div className="small muted">模型目录加载中…</div>
+                <div className="small muted">模型目录加载中…</div>
             ) : (
-              <>
-                <Field label="模型" hint={`共 ${models.length} 个可用模型可选；倍率来自平台下发的目录`}>
-                  <select className="select" value={chosen} onChange={(e) => setChosen(e.target.value)}>
-                    <option value="">（使用平台默认：Auto，思考型 · 倍率浮动）</option>
-                    {models.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name}
-                        {m.credits ? ` · ${m.credits.replace(/credits?/i, '').trim()}` : ''}
-                        {m.reasoning ? ' · 思考型（更慢）' : ''}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <div className="small muted mt8">计费：{modelCostLabel(chosenModel)}</div>
-                <div className="hint mt8">
-                  不选＝走平台的 <strong>Auto</strong>：它每次都自动挑模型，且是<strong>高推理档的思考型</strong>，
-                  所以又快又便宜都不是它的目标。想稳、想省钱、想快，就在上面选一个具体模型。
-                </div>
-                <button className="btn primary mt8" onClick={saveModel} disabled={savingModel}>
-                  {savingModel ? '保存中…' : '保存模型选择'}
-                </button>
-                <div className="hint mt16">
-                  <strong>额度归谁</strong>：这一档调用平台模型目录里的模型（DeepSeek / GLM / Kimi / 混元…），
-                  厂商 Key 存在云服务端，<strong>不用你自己填，账单记在应用创建者账号上</strong>
-                  （平台的额度错误码前缀是 <code>quota_</code>，即 <em>Creator quota</em>）。
-                  它<strong>不是默认通道</strong>：「用本应用的额度试用」关着时 AI 一律不调用，使用者自备 Key 或用本机模型。
-                  <br />
-                  <strong>限额护栏</strong>：每天 {DEFAULT_QUOTA.dailyTasks} 件 AI 任务、单件 {DEFAULT_QUOTA.maxCallsPerTask} 步、
-                  全天 {DEFAULT_QUOTA.maxCallsPerDay} 次调用，任一上限命中即拒绝并说明原因。
-                  应用侧读不到余额（SDK 只有模型目录和调用两个接口），下面几行就是全部的可见性。
-                </div>
-                <div className="small mt8">
-                  今日额度：已用 {quota?.usedTasks ?? 0} / {DEFAULT_QUOTA.dailyTasks} 件事 · 剩 {quota?.remainingTasks ?? DEFAULT_QUOTA.dailyTasks} 件 · 今日累计 {quota?.callsToday ?? 0} 次调用
-                </div>
-                {quota?.degraded ? (
+                <>
+                  <Field label="模型" hint={`共 ${models.length} 个可用模型可选；倍率来自平台下发的目录`}>
+                    <select className="select" value={chosen} onChange={(e) => setChosen(e.target.value)}>
+                      <option value="">（使用平台默认：Auto，思考型 · 倍率浮动）</option>
+                      {models.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name}
+                          {m.credits ? ` · ${m.credits.replace(/credits?/i, '').trim()}` : ''}
+                          {m.reasoning ? ' · 思考型（更慢）' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <div className="small muted mt8">计费：{modelCostLabel(chosenModel)}</div>
                   <div className="hint mt8">
-                    <strong>额度台账当前不可用</strong>（浏览器隐私模式，或本机存储配额爆了）：护栏处于
-                    <strong>放行</strong>状态，挡不住超额调用。回到正常浏览模式即可恢复计数。
+                    不选＝走平台的 <strong>Auto</strong>：它每次都自动挑模型，且是<strong>高推理档的思考型</strong>，
+                    所以又快又便宜都不是它的目标。想稳、想省钱、想快，就在上面选一个具体模型。
                   </div>
-                ) : (
-                  <div className="small muted mt8">
-                    台账记在<strong>这台设备</strong>的浏览器里：清站点数据或换浏览器会重新计数，跨设备不同步。
+                  <button className="btn primary mt8" onClick={saveModel} disabled={savingModel}>
+                    {savingModel ? '保存中…' : '保存模型选择'}
+                  </button>
+                  <div className="hint mt16">
+                    <strong>这一档怎么来的</strong>：调用平台模型目录里的模型（DeepSeek / GLM / Kimi / 混元…），
+                    厂商 Key 存在云服务端、<strong>不用你自己填</strong>，
+                    额度的错误码前缀是 <code>quota_</code>（<em>Creator quota</em>）。
+                    <br />
+                    <strong>限额护栏</strong>：每天 {DEFAULT_QUOTA.dailyTasks} 件 AI 任务、单件 {DEFAULT_QUOTA.maxCallsPerTask} 步、
+                    全天 {DEFAULT_QUOTA.maxCallsPerDay} 次调用，任一上限命中即拒绝并说明原因。
+                    应用侧读不到余额（SDK 只有模型目录和调用两个接口），下面几行就是全部的可见性。
                   </div>
-                )}
-                <div className="small muted mt8">
-                  本次会话（当前标签页，关闭即归零）：已调用 {stats.calls} 次 · 输入 {stats.prompt} tokens · 输出 {stats.completion} tokens
-                </div>
-              </>
-            )}
-          </div>
-        </section>
+                  <div className="small mt8">
+                    今日额度：已用 {quota?.usedTasks ?? 0} / {DEFAULT_QUOTA.dailyTasks} 件事 · 剩 {quota?.remainingTasks ?? DEFAULT_QUOTA.dailyTasks} 件 · 今日累计 {quota?.callsToday ?? 0} 次调用
+                  </div>
+                  {quota?.degraded ? (
+                    <div className="hint mt8">
+                      <strong>额度台账当前不可用</strong>（浏览器隐私模式，或本机存储配额爆了）：护栏处于
+                      <strong>放行</strong>状态，挡不住超额调用。回到正常浏览模式即可恢复计数。
+                    </div>
+                  ) : (
+                    <div className="small muted mt8">
+                      台账记在<strong>这台设备</strong>的浏览器里：清站点数据或换浏览器会重新计数，跨设备不同步。
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </section>
+        ) : null}
 
         <section className="card">
           <div className="card-head">
