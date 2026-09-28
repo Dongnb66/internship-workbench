@@ -415,7 +415,7 @@ inline config（优先级高于配置文件），从而真正监听 `$PORT`。
 ```bash
 curl -s -o /dev/null -w "%{http_code}\n" https://internship-workbench-47024.app.workbuddy.host/   # 期望 200
 curl -s https://internship-workbench-47024.app.workbuddy.host/ | grep -o "<title>[^<]*</title>"    # 期望「实习管理工作台」
-curl -s https://internship-workbench-47024.app.workbuddy.host/ | grep app-version                   # 期望 content="0.8.7"（当前版本）
+curl -s https://internship-workbench-47024.app.workbuddy.host/ | grep app-version                   # 期望 content 与本机 package.json 的 version 一致（别写死数字，它每次发布都会过期）
 ```
 
 发完**必须**再补两条（等于"两个提交号"）：把线上首屏 bundle 抓下来与本机 `dist/` 比 sha256；
