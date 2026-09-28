@@ -12,8 +12,8 @@ describe('emailProblem', () => {
   })
 
   it('纯数字（缺 @ 与域名）→ 说清缺什么，并给出可直接照抄的完整地址', () => {
-    const msg = emailProblem('2088417049')
-    expect(msg).toContain('2088417049@qq.com') // 建议必须补全，不能只说"格式不正确"
+    const msg = emailProblem('myuser')
+    expect(msg).toContain('myuser@qq.com') // 建议必须补全，不能只说"格式不正确"
     expect(msg).toContain('@')
   })
 
@@ -23,13 +23,13 @@ describe('emailProblem', () => {
   })
 
   it('把「输入前后带空格」当合法（用户从别处粘贴很常见）', () => {
-    expect(emailProblem('  2088417049@qq.com  ')).toBeNull()
-    expect(emailLooksValid('  2088417049@qq.com  ')).toBe(true)
+    expect(emailProblem('  example@qq.com  ')).toBeNull()
+    expect(emailLooksValid('  example@qq.com  ')).toBe(true)
   })
 
   it('合法邮箱一律放行 —— 前端不比服务端更严，不挡掉任何合法写法', () => {
     for (const v of [
-      '2088417049@qq.com',
+      'example@qq.com',
       'a_b-1@sub.example.com.cn',
       'x@y.io',
       'first.last+tag@gmail.com',

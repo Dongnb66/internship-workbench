@@ -19,7 +19,14 @@ import { profileHealth } from '../healthCheck'
  * 同类断言（registrationGate / aiPromptCoverage / ownerAccount）都在这里。
  */
 
-const IDENTITY = ['杨运栋', '吉首大学', '张家界', 'Dongnb66', 'vibe-portfolio']
+/**
+ * 发起人邮箱 @ 前那一段。拼开写是为了不在仓库里再留下完整串 ——
+ * 0.8.5 的示例文案里写过它，等于把个人信息编进前端产物（线上 bundle 可 grep），
+ * 加进 IDENTITY 之后，下面那条「产品代码里不得出现身份标记」会顺手守住它。
+ */
+const OWNER_MAIL_LOCAL = ['2088', '417049'].join('')
+
+const IDENTITY = ['杨运栋', '吉首大学', '张家界', 'Dongnb66', 'vibe-portfolio', OWNER_MAIL_LOCAL]
 
 const ROOT = fileURLToPath(new URL('../../../', import.meta.url))
 

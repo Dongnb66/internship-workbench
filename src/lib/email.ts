@@ -1,7 +1,7 @@
 /**
  * 邮箱格式前置校验 + 云服务校验类错误的转译。
  *
- * 起因（2026-09-28 实测）：登录页邮箱框里只填了「2088417049」，点「发送验证码」后
+ * 起因（2026-09-28 实测）：登录页邮箱框里只填了纯数字（漏掉 @ 与域名），点「发送验证码」后
  * 界面上出现的是服务端原文 ——
  *   invalid SendVerificationCodeRequest.Email: value does not match regex pattern
  *   "^[^1][0-9A-Za-z_]{1,40}@[0-9A-Za-z_]{1,40}\.[A-Za-z]{1,10}$"
@@ -22,7 +22,7 @@ export function emailLooksValid(value: string): boolean {
 
 /**
  * 给界面用的中文提示，合法时返回 null。
- * 「缺 @」这一支要顺带把建议补全（`2088417049` → `2088417049@qq.com`），
+ * 「缺 @」这一支要顺带把建议补全（纯数字输入 → 提示里给出「它 + @qq.com」），
  * 用户可以直接照着抄，而不是读一句「格式不正确」再猜。
  */
 export function emailProblem(value: string): string | null {
@@ -40,11 +40,15 @@ export function emailProblem(value: string): string | null {
 /**
  * 把云服务返回的原文翻成人话。只处理能确定含义的几类，其余**原样透出** ——
  * 宁可显示英文原文，也不要编一个可能不对的中文原因。
+ *
+ * ⚠️ 示例一律用 example@qq.com 这类通用串。0.8.5 第一版这里写的是发起人自己的
+ * 邮箱前缀，等于把个人信息编进了前端产物 —— 线上 bundle 里 grep 得到。凡是给用户
+ * 看的样例文案，都不许出现任何真实账号（守门断言见 __tests__/email.test.ts）。
  */
 export function humanizeCloudError(raw: string): string {
   if (!raw) return '请求失败，请重试'
   if (/regex pattern/i.test(raw)) {
-    if (/email/i.test(raw)) return '邮箱格式不对，请填完整地址，例如 2088417049@qq.com'
+    if (/email/i.test(raw)) return '邮箱格式不对，请填完整地址，例如 example@qq.com'
     if (/code|token/i.test(raw)) return '验证码格式不对，应为 6 位数字'
     if (/password/i.test(raw)) return '密码不符合要求，至少 6 位'
     return '填写的内容格式不符合要求，请检查后重试'

@@ -126,14 +126,19 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
   ⚠️ **本机验证的坑（实测）**：Windows 上的 Node **只认 POSIX 形式**的 `TZ`（`EST5EDT` / `GMT+12` 有效），
   `TZ=America/New_York` 这类 IANA 名会被**静默忽略**、回落到系统时区（UTC+8）——
   拿 IANA 名"验证过多时区"等于没验证，本机要么用 POSIX 写法，要么交给 CI（Ubuntu 认 IANA）。
-- **线上站 = `78f6f6a` 的前端构建（与 master 同步，已无落差）**：2026-09-28 13:0x 发布并实测
-  `curl -s <线上>/ | grep app-version` → `<meta name="app-version" content="0.8.3" />`，首页 HTTP 200，
+- **线上站 = `b364538` 的前端构建（0.8.5）**：2026-09-28 13:4x 发布并实测
+  `curl -s <线上>/ | grep app-version` → `<meta name="app-version" content="0.8.5" />`，首页 HTTP 200，
   域名仍是 `-47024`，sandbox 仍是 `f15f04a3222d4d6b87b8720b95f52d07`（复用原应用，未新建）。
-  产物逐字节对上本目录 `npm run build`：`index-D_NrNBsL.js` **585,664 字节**、
-  sha256 `eceed8d428df06e2dbe7ce6a0e8ba7c5fcd48ea9e0cada8021fda8f48d3653b0`；
-  首屏引用的 3 个资源（`index-D_NrNBsL.js` / `index-BnkVttEc.css` / `favicon.svg`）全 200。
-  止血复核（0.8.2 引入、本版延续）：live bundle 内 `杨运栋` / `吉首` / `Dongnb66` / `2088417049` **各 0 命中**，
-  `【姓名，与证件一致】` / `【学校全称 · 只进网申表单，不进打招呼话术】` 等占位符命中，`github.com/...` 无一命中。
+  产物逐字节对上本目录 `npm run build`：`index-BrQBKmBl.js` **586,390 字节**、
+  sha256 `28bf5e56e03a1a0638c437d7d7fe41dcf652fae07bdf82b87cc7b6c6f1d229aa`；
+  首屏引用的 3 个资源（js / css / favicon）全 200。本次新增的功能也逐条在 live bundle 里验过：
+  `不是邮箱地址` / `@qq.com` / `邮箱格式不对，请填完整地址` / `验证码格式不对，应为 6 位数字` 各命中 1 次。
+- ⚠️ **这次止血复核第一次报红，抓住的是我自己**：同一遍复核里 `Dongnb66` 是 0 命中，
+  但 `2088...`（发起人邮箱 @ 前那一段）**命中 1 次** —— 0.8.5 的兜底文案把它当成了示例邮箱。
+  改成 `example@qq.com` 后升 **0.8.6**，并把该前缀加进 `profileTemplate.test.mjs` 的 `IDENTITY`，
+  由既有的全仓扫描守住（变异核对：改回去立刻红在 `src\lib\email.ts`）。
+  ⇒ **教训：凡给用户看的示例文案，一律不许出现任何真实账号。** 这条复核清单本身是有价值的，
+  它这次报的是 1 而不是 0，不是噪声。
 - 历史（2026-09-27）：线上站曾是 `6ce185f` 的前端构建。
    **那是本项目第一次能自证成功的发布**，因为判别器换成了内容型：
   `curl -s <线上>/ | grep app-version` → 实测命中 `<meta name="app-version" content="0.8.1" />`
