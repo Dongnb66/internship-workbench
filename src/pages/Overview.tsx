@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { errText } from '../cloud'
+import { Icon } from '../components/Icon'
 import { Empty, Stat } from '../components/ui'
 import AgentSteps from '../components/AgentSteps'
 import { getQuotaSnapshot } from '../lib/ai'
@@ -192,11 +193,11 @@ export default function Overview({ profile, go }: PageProps) {
         </section>
       ) : null}
       <div className="grid grid-5">
-        <Stat label="岗位池" value={jobs.length} foot={`本周新增 ${jobs.filter((j) => String(j.created_at ?? '').slice(0, 10) >= weekAgo).length}`} icon="🎯" color="#3b82f6" />
-        <Stat label="已投递" value={apps.length} foot={`本周 +${appliedThisWeek}`} icon="📮" color="#f2542d" />
-        <Stat label="面试中" value={interviewing} foot={`进行中的流程 ${interviewing} 个`} icon="🎤" color="#8b5cf6" />
-        <Stat label="Offer" value={offers.length} foot={offers.length ? `待决策 ${offers.filter((o) => (o.decision ?? 'undecided') === 'undecided').length}` : '还没有 Offer'} icon="🏆" color="#12a150" />
-        <Stat label="待办" value={openTasks.length} foot={`7 天内到期 ${dueSoon.length}`} icon="⏰" color="#f59e0b" />
+        <Stat label="岗位池" value={jobs.length} foot={`本周新增 ${jobs.filter((j) => String(j.created_at ?? '').slice(0, 10) >= weekAgo).length}`} icon={<Icon name="jobs" size={15} />} color="#3b82f6" />
+        <Stat label="已投递" value={apps.length} foot={`本周 +${appliedThisWeek}`} icon={<Icon name="send" size={15} />} color="#f2542d" />
+        <Stat label="面试中" value={interviewing} foot={`进行中的流程 ${interviewing} 个`} icon={<Icon name="interviews" size={15} />} color="#8b5cf6" />
+        <Stat label="Offer" value={offers.length} foot={offers.length ? `待决策 ${offers.filter((o) => (o.decision ?? 'undecided') === 'undecided').length}` : '还没有 Offer'} icon={<Icon name="offers" size={15} />} color="#12a150" />
+        <Stat label="待办" value={openTasks.length} foot={`7 天内到期 ${dueSoon.length}`} icon={<Icon name="clock" size={15} />} color="#f59e0b" />
       </div>
 
       <section className="card">

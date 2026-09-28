@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { errText } from '../cloud'
+import { Icon } from '../components/Icon'
 import { Empty, Field, Modal, Stat } from '../components/ui'
 import { analyzeResume, draftResumeFields, parseResumeAnalysis, type ResumeAnalysis } from '../lib/ai'
 import { deleteRow, insertRow, listRows, updateRow } from '../lib/api'
@@ -242,11 +243,11 @@ export default function Resumes({ onChanged, go }: PageProps) {
   return (
     <div className="grid" style={{ gap: 14 }}>
       <div className="grid grid-2">
-        <Stat label="简历版本" value={rows.length} icon="📄" color="#3b82f6" foot="按方向各留一版" />
+        <Stat label="简历版本" value={rows.length} icon={<Icon name="resumes" size={15} />} color="#3b82f6" foot="按方向各留一版" />
         <Stat
           label="投递最多的一版"
           value={rows.length ? [...rows].sort((a, b) => usage(b) - usage(a))[0].name : '—'}
-          icon="🔥"
+          icon={<Icon name="trending-up" size={15} />}
           color="#f2542d"
           foot={rows.length ? `被使用 ${usage([...rows].sort((a, b) => usage(b) - usage(a))[0])} 次` : '还没有版本'}
         />

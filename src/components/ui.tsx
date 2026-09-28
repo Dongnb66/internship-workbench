@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { STAGES } from '../lib/constants'
 
-export function Stat({ label, value, foot, icon, color }: { label: string; value: ReactNode; foot?: ReactNode; icon?: string; color?: string }) {
+export function Stat({ label, value, foot, icon, color }: { label: string; value: ReactNode; foot?: ReactNode; icon?: ReactNode; color?: string }) {
   return (
     <div className="stat">
       <div className="stat-top">

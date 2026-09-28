@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { errText } from '../cloud'
+import { Icon } from '../components/Icon'
 import { Empty, Field, Modal, Stat } from '../components/ui'
 import { generateInterviewPrep, summarizeReflection } from '../lib/ai'
 import { applicationOptions } from '../lib/interviews'
@@ -269,9 +270,9 @@ export default function Interviews({ profile, onChanged }: PageProps) {
   return (
     <div className="grid" style={{ gap: 14 }}>
       <div className="grid grid-3">
-        <Stat label="待进行" value={pending} foot="笔试 / 面试未出结果" icon="⏳" color="#3b82f6" />
-        <Stat label="已通过" value={passed} foot="进入下一轮的" icon="✅" color="#12a150" />
-        <Stat label="未通过" value={failed} foot="复盘比结果重要" icon="📉" color="#9aa3af" />
+        <Stat label="待进行" value={pending} foot="笔试 / 面试未出结果" icon={<Icon name="hourglass" size={15} />} color="#3b82f6" />
+        <Stat label="已通过" value={passed} foot="进入下一轮的" icon={<Icon name="check" size={15} />} color="#12a150" />
+        <Stat label="未通过" value={failed} foot="复盘比结果重要" icon={<Icon name="x" size={15} />} color="#9aa3af" />
       </div>
 
       <div className="card">
