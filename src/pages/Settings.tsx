@@ -93,6 +93,12 @@ export default function Settings({ profile, onChanged }: PageProps) {
 
   const card = channelCard(channel, { hasKey, localReady })
 
+  /**
+   * 「现在会用哪个模型」——草稿优先，否则是这一档已经记下的（从没记过就是表里第一个）。
+   * 候选按钮的高亮与下面「当前会用」那句**共用这一个值**：两处各算一遍，迟早说不到一起。
+   */
+  const modelInUse = modelDraft.trim() || getByoModel(channel)
+
   useEffect(() => {
     setStats(getTokenStats())
     // 额度台账只服务「用本应用的额度」那一档；看不到那张卡的人不必去读它
@@ -255,6 +261,28 @@ export default function Settings({ profile, onChanged }: PageProps) {
 
   function saveByoModel() {
     setByoModel(channel.id, modelDraft)
+    notifyOk(`已记下：${channel.label} 用 ${getByoModel(channel)}`)
+  }
+
+  /**
+   * 点一个「常见模型」＝**选中并立刻记下**，不需要再点一次「记住模型名」。
+   *
+   * 为什么要有这个函数：`channel.models` 一直存在，`aiChannels.ts` 里那个字段的注释写的就是
+   * 「前端下拉用」，但界面只把它拼进了一句提示文字 —— 用户想换模型只能自己去厂商文档里抄名字。
+   * 谁订的模型名谁最清楚，本应用手里已经有这份名单，没有理由不让人点。
+   *
+   * 为什么**同时保留手填**（不做成只读下拉）：新模型、预览版、自建别名/中转别名都可能不在表里，
+   * 而模型名不影响请求发去哪（主机才影响，见 aiChannels.ts 文件头第 1 条），所以手填是安全的。
+   * 表里的名单只是「常见」，不是「允许」。
+   *
+   * 这里必须连草稿一起改写：`modelInUse` 是「草稿优先」的，只存不写草稿的话，
+   * 输入框里那条旧文字会盖住刚选中的值，界面自相矛盾。
+   */
+  function pickByoModel(name: string) {
+    const m = String(name ?? '').trim()
+    if (!m) return
+    setModelDraft(m)
+    setByoModel(channel.id, m)
     notifyOk(`已记下：${channel.label} 用 ${getByoModel(channel)}`)
   }
 
@@ -508,7 +536,19 @@ export default function Settings({ profile, onChanged }: PageProps) {
               </div>
             )}
 
-            <Field label="模型名" hint={`直接发给 ${channel.label}；表里列了 ${channel.models.join(' / ') || '（本机模型的名称在 Ollama 里看）'}，也可以填这一家的其他模型名`}>
+            <Field
+              label="模型名"
+              hint={`直接发给 ${channel.label}。下面这一家的常见模型点一下即生效；也可以手填表里没列的（新模型、预览版、自建别名）`}
+            >
+              {channel.models.length > 0 ? (
+                <div className="row wrap" style={{ gap: 6, marginBottom: 8 }}>
+                  {channel.models.map((m) => (
+                    <button key={m} type="button" className={modelInUse === m ? 'chip on' : 'chip'} onClick={() => pickByoModel(m)}>
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               <div className="row" style={{ gap: 6 }}>
                 <input className="input" value={modelDraft} onChange={(e) => setModelDraft(e.target.value)} placeholder={getByoModel(channel)} />
                 <button className="btn" type="button" onClick={saveByoModel} disabled={!modelDraft.trim()}>
@@ -516,7 +556,7 @@ export default function Settings({ profile, onChanged }: PageProps) {
                 </button>
               </div>
             </Field>
-            <div className="small muted mt8">当前会用：{modelDraft.trim() || getByoModel(channel)}</div>
+            <div className="small muted mt8">当前会用：{modelInUse}</div>
 
             <div className="row mt16" style={{ gap: 8 }}>
               <button className="btn" type="button" onClick={selfCheck} disabled={checking}>
