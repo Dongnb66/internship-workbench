@@ -116,4 +116,29 @@ describe('产品代码的身份清理边界', () => {
     expect(read('LICENSE')).toContain('杨运栋')
     expect(read('README.md')).toContain('Dongnb66')
   })
+
+  it('发起人邮箱那串数字在**整个工作树**里 0 命中（不限 src/miniprogram）', () => {
+    // 为什么单独扫它而不并入上面那条产品代码扫描：姓名与学校在 LICENSE / README / docs / 测试夹具里
+    // 有正当出现处，必须留白名单；而这一串数字**没有任何正当用途**，所以可以要求全树 0 命中。
+    // 触发这条的实证：2026-09-28 我为了"记录一处泄露"把完整串写进了 INBOX 与 CHANGELOG 两处，
+    // 而我当时自称"全仓唯一一处"的那条 grep 只扫了 docs src miniprogram crawler —— 范围写窄了。
+    const mailLocal = ['2088', '417049'].join('')
+    const skip = new Set(['.git', 'node_modules', 'dist', '.venv', 'output'])
+    const hits = []
+    const walk = (dir, depth) => {
+      if (depth > 8) return
+      for (const name of readdirSync(dir)) {
+        if (skip.has(name)) continue
+        const full = join(dir, name)
+        if (statSync(full).isDirectory()) {
+          walk(full, depth + 1)
+          continue
+        }
+        if (!/\.(md|json|txt|ts|tsx|js|jsx|mjs|cjs|sql|yml|yaml|html|css|py|java)$/.test(name)) continue
+        if (readFileSync(full, 'utf8').includes(mailLocal)) hits.push(relative(ROOT, full))
+      }
+    }
+    walk(ROOT, 0)
+    expect(hits, `这串数字出现在不该出现的地方：${hits.join('、')}`).toEqual([])
+  })
 })
