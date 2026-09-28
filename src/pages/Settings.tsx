@@ -561,9 +561,7 @@ export default function Settings({ profile, onChanged }: PageProps) {
           </div>
           <div className="card-body">
             <div className="hint mb16">
-              这一节只管<strong>「用本应用的额度」那一档</strong>：JD 评估、打招呼话术、面试题、简历分析、上传后的字段提炼，
-              在哪一档就用哪一档的模型。自备 Key 与本机模型用的是上面那张卡里填的模型名，跟这里无关。
-              不选就用平台默认模型；所选模型被平台禁用时会自动回退到默认，不会报错中断。这个选择只存在本设备（换设备要重选）。
+              这一节只管<strong>「用本应用的额度」那一档</strong>的模型。自备 Key 与本机模型用上面那张卡里的模型名，跟这里无关。
             </div>
             {modelsErr ? (
               <div className="small" style={{ color: '#d97706' }}>模型目录加载失败：{modelsErr}（不影响其他功能）</div>
@@ -592,22 +590,14 @@ export default function Settings({ profile, onChanged }: PageProps) {
                   {savingModel ? '保存中…' : '保存模型选择'}
                 </button>
                 <div className="hint mt16">
-                  <strong>额度归谁</strong>：这里选的是<strong>平台模型目录里的模型</strong>（DeepSeek / GLM / Kimi / 混元…），
-                  调用链路是「本应用前端 → 本应用的云服务端 → 模型提供方」。
-                  厂商 Key 存在<strong>云服务端</strong>，前端只出示应用标识 + 你的登录态
-                  （SDK 明确不自己构造 Authorization/厂商请求头），
-                  所以走这一档<strong>不用你自己填 Key</strong>，也正因为不用你填，这笔钱不会记在你头上。
+                  <strong>额度归谁</strong>：这一档调用平台模型目录里的模型（DeepSeek / GLM / Kimi / 混元…），
+                  厂商 Key 存在云服务端，<strong>不用你自己填，账单记在应用创建者账号上</strong>
+                  （平台的额度错误码前缀是 <code>quota_</code>，即 <em>Creator quota</em>）。
+                  它<strong>不是默认通道</strong>：「用本应用的额度试用」关着时 AI 一律不调用，使用者自备 Key 或用本机模型。
                   <br />
-                  <strong>账单落在应用创建者账号上</strong>：平台的额度错误码前缀是 <code>quota_</code>，
-                  语义明确是 <em>Creator quota</em>（创建者额度），<strong>不是从每个终端用户的账户里扣</strong>。
-                  因此它<strong>不是默认通道</strong>：上面那张卡里的「用本应用的额度试用」关着时，AI 一律不调用；
-                  使用者要自备 Key 或改用本机模型。护栏也照样生效（下面的日限与步数）。
-                  <br />
-                  <strong>本应用已经上了限额护栏</strong>：每天最多 {DEFAULT_QUOTA.dailyTasks} 件 AI 任务、
-                  单件事最多 {DEFAULT_QUOTA.maxCallsPerTask} 步、全天最多 {DEFAULT_QUOTA.maxCallsPerDay} 次调用，
-                  任一上限命中就拒绝再调，并把原因说清楚（是额度用完，不是网络或你的账号问题）。
-                  <br />
-                  应用侧读不到余额（SDK 只给模型目录和调用两个接口），所以下面这几行就是全部的可见性。
+                  <strong>限额护栏</strong>：每天 {DEFAULT_QUOTA.dailyTasks} 件 AI 任务、单件 {DEFAULT_QUOTA.maxCallsPerTask} 步、
+                  全天 {DEFAULT_QUOTA.maxCallsPerDay} 次调用，任一上限命中即拒绝并说明原因。
+                  应用侧读不到余额（SDK 只有模型目录和调用两个接口），下面几行就是全部的可见性。
                 </div>
                 <div className="small mt8">
                   今日额度：已用 {quota?.usedTasks ?? 0} / {DEFAULT_QUOTA.dailyTasks} 件事 · 剩 {quota?.remainingTasks ?? DEFAULT_QUOTA.dailyTasks} 件 · 今日累计 {quota?.callsToday ?? 0} 次调用

@@ -10,6 +10,7 @@
   --brand: #f2542d;
   --brand-2: #ff7a45;
   --brand-soft: #fff1ec;
+  --ring: rgba(242, 84, 45, 0.12);
   --up: #e8443a;
   --down: #12a150;
   --blue: #3b82f6;
@@ -59,8 +60,7 @@ a {
   align-items: center;
   justify-content: center;
   padding: 32px 16px;
-  background: radial-gradient(1200px 420px at 12% -10%, #ffe7dd 0%, transparent 60%),
-    radial-gradient(900px 420px at 100% 0%, #e8f0ff 0%, transparent 55%), var(--bg);
+  background: radial-gradient(1100px 400px at 18% -8%, #ffe9e0 0%, transparent 58%), var(--bg);
 }
 
 .login-card {
@@ -390,10 +390,11 @@ a {
 }
 
 .stat-val {
-  font-size: 26px;
+  font-size: 28px;
   font-weight: 700;
   margin: 8px 0 2px;
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
 }
 
 .stat-foot {
@@ -486,7 +487,7 @@ a {
 .select:focus,
 .textarea:focus {
   border-color: var(--brand);
-  box-shadow: 0 0 0 3px rgba(242, 84, 45, 0.12);
+  box-shadow: 0 0 0 3px var(--ring);
 }
 
 .textarea {
@@ -856,7 +857,7 @@ table.tb tr:last-child td {
 
 .cal .d.today {
   border-color: var(--brand);
-  box-shadow: 0 0 0 2px rgba(242, 84, 45, 0.1);
+  box-shadow: 0 0 0 2px var(--ring);
 }
 
 .cal .d b {
