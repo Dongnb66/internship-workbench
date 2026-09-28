@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { cloud, errText } from '../cloud'
 import { Field } from '../components/ui'
+import { emailProblem } from '../lib/email'
 import { registrationMode, signupGate } from '../lib/registration'
 
 type Mode = 'otp' | 'password' | 'reset'
@@ -43,8 +44,11 @@ export default function Login() {
 
   /** 获取验证码：登录/注册与找回密码共用入口，按当前模式决定走哪条链路 */
   async function sendCode() {
-    if (!email) {
-      setError('请先填写邮箱')
+    // 前置校验：只填「2088417049」这类明显不是邮箱的输入，不再把服务端的正则原文
+    // （value does not match regex pattern ...）抛到界面上 —— 见 lib/email.ts 文件头
+    const problem = emailProblem(email)
+    if (problem) {
+      setError(problem)
       return
     }
     setError('')
@@ -86,6 +90,11 @@ export default function Login() {
   }
 
   async function loginWithPassword() {
+    const problem = emailProblem(email)
+    if (problem) {
+      setError(problem)
+      return
+    }
     setError('')
     setInfo('')
     setBusy(true)
