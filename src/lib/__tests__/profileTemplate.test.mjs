@@ -85,6 +85,17 @@ describe('出厂画像模板', () => {
     expect(leaked, `miniprogram/utils/constants.js 还留着：${leaked.join('、')}`).toEqual([])
   })
 
+  it('模板的示例值不带任何具体届数（发起人自己那届曾经就是示例）', () => {
+    // 0.8.11 补漏：上面那条 IDENTITY 扫描的词表是「姓名 / 学校 / 张家界 / GitHub / 作品集 / 邮箱本地段」，
+    // **年份不在里面**，于是 `grad_year: '【毕业届，如 2028 届】'` 一直没被任何断言看见 ——
+    // 而 2028 正是发起人自己的届数，这个串也确实编进了线上 bundle（实测 offset 296070）。
+    // 它不像 gapPlan 那句是「对读者断言」，只是个格式示例，但标准是同一条（HANDOFF §11b）。
+    const bad = templateStrings(PROFILE_TEMPLATE).filter((s) => /20\d{2}\s*届/.test(s))
+    expect(bad, `模板示例里写了具体届数：${bad.join(' ｜ ')}`).toEqual([])
+    const mp = read('miniprogram/utils/constants.js')
+    expect(/20\d{2}\s*届/.test(mp), '小程序那份模板里还写着具体届数').toBe(false)
+  })
+
   it('模板必须停在「骨架」状态：填了它不等于画像齐全，体检要还能报出缺项', () => {
     const items = profileHealth(
       {

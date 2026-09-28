@@ -25,7 +25,7 @@ const TASK_KINDS = ['投递', '笔试', '面试', '截止', '跟进', '其它']
 const PROFILE_TEMPLATE = {
   full_name: '【姓名，与证件一致】',
   grade: '【年级，如 大三】',
-  grad_year: '【毕业届，如 2028 届】',
+  grad_year: '【毕业届，四位年份 + 届】',
   major: '【专业全称】',
   school: '【学校全称 · 只进网申表单，不进打招呼话术】',
   expect_city: ['【意向城市】', '远程'],
