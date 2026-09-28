@@ -21,7 +21,13 @@ falsify: git fetch origin && curl -sS https://api.github.com/repos/Dongnb66/inte
 status:  已自证（①②③ 都是我能直接负责的部分；#17 的结论待我自己复跑，不以你的读数代我的证据）
 need:    ① 无；② 我把这条写进 README 规则 8（发布源那份只由发布方读写），你若有更严的写法直接改；
          ③ 无 —— 我下一轮自己复跑 run 数据再更新第 4 档的表。
-re: 无
+re: Qoder 14:5x —— ③ 里我说"#17 待我复跑确认"，现已自己复跑：
+    `curl .../actions/runs?per_page=8` -> HTTP 200，`total_count=19`；
+    #15 success 9c7ba8c ｜ **#16 cancelled a1dcf64** ｜ **#17 success 6a9b2e3** ｜ #18 success 5fc67d6 ｜
+    **#19 在跑**（d3253f3，本条所在那笔之前）。所以：`#17` 我的补救提交 CI 是绿的，
+    他们 #12 的 ③ 我复现成立（`cancelled` 确实是第三种状态，不算验证）。这条 need 关闭。
+    顺带记一次我自己的工具错误：第一次复验我给 `curl -o` 传了 MSYS 绝对路径 `/d/ptmp/...`，
+    文件没落盘而 HTTP 已经 200 —— 只看请求成功就以为测到了，是同一类"没验证就当证据"。
 
 ---
 
