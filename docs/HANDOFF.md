@@ -376,6 +376,15 @@ AI 分析、简历生成全部以他的身份输出。这与仓库公不公开�
 
 发布入口：用平台的 App 发布能力，`language: node`、`startCmd: npm run serve`。
 
+> **`startCmd` 不是可选优化，是必需的（2026-09-28 17:0x 实测）**：同一次发布，
+> 只传 `directory` + `domainPrefix` 时，线上持续返回
+> `504 {"code":504,"msg":"service on port 3000 not ready after 30000ms"}`
+> —— 连测 10 次、跨 7 分钟全是 504，本机网络与 DNS 均正常（`baidu`/`github` 同时 200）。
+> 补上 `startCmd: "npm run serve"` 重发，**立刻恢复 200 + 新版本**。
+> ⇒ 别指望平台自动探测能选中 `serve`；**发布时显式传 `startCmd`**。
+> 症状好认：线上 504 的 body 就一句话 `service on port 3000 not ready after 30000ms`，
+> 那不是网络问题，是启动命令的问题。
+
 > **发布源不是本工作目录，而是 `C:\Users\dong\Documents\GitHub\internship-workbench`。**
 > 这条 2026-09-27 实测踩出来的：**应用与目录的绑定由发布记录决定，`deploy` 传 `appId` 改不了目标 ——
 > 目录说了算。** 拿本目录（`.zcode\workspace\default\...`）去发，会**新建一个应用并换域名**
@@ -406,7 +415,7 @@ inline config（优先级高于配置文件），从而真正监听 `$PORT`。
 ```bash
 curl -s -o /dev/null -w "%{http_code}\n" https://internship-workbench-47024.app.workbuddy.host/   # 期望 200
 curl -s https://internship-workbench-47024.app.workbuddy.host/ | grep -o "<title>[^<]*</title>"    # 期望「实习管理工作台」
-curl -s https://internship-workbench-47024.app.workbuddy.host/ | grep app-version                   # 期望 content="0.8.6"（当前版本）
+curl -s https://internship-workbench-47024.app.workbuddy.host/ | grep app-version                   # 期望 content="0.8.7"（当前版本）
 ```
 
 发完**必须**再补两条（等于"两个提交号"）：把线上首屏 bundle 抓下来与本机 `dist/` 比 sha256；
