@@ -12,9 +12,12 @@ const { applicationOptions } = await import('../interviews')
 
 describe('面试表单的关联投递选项', () => {
   it('文案 = 公司 · 岗位（投递日期），按投递时间最新在前', () => {
+    // 夹具按**线上真实写入的形状**来：`applied_at` 全部由 <input type="date"> / todayISO()
+    // 写入，是纯日期串。早先这里写的是 '2026-09-23T09:00:00Z'，在 UTC-11 会落到 09-22，
+    // 「投递日期」这条断言就变成了"测时区"而不是测文案。
     const apps = [
-      { id: 2, company: '腾讯', title: 'AI 全栈工程师', applied_at: '2026-09-20T10:00:00Z' },
-      { id: 1, company: '同元软控', title: 'Agent 实习', applied_at: '2026-09-23T09:00:00Z' },
+      { id: 2, company: '腾讯', title: 'AI 全栈工程师', applied_at: '2026-09-20' },
+      { id: 1, company: '同元软控', title: 'Agent 实习', applied_at: '2026-09-23' },
     ]
     const opts = applicationOptions(apps)
     expect(opts.map((o) => o.id)).toEqual([1, 2])

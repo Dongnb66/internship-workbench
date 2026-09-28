@@ -1,4 +1,4 @@
-import { todayISO } from './format'
+import { dateOnly, parseDate, todayISO } from './format'
 import type { Row } from '../types'
 
 export interface PaceConfig {
@@ -90,7 +90,11 @@ export interface StaleItem {
 
 /** 已投递但超过 days 天没有新沟通的岗位，提醒跟进 */
 export function staleApplications(applications: Row[], messages: Row[], days = 7, today: string = todayISO()): StaleItem[] {
-  const base = new Date(today).getTime()
+  // 两端都按**本地日历日**比（parseDate / dateOnly，与 format、daily、followup 同一条规则）。
+  // 原先 `new Date(today)` 与 `new Date(lastAt.slice(0, 10))` 都是 UTC 锚点：对纯日期串恰好正确，
+  // 但库里 `sent_at` 存的是 ISO 时间戳，`slice(0, 10)` 取的是 **UTC** 日 ——
+  // 于是同一条沟通在「跟进节奏」里显示 09-25、在岗位池列表里显示 09-26，差一天且不报错。
+  const base = parseDate(today).getTime()
   const out: StaleItem[] = []
   for (const app of applications) {
     if (app.stage === 'offer' || app.stage === 'rejected') continue
@@ -101,8 +105,9 @@ export function staleApplications(applications: Row[], messages: Row[], days = 7
     ].filter(Boolean)
     const lastAt = times.sort().at(-1) ?? null
     if (!lastAt) continue
-    const diff = Math.floor((base - new Date(String(lastAt).slice(0, 10)).getTime()) / 86400000)
-    if (diff >= days) out.push({ application: app, lastAt: String(lastAt).slice(0, 10), days: diff })
+    const lastDay = dateOnly(lastAt)
+    const diff = Math.round((base - parseDate(lastDay).getTime()) / 86400000)
+    if (diff >= days) out.push({ application: app, lastAt: lastDay, days: diff })
   }
   return out.sort((a, b) => b.days - a.days)
 }

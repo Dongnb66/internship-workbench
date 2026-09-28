@@ -1,4 +1,4 @@
-import { todayISO } from './format'
+import { pad, parseDate, todayISO } from './format'
 import { FOLLOWUP_WINDOWS } from './timeline'
 import type { Row } from '../types'
 
@@ -30,16 +30,27 @@ export interface FollowupItem {
   suggestion: string
 }
 
+/**
+ * 纯日期串 + n 天（本地日历日）。
+ *
+ * 踩过的坑（2026-09-28，由 CI 的负偏移时区复跑抓出来）：原先写的是
+ * `new Date(iso.slice(0, 10))` —— 纯日期串按 **UTC 零点** 解析，而 `getDate()` /
+ * `setDate()` 用的是**本地**口径。在 UTC-4，`'2026-09-20'` 被读成 09-19 20:00，
+ * `+4 天` 得到 09-23（应为 09-24），于是每条投递的「该不该催」都提前一天。
+ * UTC+8（本机）与 UTC（CI 默认）都恰好正常 —— 这一类只在整个西半球出错。
+ */
 function plusDays(iso: string, days: number): string {
-  const d = new Date(iso.slice(0, 10))
-  d.setDate(d.getDate() + days)
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${d.getFullYear()}-${m}-${day}`
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number)
+  const t = new Date(y, m - 1, d + days)
+  return `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}`
 }
 
 function diffDays(today: string, due: string): number {
-  return Math.floor((new Date(today).getTime() - new Date(due).getTime()) / 86400000)
+  // 两端都按本地日历日构造（与 format.ts#daysLeft 同一条规则）。
+  // 用 round 不用 floor：跨夏令时的那一天是 23 或 25 小时，floor 会把 23 小时算成 0 天。
+  const a = parseDate(today.slice(0, 10)).getTime()
+  const b = parseDate(due.slice(0, 10)).getTime()
+  return Math.round((a - b) / 86400000)
 }
 
 export function followupDue(applications: Row[], messages: Row[], today: string = todayISO()): FollowupItem[] {

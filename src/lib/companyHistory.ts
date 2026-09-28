@@ -11,7 +11,7 @@
  * - **没评分的岗位不能当 0 分**。`Number(null)` 是 0，直接平均会把均值拉低到骗人。
  */
 import type { Row } from '../types'
-import { todayISO } from './format'
+import { dateOnly, parseDate, todayISO } from './format'
 
 export interface CompanyJobBrief {
   id: unknown
@@ -82,7 +82,10 @@ export function companyHistory(
   const related = messages.filter((m) => appIds.has(String(m.application_id)))
   const lastContactAt = related.length ? latestContact(related) : null
   const daysSinceLastContact = lastContactAt
-    ? Math.floor((new Date(today).getTime() - new Date(lastContactAt).getTime()) / 86400000)
+    // 按**本地日历日**算（与 format / daily / pace / followup 同一条规则）。
+    // 原先 `new Date(today)`（纯日期串 → UTC 零点）直接减时间戳，比的是"离今天零点几小时"，
+    // 于是 09-27 晚上 8 点（UTC）联系过会显示「0 天前」，而列表页显示的是 09-28。
+    ? Math.round((parseDate(today).getTime() - parseDate(dateOnly(lastContactAt)).getTime()) / 86400000)
     : null
 
   // 裁掉的那些按「分数高的先看」，留下的才是有信息量的 20 条

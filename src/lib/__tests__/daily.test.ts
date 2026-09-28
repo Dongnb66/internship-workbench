@@ -29,12 +29,16 @@ describe('daysFrom', () => {
   it('带时间的时间戳按**本地日历日**取，不取 UTC 日期部分', () => {
     // 老实现是 `slice(0, 10)`（取时间戳的 UTC 日期），UTC+8 下与列表页差一天：
     // 同一份 deadline 在「今日优先」算 2 天、在岗位池列表算 3 天，且不报错。
+    // 注意别写成 `expect(daysFrom(TODAY, instant)).toBe(2)` 这种硬编码整数 ——
+    // 时间戳的「本地日历日」本来就是随时区变的（`2026-09-23T12:00:00Z` 在 UTC+12
+    // 已是次日），硬编码会把这条断言变成"测时区"。只断言"与它本地日历日算出来的一致"。
     for (const instant of ['2026-09-25T16:00:00.000Z', '2026-09-23T12:00:00.000Z']) {
       const t = new Date(instant)
       const localDay = `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}`
       expect(daysFrom(TODAY, instant), `daysFrom(${instant})`).toBe(daysFrom(TODAY, localDay))
     }
-    expect(daysFrom(TODAY, '2026-09-23T12:00:00.000Z')).toBe(0)
+    // 纯日期串这一支与本地时区无关，可以钉死整数
+    expect(daysFrom(TODAY, '2026-09-23')).toBe(0)
   })
 
   it('与岗位池列表同一条规则：同一截止日两处算出的天数必须一致', () => {

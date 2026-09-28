@@ -64,6 +64,16 @@ describe('followupDue（按状态的跟进窗口）', () => {
     expect(items).toHaveLength(0)
   })
 
+  it('到期日按本地日历日推进：UTC 解析 + 本地 getDate 会整体差一天', () => {
+    // `'2026-09-20'` 若被 `new Date()` 按 UTC 零点解析，在 UTC-4 本地是 09-19 20:00，
+    // `getDate() + 4` 落在 23 号，到期日提前一天（正确值 09-24）。
+    // 这条在 UTC+8（本机）与 UTC（CI 默认）都不红 —— 牙长在换时区复跑上。
+    const items = followupDue([app(11)], [msg(11, 'sent', '2026-09-20T09:00:00')], '2026-09-24')
+    expect(items).toHaveLength(1)
+    expect(items[0].dueAt).toBe('2026-09-24')
+    expect(items[0].overdueDays).toBe(0)
+  })
+
   it('多条沟通取最后一条的状态与日期；按超期天数降序', () => {
     const items = followupDue(
       [app(7), app(8)],

@@ -13,11 +13,17 @@ import {
 import { pad, todayISO } from '../format'
 import type { Row } from '../../types'
 
-/** 相对今天偏移 n 天的 YYYY-MM-DD，避免测试依赖某个固定日期 */
+/**
+ * 相对今天偏移 n 天的 YYYY-MM-DD，避免测试依赖某个固定日期。
+ *
+ * 必须走**本地**日历日构造：`new Date(todayISO())` 是 UTC 零点，再 `setDate` 用的是本地
+ * getter/setter，在整个西半球会整体退回一天 —— 那样 `iso(-10)` 实际只有 9 天前，
+ * 「超期天数」这组断言会在非 UTC+8 的时区里静默失真（UTC+8 与 UTC 都看不出来）。
+ */
 function iso(offset: number): string {
-  const d = new Date(todayISO())
-  d.setDate(d.getDate() + offset)
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+  const [y, m, d] = todayISO().split('-').map(Number)
+  const t = new Date(y, m - 1, d + offset)
+  return `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}`
 }
 
 const today = todayISO()

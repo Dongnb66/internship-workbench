@@ -16,7 +16,11 @@ import {
   type CallRecord,
 } from '../quota'
 
-const NOW = new Date('2026-09-26T10:30:00+08:00')
+// 夹具用**本地** 2026-09-26 10:30，不用 `new Date('2026-09-26T10:30:00+08:00')`：
+// 那是个绝对瞬时，在 UTC-4 落到 09-25 22:30，`dayKey(NOW)` 于是变成 '2026-09-25'，
+// 与下面硬写的 TODAY/YESTERDAY 全部对不上 —— 8 条断言只在西半球红。
+// 额度是按使用者的本地日历日切桶的，夹具必须把这件事表达清楚。
+const NOW = new Date(2026, 8, 26, 10, 30, 0)
 const TODAY = '2026-09-26'
 const YESTERDAY = '2026-09-25'
 
