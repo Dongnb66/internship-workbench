@@ -316,11 +316,11 @@ export default function Interviews({ profile, onChanged }: PageProps) {
                       {row.company} · {row.title ?? ''}
                     </span>
                     <span className="badge">{row.kind ?? '面试'}</span>
-                    <span className="badge brand">{row.round_name ?? '—'}</span>
+                    <span className="badge brand">{row.round_name ?? '暂无'}</span>
                     <span className={RESULT_LABEL[row.result ?? 'pending']?.cls ?? 'badge'}>{RESULT_LABEL[row.result ?? 'pending']?.text ?? '待进行'}</span>
                     <span className="spacer" />
                     <span className="small muted">
-                      {fmtDateTime(row.scheduled_at)} · {row.mode ?? '—'} {row.place ? `· ${row.place}` : ''}
+                      {fmtDateTime(row.scheduled_at)} · {row.mode ?? '暂无'} {row.place ? `· ${row.place}` : ''}
                     </span>
                   </div>
                   {row.questions ? (
@@ -337,7 +337,7 @@ export default function Interviews({ profile, onChanged }: PageProps) {
                   ) : null}
                   {(violationsByInterview.get(Number(row.id)) ?? []).map((v) => (
                     <div key={v.label} className="small mt8" style={{ color: '#b45309' }}>
-                      ⚠ {v.label} —— {v.fix}（原话：{v.quote}）
+                      ⚠ {v.label}：{v.fix}（原话：{v.quote}）
                     </div>
                   ))}
                   <div className="actions mt8">

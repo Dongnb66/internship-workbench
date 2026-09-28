@@ -474,7 +474,7 @@ export default function Jobs({ profile, onChanged, go }: PageProps) {
       <details className="card">
         <summary className="card-head" style={{ cursor: 'pointer' }}>
           <h3>渠道能力边界</h3>
-          <span className="small muted">投递永远是人工 —— 点开看各渠道在采集 / AI 处理 / 投递 / 回填四个环节的分工</span>
+          <span className="small muted">投递永远是人工。点开看采集 / AI 处理 / 投递 / 回填四个环节的分工</span>
         </summary>
         <div className="card-body">
           <div className="table-wrap">
@@ -502,7 +502,7 @@ export default function Jobs({ profile, onChanged, go }: PageProps) {
             </table>
           </div>
           <div className="small muted mt8">
-            「投递」一列恒为人工：本工作台不登录招聘平台、不自动发送任何消息，最终提交永远由你完成 ——
+            「投递」一列恒为人工：本工作台不登录招聘平台、不自动发送任何消息，最终提交永远由你完成。
             这是产品承诺，不是暂未实现。
           </div>
         </div>
@@ -657,11 +657,11 @@ export default function Jobs({ profile, onChanged, go }: PageProps) {
                       <div className="cell-main">{row.company}</div>
                       <div className="cell-sub">{row.title}</div>
                     </td>
-                    <td>{row.city ?? '—'}</td>
+                    <td>{row.city ?? '暂无'}</td>
                     <td>
-                      <span className="badge">{row.job_type ?? '—'}</span>
+                      <span className="badge">{row.job_type ?? '暂无'}</span>
                     </td>
-                    <td className="small">{row.salary ?? '—'}</td>
+                    <td className="small">{row.salary ?? '暂无'}</td>
                     <td>
                       <ScoreCell value={Number(row.match_score ?? 0)} />
                     </td>
@@ -731,7 +731,7 @@ export default function Jobs({ profile, onChanged, go }: PageProps) {
           <div className="grid grid-2 mb16">
             <div>
               <div className="small muted">薪资</div>
-              <div>{detail.salary ?? '—'}</div>
+              <div>{detail.salary ?? '暂无'}</div>
             </div>
             <div>
               <div className="small muted">截止日期</div>
@@ -741,7 +741,7 @@ export default function Jobs({ profile, onChanged, go }: PageProps) {
             </div>
             <div>
               <div className="small muted">来源</div>
-              <div>{detail.source ?? '—'}</div>
+              <div>{detail.source ?? '暂无'}</div>
             </div>
             <div>
               <div className="small muted">匹配度</div>

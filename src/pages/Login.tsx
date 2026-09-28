@@ -228,7 +228,7 @@ export default function Login() {
         </div>
         <p className="login-sub">
           填邮箱收验证码即可：已有账号就登录，新邮箱会自动开一个。
-          <strong>AI 功能需要你自己的模型 Key（或本机模型）</strong>——本应用的额度记在创建者账号上，不默认替使用者承担。
+          <strong>AI 功能需要你自己的模型 Key（或本机模型）</strong>，本应用的额度记在创建者账号上，不默认替使用者承担。
           {inviteNeeded ? '这个站现在按邀请码开账号，新邮箱记得带上创建者给你的码。' : ''}
         </p>
 
@@ -271,7 +271,7 @@ export default function Login() {
         {needPasswordField ? (
           <Field
             label="登录密码"
-            hint="首次使用请设置（至少 6 位）。注意：已有账号用验证码登录时，这里填的密码不会生效（认证服务会忽略）——老账号补设密码请用「找回密码」"
+            hint="首次使用请设置（至少 6 位）。注意：已有账号用验证码登录时，这里填的密码不会生效（认证服务会忽略），老账号补设密码请用「找回密码」"
           >
             <input
               className="input"

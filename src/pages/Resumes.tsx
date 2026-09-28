@@ -163,7 +163,7 @@ export default function Resumes({ onChanged, go }: PageProps) {
         try {
           const draft = await draftResumeFields(text)
           if (!draft.highlights && !draft.projects && !draft.notes) {
-            notifyErr('AI 没提炼出内容（模型返回为空）——三个栏位留空了，请手动填写')
+            notifyErr('AI 没提炼出内容（模型返回为空），三个栏位已留空，请手动填写')
           } else {
             setForm((f) => ({
               ...f,
@@ -174,7 +174,7 @@ export default function Resumes({ onChanged, go }: PageProps) {
             notifyOk('已按简历原文提炼出亮点/项目/备注草稿，请核对修改后保存')
           }
         } catch (error) {
-          notifyErr('AI 提炼失败：' + errText(error) + ' —— 栏位留空了，可手动填写后再保存')
+          notifyErr('AI 提炼失败：' + errText(error) + '，栏位已留空，可手动填写后再保存')
         }
       }
     } catch (error) {
@@ -293,8 +293,8 @@ export default function Resumes({ onChanged, go }: PageProps) {
                         {row.content_text ? '' : ' · 无文本（AI 分析不可用）'}
                       </div>
                     </td>
-                    <td className="small">{row.direction ?? '—'}</td>
-                    <td className="small">{row.target_role ?? '—'}</td>
+                    <td className="small">{row.direction ?? '暂无'}</td>
+                    <td className="small">{row.target_role ?? '暂无'}</td>
                     <td className="mono">{usage(row)}</td>
                     <td>{row.is_default ? <span className="badge ok">默认</span> : <span className="badge">—</span>}</td>
                     <td>

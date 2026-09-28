@@ -457,7 +457,7 @@ export default function Settings({ profile, onChanged }: PageProps) {
           </div>
           <div className="card-body">
             <div className="hint mb16">
-              AI 只走你在这里选的那一条通道，而且<strong>默认是自备 Key</strong>——花你自己账户的余额。
+              AI 只走你在这里选的那一条通道，而且<strong>默认是自备 Key</strong>，花的是你自己账户的余额。
               下面这个「本应用的额度」记在<strong>应用创建者的账号</strong>上，所以它默认关着，不会替使用者垫钱。
             </div>
 
@@ -540,14 +540,14 @@ export default function Settings({ profile, onChanged }: PageProps) {
               </div>
             ) : OWNER_EMAIL ? (
               <div className="small muted mt16">
-                「用本应用的额度试用」这道开关只对<strong>应用创建者的账号</strong>显示——当前登录的不是创建者账号，所以这里看不到它。
+                「用本应用的额度试用」这道开关只对<strong>应用创建者的账号</strong>显示。当前登录的不是创建者账号，所以这里看不到它。
                 AI 请自备 Key，或选本机模型。
               </div>
             ) : (
               <div className="hint mt16">
                 还没有「用本应用的额度」这一档可用：创建者邮箱没在 <code>src/lib/ownerAccount.ts</code> 的
                 <code> OWNER_EMAIL </code>里设置，所以<strong>谁都不算创建者</strong>，这道开关对谁都不显示。
-                留空是刻意的默认关闭——要开这一档，先填上你自己的登录邮箱，再用该账号来这里勾选。
+                留空是刻意的默认关闭。要开这一档，先填上你自己的登录邮箱，再用该账号来这里勾选。
               </div>
             )}
           </div>
@@ -562,7 +562,7 @@ export default function Settings({ profile, onChanged }: PageProps) {
           <div className="card-body">
             <div className="hint mb16">
               这一节只管<strong>「用本应用的额度」那一档</strong>：JD 评估、打招呼话术、面试题、简历分析、上传后的字段提炼，
-              在哪一档就用哪一档的模型——自备 Key 与本机模型用的是上面那张卡里填的模型名，跟这里无关。
+              在哪一档就用哪一档的模型。自备 Key 与本机模型用的是上面那张卡里填的模型名，跟这里无关。
               不选就用平台默认模型；所选模型被平台禁用时会自动回退到默认，不会报错中断。这个选择只存在本设备（换设备要重选）。
             </div>
             {modelsErr ? (
@@ -586,7 +586,7 @@ export default function Settings({ profile, onChanged }: PageProps) {
                 <div className="small muted mt8">计费：{modelCostLabel(chosenModel)}</div>
                 <div className="hint mt8">
                   不选＝走平台的 <strong>Auto</strong>：它每次都自动挑模型，且是<strong>高推理档的思考型</strong>，
-                  所以又快又便宜都不是它的目标——想稳、想省钱、想快，就在上面选一个具体模型。
+                  所以又快又便宜都不是它的目标。想稳、想省钱、想快，就在上面选一个具体模型。
                 </div>
                 <button className="btn primary mt8" onClick={saveModel} disabled={savingModel}>
                   {savingModel ? '保存中…' : '保存模型选择'}
@@ -596,10 +596,10 @@ export default function Settings({ profile, onChanged }: PageProps) {
                   调用链路是「本应用前端 → 本应用的云服务端 → 模型提供方」。
                   厂商 Key 存在<strong>云服务端</strong>，前端只出示应用标识 + 你的登录态
                   （SDK 明确不自己构造 Authorization/厂商请求头），
-                  所以走这一档<strong>不用你自己填 Key</strong>——也正因为不用你填，这笔钱不会记在你头上。
+                  所以走这一档<strong>不用你自己填 Key</strong>，也正因为不用你填，这笔钱不会记在你头上。
                   <br />
                   <strong>账单落在应用创建者账号上</strong>：平台的额度错误码前缀是 <code>quota_</code>，
-                  语义明确是 <em>Creator quota</em>（创建者额度）——<strong>不是每个终端用户扣自己的</strong>。
+                  语义明确是 <em>Creator quota</em>（创建者额度），<strong>不是从每个终端用户的账户里扣</strong>。
                   因此它<strong>不是默认通道</strong>：上面那张卡里的「用本应用的额度试用」关着时，AI 一律不调用；
                   使用者要自备 Key 或改用本机模型。护栏也照样生效（下面的日限与步数）。
                   <br />

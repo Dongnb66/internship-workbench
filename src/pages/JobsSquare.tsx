@@ -195,7 +195,7 @@ export default function JobsSquare({ profile, onChanged, go }: PageProps) {
         }
       }
       if (failed) {
-        notifyErr(`已加入 ${ok} 个，失败 ${failed} 个 —— 通常是网络或登录态问题，可重试`)
+        notifyErr(`已加入 ${ok} 个，失败 ${failed} 个，通常是网络或登录态问题，可重试`)
       } else {
         notifyOk(`已加入 ${ok} 个岗位到岗位池`)
       }
@@ -305,7 +305,7 @@ export default function JobsSquare({ profile, onChanged, go }: PageProps) {
               <h3>{isMissingTable(loadError) ? '岗位广场还没建好' : '岗位广场读取失败'}</h3>
               <span className="small muted">
                 {isMissingTable(loadError)
-                  ? '公共岗位表（jobs_public）还没有在这个环境里创建 —— 页面代码已就绪，缺的只是数据表本身。'
+                  ? '公共岗位表（jobs_public）还没有在这个环境里创建。页面代码已就绪，缺的只是数据表本身。'
                   : loadError}
               </span>
             </div>
@@ -360,7 +360,7 @@ export default function JobsSquare({ profile, onChanged, go }: PageProps) {
                 <span className="idx">2</span>
                 <h4>广场数据还没导入</h4>
                 <p>
-                  广场需要先把公共岗位写进数据库才会有人看到。在灌入之前，这里就是空的 —— 这是预期状态，不是坏了。
+                  广场需要先把公共岗位写进数据库才会有人看到。在灌入之前，这里就是空的，这是预期状态，不是坏了。
                 </p>
               </div>
             </div>
@@ -420,12 +420,12 @@ export default function JobsSquare({ profile, onChanged, go }: PageProps) {
                           {bl.length ? <span className="badge danger">已拉黑</span> : null}
                           {repost ? <span className="badge warn">⚠ 僵尸重发</span> : null}
                         </td>
-                        <td>{job.city ?? '—'}</td>
+                        <td>{job.city ?? '暂无'}</td>
                         <td>
-                          <span className="badge">{job.job_type ?? '—'}</span>
+                          <span className="badge">{job.job_type ?? '暂无'}</span>
                         </td>
-                        <td className="small">{job.salary ?? '—'}</td>
-                        <td className="small">{job.source ?? '—'}</td>
+                        <td className="small">{job.salary ?? '暂无'}</td>
+                        <td className="small">{job.source ?? '暂无'}</td>
                         <td>
                           {already ? <span className="badge ok">已在池中</span> : <ScoreCell value={score} />}
                         </td>
@@ -490,11 +490,11 @@ export default function JobsSquare({ profile, onChanged, go }: PageProps) {
           <div className="grid grid-2 mb16">
             <div>
               <div className="small muted">薪资</div>
-              <div>{detail.salary ?? '—'}</div>
+              <div>{detail.salary ?? '暂无'}</div>
             </div>
             <div>
               <div className="small muted">来源渠道</div>
-              <div>{detail.source ?? '—'}</div>
+              <div>{detail.source ?? '暂无'}</div>
             </div>
             <div>
               <div className="small muted">采集时间</div>

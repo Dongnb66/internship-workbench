@@ -366,9 +366,9 @@ export default function Pipeline({ profile, onChanged, go }: PageProps) {
                           <span className="muted">暂无</span>
                         )}
                       </td>
-                      <td className="small">{row.channel ?? '—'}</td>
+                      <td className="small">{row.channel ?? '暂无'}</td>
                       <td className="small">{fmtDate(row.applied_at)}</td>
-                      <td className="small">{row.next_action ?? '—'}</td>
+                      <td className="small">{row.next_action ?? '暂无'}</td>
                       <td>
                         <div className="actions">
                           <button className="linkish" onClick={() => setConvFor(row)}>

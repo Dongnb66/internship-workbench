@@ -184,9 +184,9 @@ export default function Offers({ onChanged }: PageProps) {
                   <tr key={row.id}>
                     <td>
                       <div className="cell-main">{row.company}</div>
-                      <div className="cell-sub">{row.title ?? '—'}</div>
+                      <div className="cell-sub">{row.title ?? '暂无'}</div>
                     </td>
-                    <td>{row.city ?? '—'}</td>
+                    <td>{row.city ?? '暂无'}</td>
                     <td className="small">
                       {row.daily_rate ? `¥${row.daily_rate}/天` : '—'}
                       <br />

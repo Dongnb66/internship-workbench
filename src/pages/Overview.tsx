@@ -34,7 +34,7 @@ const STOP_LABEL: Record<StopReason, string> = {
   // model_error 的触发面很宽：没接上 AI 通道、Key 失效、余额不足、厂商侧故障都会落到这里，
   // 而在「AI 只走使用者自备 Key」的口径下，本应用根本没有"额度"给使用者用。指一条确定的
   // 排查路径（自检能区分是断在哪一环），比替用户猜原因有用。
-  model_error: '模型没跑起来 —— 去「目标条件」页的「AI 通道」点「自检一下」',
+  model_error: '模型没跑起来。去「目标条件」页的「AI 通道」点「自检一下」',
   aborted: '已手动停止',
 }
 
@@ -183,7 +183,7 @@ export default function Overview({ profile, go }: PageProps) {
               去接 AI 通道
             </button>
           </div>
-          <div className="small mb8">本应用的额度记在创建者账号上，不默认替使用者承担 —— 所以 AI 要走你自己的模型通道。三步：</div>
+          <div className="small mb8">本应用的额度记在创建者账号上，不默认替使用者承担，所以 AI 要走你自己的模型通道。三步：</div>
           <ol className="small">
             {BYO_SETUP_STEPS.map((s) => (
               <li key={s}>{s}</li>
@@ -268,7 +268,7 @@ export default function Overview({ profile, go }: PageProps) {
           ) : null}
           {quotaNow.degraded ? (
             <div className="small mt4" style={{ color: '#b45309' }}>
-              额度台账当前不可用（浏览器隐私模式或存储配额爆了），这一轮的调用没被计数——护栏是放行状态。
+              额度台账当前不可用（浏览器隐私模式或存储配额爆了），这一轮的调用没被计数，护栏处于放行状态。
             </div>
           ) : null}
 
@@ -282,7 +282,7 @@ export default function Overview({ profile, go }: PageProps) {
           ) : null}
           {agent.stop ? (
             <div className="small muted mt4">
-              停止原因：{STOP_LABEL[agent.stop]}。巡检只给清单与建议，<strong>不替你发任何东西</strong>——投递与打招呼由你确认。
+              停止原因：{STOP_LABEL[agent.stop]}。巡检只给清单与建议，<strong>不替你发任何东西</strong>，投递与打招呼由你确认。
             </div>
           ) : (
             <div className="small muted mt4">巡检只读数据、只出清单与建议，不自动投递也不自动发消息。</div>
@@ -335,7 +335,7 @@ export default function Overview({ profile, go }: PageProps) {
             <div className="small muted mt8">
               回复后到面率 {funnel.interviewAfterReplyRate}%。
               {cal.gap !== null
-                ? ` 评分校准：被拒的当时均分 ${cal.rejectedAvg} 分，走到后面的均分 ${cal.advancedAvg} 分，差 ${cal.gap} 分${cal.gap >= 20 ? '——预筛在起作用，低分确实该拦。' : cal.gap >= 0 ? '——差距不大，预筛阈值可以再收紧一点。' : '——被拒的反而是当时打高分的，校准一下 skill 关键词。'}`
+                ? ` 评分校准：被拒的当时均分 ${cal.rejectedAvg} 分，走到后面的均分 ${cal.advancedAvg} 分，差 ${cal.gap} 分${cal.gap >= 20 ? '。预筛在起作用，低分确实该拦。' : cal.gap >= 0 ? '。差距不大，预筛阈值可以再收紧一点。' : '。被拒的反而是当时打高分的，校准一下 skill 关键词。'}`
                 : ' 评分校准要有「被拒」和「推进到后面」两种结果后才会出现。'}
             </div>
           </div>
