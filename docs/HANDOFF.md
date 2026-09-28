@@ -13,9 +13,13 @@
 | 本机路径 | `C:\Users\dong\Documents\GitHub\internship-workbench` |
 | 技术栈 | React 19 + Vite + TypeScript（前端）/ 平台云服务 BaaS（DB + Auth + Storage + LLM） |
 | 线上地址 | https://internship-workbench-47024.app.workbuddy.host/ （发布方式见第 12 节） |
-| 远程仓库 | **`git@github.com:Dongnb66/internship-workbench.git`（私有，已推送）** |
-| 分支 | `master`，跟踪 `origin/master`，工作树干净 |
-| 规模 | 260 个已跟踪文件 / 1.72 MB / 54 个测试文件 / 716 条断言全绿 + 59 条真浏览器夹具断言（`cd crawler && npm run selftest`）（2026-09-28 实测） |
+| 远程仓库 | `git@github.com:Dongnb66/internship-workbench.git` —— **已转 public**（匿名可读，2026-09-28 15:33 +0800 实测 `github.com/...` 与 `api.github.com/...` 均 200） |
+| 分支 | `master`，跟踪 `origin/master`；HEAD = `7b51717`，与远端对齐（`0 0`），工作树干净 |
+| 规模 | **266** 个已跟踪文件 / **56 个测试文件 / 738 条断言全绿** + 59 条真浏览器夹具断言（`cd crawler && npm run selftest`）（2026-09-28 15:33 +0800 `npm test` 实测） |
+
+> ⚠️ **本表在 2026-09-28 15:33 前写的是「私有 / 260 文件 / 54 文件 716 条」——两者都已过期，原文按本仓库惯例不抹、在此更正。**
+> 私有→public 的变更发生在 15:00 前后（`docs/sync/README.md` 规则 2 那条更正里已记：转 public 后匿名
+> `GET /actions/runs` 从 404 变 200）。**这一条对交接影响最大**：第 11 节的授权步骤整节失效，见该节更正。
 
 ## 1. 五分钟上手
 
@@ -100,7 +104,9 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
 4. **扫描/解析类断言要先「钉住扫描本身」**（如「至少扫到 N 个且包含已知文件」），
    否则扫描逻辑一失效，下游断言全部假绿。
 5. **改完必须跑 `npm run typecheck && npm test && npm run lint && npm run build` 四件套**，
-   并把测试数变化写进提交信息（当前基线 **716**，54 个测试文件；另有 59 条真浏览器夹具断言，见第 6 节）。
+   并把测试数变化写进提交信息（当前基线 **738**，56 个测试文件；另有 59 条真浏览器夹具断言，见第 6 节）。
+   基线由 `npm test` 打印的 `Tests N passed` 为准，**不要抄这份文档里的数字**——它已经错过 4 次。
+   （`.github/workflows/ci.yml` 注释里那个「716 条全绿」是**当时**的描述，属历史记录，不改。）
 6. **提交信息写「为什么」**，不写「改了什么」。历次提交都遵循这个风格，可以 `git log` 看。
 
 ## 5. 当前状态快照（2026-09-28）
@@ -111,7 +117,8 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
   **注册是默认开放**——同日先收成邀请码、当天被推翻（理由见 `CHANGELOG.md` Unreleased/Changed 与
   `src/lib/registration.ts` 文件头）：自备 Key 之后开号不再产生创建者成本，而码的代价是"每来一个用户都要亲自发一次"。
   旋钮仍在：`INVITE_CODES` 里填进真码就自动回到"要码"模式。
-- 测试：**54 个文件 / 722 条断言全绿**，且在 **13 个时区配置**下逐个跑过（偏移 UTC-14 … UTC+14）；
+- 测试：**56 个文件 / 738 条断言全绿**（2026-09-28 15:33 +0800 本机实测 `npm test` → `Test Files 56 passed`、`Tests 738 passed`，
+  该文档此前写的「54 个文件 / 722 条」是 09-28 早间的旧读数），部分历史轮次在 **13 个时区配置**下逐个跑过（偏移 UTC-14 … UTC+14）；
   另有 **59 条真浏览器夹具断言**（`cd crawler && npm run selftest`，
   对着 `extension/__fixtures__/` 的 7 个页面跑本机 Edge）；`tsc -b`、`oxlint`（0 error / 26 warning）、`vite build` 均通过。
 - 最近提交（倒序）：日期口径收敛成一条 + CI 加时区守卫 → 时区守卫第一跑抓出的第二批
@@ -158,6 +165,16 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
    （沙箱重启也会改它），而首页 ETag 的"大小位"写的是 `292`、实际响应体 658 字节，连文件大小都不是。
    比对首屏文件时还要注意**行尾**：本机 checkout 是 CRLF、沙箱产物是 LF，同一份内容会差出 14 字节。
 
+- ⚠️ **已知口径不一致（2026-09-28 15:33 +0800 复核，未修，待发起人定夺）**：仓库里硬编码的技术数字口径是
+  **`5 个项目 / 6 个仓库 / 508 条测试`**，而发起人简历现行口径是 **`518 条测试`**（2026-09-25 逐项复核后更新，差在
+  主项目 `python-learning-agent` 由 146 升到 156）。落点共 5 个产品文件 + 2 份文档 + 1 个测试：
+  `src/lib/constants.ts`(#128 `GREETING_RULES`)、`miniprogram/utils/constants.js`(#64，同一条规则的移植)、
+  `src/lib/healthCheck.ts`(#81)、`src/pages/AiLab.tsx`(#478)、`src/pages/ApplyKit.tsx`(#197)、
+  `AGENTS.md`(#43)、以及钉住它的 `crawler/__tests__/contract.test.mjs`(#81，`PARTS` 数组含 `'508'` 与 `'146'`)。
+  **为什么不在交接时顺手改**：① 它是产品代码（会进用户可见文案），改完必须升版本 + 重新发布才生效，
+  否则线上继续输出旧数字；② `contract.test.mjs` 是跨端契约测试，**改数字等于同时改两端的白名单**，
+  漏掉 `miniprogram/utils/constants.js` 会直接红；③ 数字口径本身属于「写进简历与所有衍生材料」的
+  发起人决策（`AGENTS.md` §2.2），**不该由 agent 单方面改**。交给接手方：**先问，再改，五处一起改**。
 - 已知缺口与优先级在 `docs/BENCHMARK.md` 第二节（P0：渠道能力边界表、漏斗转化统计、跟进节奏）。
 
 ### 5b. 只有创建者本人能做的四件事（代码到不了的那一半）
@@ -238,47 +255,66 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
   任何 AI 工具进仓库先读这两份即可；不需要额外的口头交代。
 - **三项能力交接不了**（见第 7 节）：线上发布、云服务环境管理、模型额度付款方。
   这三样都挂在 WorkBuddy 平台上，接手方只能改代码 + 本地验证。
-- **转公开的唯一硬阻塞已经拆掉**（2026-09-28）：`PROFILE_TEMPLATE` 曾内含发起人的真实姓名、学校、
+- **仓库已于 2026-09-28 转 public**（原文写「转公开的唯一硬阻塞已经拆掉…接受即可转公开」，此处更正：
+  已经转了，2026-09-28 15:33 +0800 实测匿名可读）。拆掉的阻塞正是：`PROFILE_TEMPLATE` 曾内含发起人的真实姓名、学校、
   GitHub 与自我介绍，而它是**任何注册用户都能点**的「一键填入」默认值 —— 所以那不只是交接问题，
   是线上产品缺陷。现在两端模板都是【】占位，产品代码里身份命中 0 处（有断言守）。
   密钥 / cookie / 抓取产物的历史扫描结论见第 11 节：**从没进过 git**。
-  剩下的只有第 11 节列的两件「非密钥暴露」，接受即可转公开。
+  转公开同时接受了两件「非密钥暴露」（抓取器手法可读、提交节奏可见），见第 11 节。
 
 ## 10. 接手后的第一件事建议
 
 按顺序做，别跳：
 
-1. `npm install && npm run typecheck && npm test` —— 确认基线是 **716 全绿 / 54 个文件**（不是就先查环境）。
+1. `npm install && npm run typecheck && npm test` —— 确认基线是 **738 全绿 / 56 个文件**（不是就先查环境）。
+   历史教训：这份文档里的基线数字曾连续 4 处写旧（716/722/54），**照抄它会把正常环境误判成坏了**。
+   唯一权威是 `npm test` 自己打印的 `Tests N passed`。
 2. `git log --oneline -15` 读提交信息，理解近期决策的「为什么」。
 3. 读 `AGENTS.md` 的硬约束 + 本文件第 3 节的不变量。
 4. 从 `docs/BENCHMARK.md` 第二节挑一个 P0 缺口开工，并在动手前先写会变红的断言。
 
-## 11. 私有仓库的访问方式（接手方必读）
+## 11. 仓库的访问方式（接手方必读）
 
-仓库地址：`git@github.com:Dongnb66/internship-workbench.git`（私有）。
+仓库地址：`https://github.com/Dongnb66/internship-workbench`（**已转 public**）。
 
 ```bash
-git clone git@github.com:Dongnb66/internship-workbench.git
-cd internship-workbench && npm install && npm run typecheck && npm test   # 基线 716 全绿 / 54 个文件
+# 已转 public ⇒ 匿名 HTTPS 即可，无需任何凭据（2026-09-28 15:33 +0800 实测）
+git clone https://github.com/Dongnb66/internship-workbench.git
+cd internship-workbench && npm install && npm run typecheck && npm test   # 基线 738 全绿 / 56 个文件
+
+# 本机（同一台 Windows）要推送时走 SSH：
+# git remote set-url origin git@github.com:Dongnb66/internship-workbench.git
 ```
 
-**私有仓意味着接手方必须先能认证**，两条路：
+> ⚠️ **本节原标题是「私有仓库的访问方式」、正文要求「先配 SSH / Deploy Key / Collaborator」——
+> 原文按惯例不抹，在此更正：仓库转 public 后这些步骤全部不需要了。**
+> 2026-09-28 15:33 +0800 实测：`github.com/Dongnb66/internship-workbench` → **200**、
+> `api.github.com/repos/Dongnb66/internship-workbench` → **200**（转 public 前两者都是 404）。
+> 下表与「首次推送经过」保留，作为历史记录：
 
-| 接手方运行位置 | 需要什么 |
+| 接手方运行位置 | 需要什么（**已转 public，读代码不再需要任何授权**） |
 | --- | --- |
-| 本机（同一台 Windows） | 直接用现有 SSH key（`~/.ssh/id_ed25519` 已加到 GitHub 账号），无需额外配置 |
-| 其他机器 / 云端 | 需要单独授权：把该环境的 SSH 公钥加成**仓库 Deploy Key**（只读即可），或在 GitHub 网页把它加成 Collaborator |
+| 任意位置（只读） | 无 —— HTTPS clone 即可 |
+| 本机（同一台 Windows，需要推送） | 直接用现有 SSH key（`~/.ssh/id_ed25519` 已加到 GitHub 账号） |
+| 其他机器 / 云端（需要推送） | 得是 Collaborator；只读**不需要** Deploy Key 了 |
 
-**首次推送的完整经过（记下来，避免重复踩）**：
+**首次推送的完整经过（历史，记下来避免重复踩）**：
 1. AI 侧**建不了仓**——GitHub 集成对 `POST /user/repos` 返回 403（`Resource not accessible by integration`）。
 2. AI 侧**走 HTTPS 推不了**——报 `could not read Username`（本机 git 只有 WorkBuddy 的
-   `helper-selector`，不外露用户凭据）。**必须用 SSH remote。**
+   `helper-selector`，不外露用户凭据）。**推送必须用 SSH remote。**
 3. GitHub Desktop 的 `Publish branch` 也失败了，原因是 **Desktop 自己没登录 GitHub 账号**
    （`File → Options → Accounts` 登录可修）。它失败在建仓那一步之前，所以没有留下半成品仓库。
-4. 最终路径：**人在网页建一个空私有仓**（不勾 README/.gitignore/license）→ AI 用 SSH 推送成功。
+4. 最终路径：**人在网页建一个空仓**（不勾 README/.gitignore/license）→ AI 用 SSH 推送成功。
 
-推送后核对过四项：远端 `master` = 本地 HEAD、远端 190 个文件、分支跟踪已建立、
-**未登录访问 `github.com/Dongnb66/internship-workbench` 与 API 均返回 404**（确认私有）。
+推送后核对过四项：远端 `master` = 本地 HEAD、分支跟踪已建立、
+**未登录访问 `github.com/Dongnb66/internship-workbench` 与 API 均返回 404**（当时确认私有 ——
+**这句现已失效，转 public 后是 200**）。
+
+### 11b. 已转 public：现在必须多守一条
+
+**仓库公开 ⇒ 任何写进 `docs/` 或提交信息的「原始输出」都可能永久可读。**本轮实测踩过一次：
+一条 INBOX 条目贴 `curl` 返回体时把**发起人网络的公网出口 IP** 原样写了进去（已脱敏、`git grep` 复核 0 命中）。
+写进公开仓库之前先问一句：**这段输出里有 IP / 邮箱 / cookie / 会话片段吗？**
 
 
 **个人信息与密钥：转公开前的实测结论（2026-09-28 复扫）**
