@@ -126,19 +126,27 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
   ⚠️ **本机验证的坑（实测）**：Windows 上的 Node **只认 POSIX 形式**的 `TZ`（`EST5EDT` / `GMT+12` 有效），
   `TZ=America/New_York` 这类 IANA 名会被**静默忽略**、回落到系统时区（UTC+8）——
   拿 IANA 名"验证过多时区"等于没验证，本机要么用 POSIX 写法，要么交给 CI（Ubuntu 认 IANA）。
-- **线上站 = `b364538` 的前端构建（0.8.5）**：2026-09-28 13:4x 发布并实测
-  `curl -s <线上>/ | grep app-version` → `<meta name="app-version" content="0.8.5" />`，首页 HTTP 200，
+- **线上站 = `9c7ba8c` 的前端构建（0.8.6，0.8.5 那处泄露已清）**：2026-09-28 14:32 发布并实测
+  `curl -s <线上>/ | grep app-version` → `<meta name="app-version" content="0.8.6" />`，首页 HTTP 200，
   域名仍是 `-47024`，sandbox 仍是 `f15f04a3222d4d6b87b8720b95f52d07`（复用原应用，未新建）。
-  产物逐字节对上本目录 `npm run build`：`index-BrQBKmBl.js` **586,390 字节**、
-  sha256 `28bf5e56e03a1a0638c437d7d7fe41dcf652fae07bdf82b87cc7b6c6f1d229aa`；
-  首屏引用的 3 个资源（js / css / favicon）全 200。本次新增的功能也逐条在 live bundle 里验过：
-  `不是邮箱地址` / `@qq.com` / `邮箱格式不对，请填完整地址` / `验证码格式不对，应为 6 位数字` 各命中 1 次。
-- ⚠️ **这次止血复核第一次报红，抓住的是我自己**：同一遍复核里 `Dongnb66` 是 0 命中，
-  但 `2088...`（发起人邮箱 @ 前那一段）**命中 1 次** —— 0.8.5 的兜底文案把它当成了示例邮箱。
-  改成 `example@qq.com` 后升 **0.8.6**，并把该前缀加进 `profileTemplate.test.mjs` 的 `IDENTITY`，
-  由既有的全仓扫描守住（变异核对：改回去立刻红在 `src\lib\email.ts`）。
+  产物逐字节对上本目录 `npm run build`：`index-B1Lj0CS5.js` **586,387 字节**、
+  sha256 `59c17f71d424bcf4ae562850bcc9557d7dfed8b18f154ac5dd9241f62b3d188a`；
+  首屏引用的 3 个资源（js / css / favicon）全 200。
+  **止血复核全 0**：`杨运栋` / `吉首大学` / `Dongnb66` / 邮箱本地段 / 完整地址 **各 0 命中**；
+  `【姓名，与证件一致】` 命中 1 次、`example@qq.com` 命中 2 次（示例文案已中性化）。
+- 历史（2026-09-28 13:4x）：线上站曾是 **`b364538` 的构建（0.8.5）**，`index-BrQBKmBl.js`
+  586,390 字节、sha256 `28bf5e56…`。⚠️ **那一版的止血复核第一次报红，抓住的是我自己**：
+  同一遍复核里 `Dongnb66` 是 0 命中，但发起人邮箱那串**命中 1 次** —— 0.8.5 的兜底文案把它当成了
+  示例邮箱，而且它不止是"@ 前那一段"，是**带 `@qq.com` 后缀的完整地址**（第一轮汇报我把它说小了，
+  照 `grep -o -- "<完整串>" | wc -l` 的读数复述，别凭印象降级）。改成 `example@qq.com` 后升 **0.8.6**，
+  并把该段加进 `profileTemplate.test.mjs` 的 `IDENTITY`，由既有的全仓扫描守住
+  （变异核对：改回去立刻红在 `src\lib\email.ts`）。
   ⇒ **教训：凡给用户看的示例文案，一律不许出现任何真实账号。** 这条复核清单本身是有价值的，
   它这次报的是 1 而不是 0，不是噪声。
+- **线上归因方法（2026-09-28 起）**：要回答"线上跑的是哪个提交"，不再靠比文件名 / 字节数，
+  而是在候选提交上开临时 worktree 重建、与线上产物比 sha256（`0.8.5` 那次重建得同名同字节同哈希
+  ⇒ 线上就是 `b364538`）。重构类提交（行为不变、无可 grep 特征）只有这一招能证。
+  命令与 Windows 下的坑见 `docs/sync/INBOX.md` #8 与技能 `web-project-publish-pitfalls` 陷阱 10。
 - 历史（2026-09-27）：线上站曾是 `6ce185f` 的前端构建。
    **那是本项目第一次能自证成功的发布**，因为判别器换成了内容型：
   `curl -s <线上>/ | grep app-version` → 实测命中 `<meta name="app-version" content="0.8.1" />`
@@ -358,7 +366,10 @@ inline config（优先级高于配置文件），从而真正监听 `$PORT`。
 ```bash
 curl -s -o /dev/null -w "%{http_code}\n" https://internship-workbench-47024.app.workbuddy.host/   # 期望 200
 curl -s https://internship-workbench-47024.app.workbuddy.host/ | grep -o "<title>[^<]*</title>"    # 期望「实习管理工作台」
-curl -s https://internship-workbench-47024.app.workbuddy.host/ | grep app-version                   # 期望 content="0.8.3"（当前版本）
+curl -s https://internship-workbench-47024.app.workbuddy.host/ | grep app-version                   # 期望 content="0.8.6"（当前版本）
 ```
+
+发完**必须**再补两条（等于"两个提交号"）：把线上首屏 bundle 抓下来与本机 `dist/` 比 sha256；
+再 grep 一遍 `IDENTITY`（姓名/学校/GitHub 名/邮箱），**必须全 0** —— 见 `docs/sync/INBOX.md` #7/#8/#9。
 
 站点管理入口在平台侧：**设置—数据管理—应用**。
