@@ -16,7 +16,10 @@ export default function AgentSteps({ steps }: { steps: ActionStep[] }) {
           <span className={s.error ? 'badge danger' : 'badge info'}>{s.step}</span>
           <div style={{ minWidth: 0, flex: 1 }}>
             <div className="cell-main">
-              {s.tool ? `调用 ${s.tool}` : s.thought ? '给出结论' : '（没识别出指令）'}
+              {/* 这一步既没调工具也没出结论 = 模型这轮没返回可用内容（下面会显示观察与错误）。
+                  原来写的是「（没识别出指令）」，读起来像在怪用户没说清楚 —— 而用户只是点了
+                  一个按钮，真正的断点在下方的错误里。标签只描述"这一步没有产出"。 */}
+              {s.tool ? `调用 ${s.tool}` : s.thought ? '给出结论' : '（这一步没有产出）'}
               <span className="small muted"> · {s.ms}ms</span>
             </div>
             {s.thought ? <div className="cell-sub">想法：{s.thought}</div> : null}
