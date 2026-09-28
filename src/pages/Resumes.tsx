@@ -76,7 +76,7 @@ export default function Resumes({ onChanged, go }: PageProps) {
 
   async function save() {
     if (!form.name?.trim()) {
-      notifyErr('简历名称必填，如「杨运栋-AI Agent方向」')
+      notifyErr('简历名称必填，如「姓名-AI Agent方向」')
       return
     }
     setBusy(true)
@@ -357,7 +357,7 @@ export default function Resumes({ onChanged, go }: PageProps) {
         >
           <div className="grid grid-2">
             <Field label="名称 *">
-              <input className="input" value={form.name ?? ''} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="如 杨运栋-通用投递" />
+              <input className="input" value={form.name ?? ''} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="如 姓名-通用投递" />
             </Field>
             <Field label="版本号">
               <input className="input" value={form.version ?? ''} onChange={(e) => setForm({ ...form, version: e.target.value })} />

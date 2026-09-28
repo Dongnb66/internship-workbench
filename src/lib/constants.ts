@@ -49,25 +49,30 @@ export const TASK_KINDS = ['投递', '笔试', '面试', '截止', '跟进', '�
 export const KNOW_CATEGORIES = ['八股', '面经', '项目', '打招呼话术', '公司情报', '面试准备']
 export const RESUME_DIRECTIONS = ['AI Agent 方向', '后端方向', '全栈方向', '算法方向', '通用投递']
 
-/** 目标条件模板：一键填入发起人已知的可验证事实，可自行修改 */
+/**
+ * 出厂模板：只给字段骨架与填写口径，**不含任何真实个人的信息**。
+ *
+ * 这份模板会被每个注册用户的「一键填入」灌进表单，而提示语还叫人补两格就保存。
+ * 早期版本放的是发起人自己的姓名、学校、GitHub 与自我介绍，于是陌生人保存下来的
+ * 画像就是发起人的画像 —— 之后的打招呼话术、AI 分析、简历生成全部以他的身份输出。
+ * 所以身份字段一律用【】占位：没替换就保存，产物里会明晃晃露出方括号，
+ * 而不是悄悄变成另一个人。数字字段留 null：填了数字等于替别人定死期望日薪，
+ * 而 `Number('【…】')` 还会变成 NaN 存进库。
+ */
 export const PROFILE_TEMPLATE = {
-  full_name: '杨运栋',
-  grade: '大三',
-  grad_year: '2028 届',
-  major: '计算机科学与技术',
-  school: '吉首大学张家界学院',
-  expect_city: ['广州', '深圳', '远程'],
+  full_name: '【姓名，与证件一致】',
+  grade: '【年级，如 大三】',
+  grad_year: '【毕业届，如 2028 届】',
+  major: '【专业全称】',
+  school: '【学校全称 · 只进网申表单，不进打招呼话术】',
+  expect_city: ['【意向城市】', '远程'],
   expect_type: ['实习', '日常实习'],
-  expect_daily: 180,
-  skills: ['Python', 'FastAPI', 'LangGraph', 'RAG', 'React', 'TypeScript', 'Node/Express', 'Spring Boot', 'MySQL', 'Docker', 'pytest/JUnit'],
-  directions: ['AI Agent 应用', 'LLM 工程', 'Python 后端', '全栈开发'],
-  available_days: '每周 5 天，可连续实习 6 个月以上',
-  self_intro:
-    '2028 届计算机科学与技术本科在读，独立完成 5 个开源项目（6 个仓库、508 条测试），主力项目用 FastAPI + LangGraph 实现多智能体学习系统，含 BM25 三道代码级防幻觉 RAG 与三层记忆。',
-  resume_summary:
-    '5 个开源项目 / 6 个仓库，合计 508 条测试（python-learning-agent 146 · campus-mutual-aid 71 · travel-rank 79 · mcp-toolkit 48 · offer-pipeline 前端 129 + agent-platform-java 后端 35）。' +
-    '主力项目 python-learning-agent：FastAPI + LangGraph，ReAct 自主辅导 Agent + BM25 三道代码级防幻觉 RAG + 三层记忆，pytest 全离线可跑。' +
-    '可流畅阅读英文技术文档与官方 API 文档。',
+  expect_daily: null as number | null,
+  skills: ['【技能，逐个填 · 只写能对着公开仓库核对的】'],
+  directions: ['【投递方向，如 AI Agent 应用】'],
+  available_days: '【每周几天、可连续几个月】',
+  self_intro: '【一段话：届别 + 专业 + 做过什么；写进去的数字要能在公开仓库里核对】',
+  resume_summary: '【项目 / 仓库 / 测试条数，逐条可核对；不写无法验证的形容词】',
 }
 
 /**

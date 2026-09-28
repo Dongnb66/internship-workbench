@@ -175,7 +175,7 @@ export default function Coach({ profile, onChanged }: PageProps) {
         <div className="card-body">
           <div className="grid grid-2">
             <Field label="GitHub 用户名" hint="仓库必须是公开的：私有仓库这一轮读不到，会明确告诉你「无法确认」">
-              <input className="input" value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="Dongnb66" />
+              <input className="input" value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="your-github-name" />
             </Field>
             <Field label="仓库名">
               <input className="input" value={repo} onChange={(e) => setRepo(e.target.value)} placeholder="my-rag-demo" />

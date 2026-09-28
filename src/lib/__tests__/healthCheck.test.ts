@@ -1,14 +1,33 @@
 import { describe, expect, it } from 'vitest'
 
 import { healthSummary, profileHealth } from '../healthCheck'
-import { PROFILE_TEMPLATE } from '../constants'
 import type { Profile } from '../../types'
 
+/**
+ * 「齐全画像」用自己的假数据，不复用 PROFILE_TEMPLATE。
+ *
+ * 以前这里是 `{...PROFILE_TEMPLATE}`，于是模板一改，体检的测试就跟着红 ——
+ * 而模板现在的职责恰恰是**骨架**（全是【】占位、技能只有 1 条、数字字段留空），
+ * 拿它当「齐全」的样本是在断言一件反过来的事。
+ */
 const full: Profile = {
-  ...PROFILE_TEMPLATE,
+  full_name: '张三',
+  grade: '大三',
+  grad_year: '2028 届',
+  major: '计算机科学与技术',
+  school: '某大学',
+  expect_city: ['广州', '远程'],
+  expect_type: ['实习', '日常实习'],
+  expect_daily: 180,
+  skills: ['Python', 'FastAPI', 'React', 'TypeScript', 'Docker'],
+  directions: ['AI Agent 应用', 'LLM 工程'],
+  available_days: '每周 5 天，可连续实习 6 个月以上',
+  self_intro:
+    '2028 届计算机科学与技术本科在读，独立完成 3 个带测试的开源项目，主力项目用 FastAPI + LangGraph 实现多智能体系统，含检索增强与三层记忆。',
+  resume_summary: '3 个开源项目 / 4 个仓库，合计 120 条测试，全部可 clone 复跑。',
   phone: '13800000000',
   contact_email: 'me@example.com',
-  github: 'https://github.com/Dongnb66',
+  github: 'https://github.com/someone',
   portfolio: 'https://example.com',
 } as Profile
 

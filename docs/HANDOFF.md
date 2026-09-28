@@ -15,7 +15,7 @@
 | 线上地址 | https://internship-workbench-47024.app.workbuddy.host/ （发布方式见第 12 节） |
 | 远程仓库 | **`git@github.com:Dongnb66/internship-workbench.git`（私有，已推送）** |
 | 分支 | `master`，跟踪 `origin/master`，工作树干净 |
-| 规模 | 258 个已跟踪文件 / 1.71 MB / 52 个测试文件 / 704 条断言全绿 + 59 条真浏览器夹具断言（`cd crawler && npm run selftest`）（2026-09-27 实测） |
+| 规模 | 260 个已跟踪文件 / 1.72 MB / 54 个测试文件 / 716 条断言全绿 + 59 条真浏览器夹具断言（`cd crawler && npm run selftest`）（2026-09-28 实测） |
 
 ## 1. 五分钟上手
 
@@ -100,7 +100,7 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
 4. **扫描/解析类断言要先「钉住扫描本身」**（如「至少扫到 N 个且包含已知文件」），
    否则扫描逻辑一失效，下游断言全部假绿。
 5. **改完必须跑 `npm run typecheck && npm test && npm run lint && npm run build` 四件套**，
-   并把测试数变化写进提交信息（当前基线 **704**，52 个测试文件；另有 59 条真浏览器夹具断言，见第 6 节）。
+   并把测试数变化写进提交信息（当前基线 **716**，54 个测试文件；另有 59 条真浏览器夹具断言，见第 6 节）。
 6. **提交信息写「为什么」**，不写「改了什么」。历次提交都遵循这个风格，可以 `git log` 看。
 
 ## 5. 当前状态快照（2026-09-27）
@@ -111,7 +111,7 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
   **注册是默认开放**——同日先收成邀请码、当天被推翻（理由见 `CHANGELOG.md` Unreleased/Changed 与
   `src/lib/registration.ts` 文件头）：自备 Key 之后开号不再产生创建者成本，而码的代价是"每来一个用户都要亲自发一次"。
   旋钮仍在：`INVITE_CODES` 里填进真码就自动回到"要码"模式。
-- 测试：**52 个文件 / 704 条断言全绿**；另有 **59 条真浏览器夹具断言**（`cd crawler && npm run selftest`，
+- 测试：**54 个文件 / 716 条断言全绿**；另有 **59 条真浏览器夹具断言**（`cd crawler && npm run selftest`，
   对着 `extension/__fixtures__/` 的 7 个页面跑本机 Edge）；`tsc -b`、`oxlint`（0 error / 26 warning）、`vite build` 均通过。
 - 最近提交（倒序）：版本号升 0.8.1（让 app-version 标记能区分代际）→ 构建期注入版本标记 →
   实习僧乱码不是反爬、是我们把干净数据压掉了 → 抓取器三件（CLI 入口可测 / 详情页 JD 不许静默 / OfferBiu 一条一岗）→
@@ -209,16 +209,17 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
   任何 AI 工具进仓库先读这两份即可；不需要额外的口头交代。
 - **三项能力交接不了**（见第 7 节）：线上发布、云服务环境管理、模型额度付款方。
   这三样都挂在 WorkBuddy 平台上，接手方只能改代码 + 本地验证。
-- **不要为了交接而把仓库推成公开仓库**：`src/lib/constants.ts` 的 `PROFILE_TEMPLATE` 内含真实姓名与学校
-  （它是「一键填入已知事实」的模板，服务于使用者本人的网申表单，不是示例数据）。
-  本项目**目前没有远端**；要交接建议用**私有仓库或直接给本机路径**。
-  若确实要公开，必须先决定 `PROFILE_TEMPLATE` 里的个人信息怎么处理。
+- **转公开的唯一硬阻塞已经拆掉**（2026-09-28）：`PROFILE_TEMPLATE` 曾内含发起人的真实姓名、学校、
+  GitHub 与自我介绍，而它是**任何注册用户都能点**的「一键填入」默认值 —— 所以那不只是交接问题，
+  是线上产品缺陷。现在两端模板都是【】占位，产品代码里身份命中 0 处（有断言守）。
+  密钥 / cookie / 抓取产物的历史扫描结论见第 11 节：**从没进过 git**。
+  剩下的只有第 11 节列的两件「非密钥暴露」，接受即可转公开。
 
 ## 10. 接手后的第一件事建议
 
 按顺序做，别跳：
 
-1. `npm install && npm run typecheck && npm test` —— 确认基线是 **704 全绿 / 52 个文件**（不是就先查环境）。
+1. `npm install && npm run typecheck && npm test` —— 确认基线是 **716 全绿 / 54 个文件**（不是就先查环境）。
 2. `git log --oneline -15` 读提交信息，理解近期决策的「为什么」。
 3. 读 `AGENTS.md` 的硬约束 + 本文件第 3 节的不变量。
 4. 从 `docs/BENCHMARK.md` 第二节挑一个 P0 缺口开工，并在动手前先写会变红的断言。
@@ -229,7 +230,7 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
 
 ```bash
 git clone git@github.com:Dongnb66/internship-workbench.git
-cd internship-workbench && npm install && npm run typecheck && npm test   # 基线 704 全绿 / 52 个文件
+cd internship-workbench && npm install && npm run typecheck && npm test   # 基线 716 全绿 / 54 个文件
 ```
 
 **私有仓意味着接手方必须先能认证**，两条路：
@@ -251,13 +252,43 @@ cd internship-workbench && npm install && npm run typecheck && npm test   # 基�
 **未登录访问 `github.com/Dongnb66/internship-workbench` 与 API 均返回 404**（确认私有）。
 
 
-**仓库里确实存在个人信息的 3 类**（私有仓可接受，转公开前必须处理）：
+**个人信息与密钥：转公开前的实测结论（2026-09-28 复扫）**
 
-| 内容 | 处数 | 位置 |
+*已经修掉的*：`PROFILE_TEMPLATE` 曾是发起人的真实画像（姓名 / 学校 / GitHub / 作品集 /
+自我介绍 / 508 条测试口径），而「一键填入模板」是**任何注册用户都能点**的产品功能，
+提示语还叫人补两格就保存 —— 陌生人存下来的画像是发起人的画像，之后的打招呼话术、
+AI 分析、简历生成全部以他的身份输出。这与仓库公不公开无关，线上站点当时就能点到。
+现在两端模板（`src/lib/constants.ts` + `miniprogram/utils/constants.js`）一律改成【】占位，
+数字字段留 `null`（填数字等于替别人定死期望日薪，而 `Number('【…】')` 还会变成 NaN 入库），
+`src/pages/Settings.tsx` 与 `miniprogram/pages/me/me.js` 里硬编码的 GitHub / 作品集链接清空。
+断言在 `src/lib/__tests__/profileTemplate.test.mjs`（8 条，4 个变异体全杀，其中「扫描是否空转」
+与「骨架断言是否真空」两个手工复核过）。
+
+*剩下的 14 处命中，全部是该留的*（`git grep -o "杨运栋\|吉首大学\|张家界\|Dongnb66\|vibe-portfolio"`）：
+
+| 文件 | 处数 | 为什么留 |
 | --- | --- | --- |
-| 真实姓名 | 9 | `src/lib/constants.ts`（`PROFILE_TEMPLATE`）、测试夹具、小程序端 `miniprogram/` |
-| 学校名 | 1 | `src/lib/constants.ts` 的 `PROFILE_TEMPLATE` —— **转公开前必须先改成占位符** |
-| GitHub 用户名 | 8 | `README.md`、`LICENSE`、`docs/QUICKSTART.md`、`src/pages/*` |
+| `docs/HANDOFF.md` | 4 | 仓库链接 |
+| `README.md` | 3 | 作者与仓库链接 |
+| `LICENSE` | 2 | MIT 版权人 |
+| `docs/QUICKSTART.md` | 1 | 仓库链接 |
+| `src/lib/__tests__/{githubVerify,resume,aiPrompt}.test.ts` | 4 | 测试夹具，不是出厂默认值 |
+
+**产品代码（`src/` + `miniprogram/`，测试夹具除外）命中 0 处**，这条由断言守着。
+
+*密钥扫描*：`crawler/.profile`（浏览器会话 cookie）、`crawler/output`、`.env`、`.git-credentials`
+四类**跟踪文件 0 个、历史提交 0 次**（`git log -S` 查过），从没进过 git。全仓唯一像 key 的字符串是
+测试夹具假值 `sk-abcdef1234567890wxyz`；`ghp_` / `github_pat_` / `AKIA` / `BEGIN PRIVATE KEY` 命中 0；
+手机号模式只命中 `healthCheck.test.ts` 的 `13800000000`。`src/cloud.ts` 与 `db/PASTE-HERE.md` 里的
+`publishableKey` / `applicationId` / 线上域名**本来就是 publishable 设计**，已经发给每个打开线上站的
+浏览器，不算泄露。
+
+*转公开要接受的两件非密钥暴露*：抓取器对实习僧 / BOSS 的做法变成公开可读；提交节奏
+（66 提交 / 8 天）变成公开可见 —— 简历里「2026.09 开源」已经披露了同一件事。
+
+*改历史不建议*：姓名与学校在 git 历史里（`杨运栋` 3 个提交、`吉首大学` 1 个提交），转公开会连历史
+一起公开。清理历史要 force push，还会把 `Documents\GitHub` 那份发布源 clone 搞乱，代价远大于收益；
+而且这些信息本来就是要公开的（GitHub 主页与简历同源）。
 
 （QQ 邮箱扫描为 0 处。）
 

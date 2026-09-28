@@ -125,13 +125,13 @@ Page({
         grad_year: t.grad_year,
         major: t.major,
         school: t.school,
-        github: 'https://github.com/Dongnb66',
-        portfolio: 'https://github.com/Dongnb66/vibe-portfolio',
+        github: '',
+        portfolio: '',
         available_days: t.available_days,
         self_intro: t.self_intro,
         expect_city: t.expect_city.join('、'),
         expect_type: t.expect_type.join('、'),
-        expect_daily: String(t.expect_daily),
+        expect_daily: t.expect_daily ? String(t.expect_daily) : '',
         skills: t.skills.join('、'),
         directions: t.directions.join('、'),
         resume_summary: t.resume_summary,
@@ -140,7 +140,7 @@ Page({
         min_interval_min: String(pace.DEFAULT_PACE.minIntervalMin)
       })
     })
-    wx.showToast({ title: '已填入模板，请核对后保存', icon: 'none', duration: 2200 })
+    wx.showToast({ title: '已填入模板：先把每一处【】替换成你自己的，再核对保存', icon: 'none', duration: 2600 })
   },
 
   resetPace() {

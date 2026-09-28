@@ -218,14 +218,14 @@ export default function Settings({ profile, onChanged }: PageProps) {
       school: PROFILE_TEMPLATE.school,
       phone: '',
       contact_email: '',
-      github: 'https://github.com/Dongnb66',
-      portfolio: 'https://github.com/Dongnb66/vibe-portfolio',
+      github: '',
+      portfolio: '',
       available_from: '',
       available_days: PROFILE_TEMPLATE.available_days,
       self_intro: PROFILE_TEMPLATE.self_intro,
       expect_city: PROFILE_TEMPLATE.expect_city.join('、'),
       expect_type: PROFILE_TEMPLATE.expect_type.join('、'),
-      expect_daily: String(PROFILE_TEMPLATE.expect_daily),
+      expect_daily: PROFILE_TEMPLATE.expect_daily ? String(PROFILE_TEMPLATE.expect_daily) : '',
       skills: PROFILE_TEMPLATE.skills.join('、'),
       directions: PROFILE_TEMPLATE.directions.join('、'),
       resume_summary: PROFILE_TEMPLATE.resume_summary,
@@ -233,7 +233,7 @@ export default function Settings({ profile, onChanged }: PageProps) {
       greet_window: '09:00-21:00',
       min_interval_min: '30',
     })
-    notifyOk('已填入模板，请补手机号与邮箱后保存（数字口径需与简历一致）')
+    notifyOk('已填入模板：先把每一处【】替换成你自己的信息，再补手机号与邮箱后保存（数字口径要能在仓库里核对）')
   }
 
   /** 换厂商：档位是显式选择，所以选完立刻把「谁付钱」与就绪状态换过来 */
