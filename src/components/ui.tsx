@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { STAGES } from '../lib/constants'
 
-export function Stat({ label, value, foot, icon, color }: { label: string; value: ReactNode; foot?: ReactNode; icon?: string; color?: string }) {
+export function Stat({ label, value, foot, icon, color }: { label: string; value: ReactNode; foot?: ReactNode; icon?: ReactNode; color?: string }) {
   return (
     <div className="stat">
       <div className="stat-top">
@@ -82,6 +82,21 @@ export function Drawer({ title, onClose, children, footer }: { title: string; on
 export function Empty({ text, action }: { text: string; action?: ReactNode }) {
   return (
     <div className="empty">
+      <svg
+        width="34"
+        height="34"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        style={{ opacity: 0.5, marginBottom: 6 }}
+        aria-hidden="true"
+      >
+        <path d="M3.5 13.5h4l2 3h5l2-3h4" />
+        <path d="M5.5 5.5h13l3 8v6a1.5 1.5 0 0 1-1.5 1.5H4a1.5 1.5 0 0 1-1.5-1.5v-6z" />
+      </svg>
       <div>{text}</div>
       {action ? <div className="mt16">{action}</div> : null}
     </div>

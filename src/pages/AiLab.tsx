@@ -278,7 +278,7 @@ export default function AiLab({ profile, onChanged, go }: PageProps) {
                 {decision.answer ? <div className="small mt4" style={{ whiteSpace: 'pre-wrap' }}>{decision.answer}</div> : null}
                 {decision.stop ? (
                   <div className="small muted mt4">
-                    停止原因：{decision.stop === 'final_answer' ? '已完成' : `未跑完（${decision.stop}）——结论是部分分析，别当成完整判断`}
+                    停止原因：{decision.stop === 'final_answer' ? '已完成' : `未跑完（${decision.stop}），结论是部分分析，别当成完整判断`}
                   </div>
                 ) : null}
               </div>
@@ -388,7 +388,7 @@ export default function AiLab({ profile, onChanged, go }: PageProps) {
                       <div className="small mt8">已覆盖：{cov.matched.join('、') || '（无）'}</div>
                       {cov.missing.length ? (
                         <div className="small mt8" style={{ color: '#b45309' }}>
-                          缺失：{cov.missing.join('、')} —— 想投就提前准备「用哪段已有能力顶上」的说法
+                          缺失：{cov.missing.join('、')}。想投就提前准备「用哪段已有能力顶上」的说法
                         </div>
                       ) : (
                         <div className="small muted mt8">JD 的技术词简历全都覆盖了。</div>
@@ -431,7 +431,7 @@ export default function AiLab({ profile, onChanged, go }: PageProps) {
                     <>
                       {plan.confirm.length ? (
                         <>
-                          <div className="small muted mb8">待确认 —— 只有你自己能核实的事实，投前过一遍：</div>
+                          <div className="small muted mb8">待确认（只有你自己能核实的事实，投前过一遍）：</div>
                           {plan.confirm.map((c, i) => (
                             <div key={i} className="row" style={{ alignItems: 'flex-start', marginBottom: 6 }}>
                               <span className="badge warn">?</span>

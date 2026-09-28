@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { errText } from '../cloud'
 import ConversationDrawer from '../components/ConversationDrawer'
+import { Icon, type IconName } from '../components/Icon'
 import { Empty, Field, Modal, Stat } from '../components/ui'
 import { deleteRow, insertRow, listRows, updateRow } from '../lib/api'
 import { CHANNELS, STAGES } from '../lib/constants'
@@ -11,6 +12,12 @@ import { jobUrlByApplication } from '../lib/timeline'
 import { notifyErr, notifyOk } from '../lib/toast'
 import type { Row } from '../types'
 import type { PageProps } from './Overview'
+
+const PIPE_ICON: Record<string, IconName> = {
+  applied: 'send',
+  interview: 'interviews',
+  offer: 'offers',
+}
 
 export default function Pipeline({ profile, onChanged, go }: PageProps) {
   const [rows, setRows] = useState<Row[]>([])
@@ -195,7 +202,7 @@ export default function Pipeline({ profile, onChanged, go }: PageProps) {
     <div className="grid" style={{ gap: 14 }}>
       <div className="grid grid-5">
         {STAGES.map((s) => (
-          <Stat key={s.key} label={s.label} value={counts[s.key] ?? 0} icon="•" color={s.color} foot={s.key === 'applied' ? '刚投出去的' : s.key === 'offer' ? '拿到手的' : '进行中'} />
+          <Stat key={s.key} label={s.label} value={counts[s.key] ?? 0} icon={<Icon name={PIPE_ICON[s.key] ?? 'clock'} size={15} />} color={s.color} foot={s.key === 'applied' ? '刚投出去的' : s.key === 'offer' ? '拿到手的' : '进行中'} />
         ))}
       </div>
 
@@ -359,9 +366,9 @@ export default function Pipeline({ profile, onChanged, go }: PageProps) {
                           <span className="muted">暂无</span>
                         )}
                       </td>
-                      <td className="small">{row.channel ?? '—'}</td>
+                      <td className="small">{row.channel ?? '暂无'}</td>
                       <td className="small">{fmtDate(row.applied_at)}</td>
-                      <td className="small">{row.next_action ?? '—'}</td>
+                      <td className="small">{row.next_action ?? '暂无'}</td>
                       <td>
                         <div className="actions">
                           <button className="linkish" onClick={() => setConvFor(row)}>

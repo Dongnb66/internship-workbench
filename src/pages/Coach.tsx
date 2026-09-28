@@ -140,7 +140,7 @@ export default function Coach({ profile, onChanged }: PageProps) {
           ) : null}
           <div className="hint mt8">
             用法：把每一步整段复制给智能体，<strong>它给完代码后你必须自己跑一遍、逐条讲清为什么这样写</strong>。
-            讲不清的那部分不要写进简历——面试官会 clone 仓库核对。
+            讲不清的那部分不要写进简历：面试官会 clone 仓库核对。
           </div>
         </div>
       </section>

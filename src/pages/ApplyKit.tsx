@@ -179,7 +179,7 @@ export default function ApplyKit({ profile, go }: PageProps) {
           </div>
           <div className="card-body">
             <div className="small muted">
-              期望薪资、可实习时长、为什么选择我们、自我介绍——这些开放题最容易写得像模板。粘一个 JD，AI 会按 JD 和你自己的项目写一版。
+              期望薪资、可实习时长、为什么选择我们、自我介绍，这些开放题最容易写得像模板。粘一个 JD，AI 会按 JD 和你自己的项目写一版。
             </div>
             {aiOut ? <div className="md mt16" style={{ background: '#fafbfc', padding: 12, borderRadius: 9 }}>{aiOut}</div> : null}
           </div>

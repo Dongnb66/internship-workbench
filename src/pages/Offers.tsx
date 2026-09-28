@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { errText } from '../cloud'
+import { Icon } from '../components/Icon'
 import { Empty, Field, Modal, Stat } from '../components/ui'
 import { deleteRow, insertRow, listRows, updateRow } from '../lib/api'
 import { DIMS } from '../lib/constants'
@@ -148,10 +149,10 @@ export default function Offers({ onChanged }: PageProps) {
   return (
     <div className="grid" style={{ gap: 14 }}>
       <div className="grid grid-4">
-        <Stat label="Offer 总数" value={rows.length} icon="🏆" color="#12a150" foot="拿到手的" />
-        <Stat label="待决策" value={rows.filter((r) => (r.decision ?? 'undecided') === 'undecided').length} icon="🤔" color="#f59e0b" foot="还没定的" />
-        <Stat label="已接受" value={rows.filter((r) => r.decision === 'accepted').length} icon="✅" color="#3b82f6" foot="定下来的" />
-        <Stat label="最高月折算" value={rows.length ? `¥${Math.round(Math.max(...rows.map((r) => monthly(r)))).toLocaleString('zh-CN')}` : '—'} icon="💰" color="#e8443a" foot="日薪按 21.75 天折算" />
+        <Stat label="Offer 总数" value={rows.length} icon={<Icon name="offers" size={15} />} color="#12a150" foot="拿到手的" />
+        <Stat label="待决策" value={rows.filter((r) => (r.decision ?? 'undecided') === 'undecided').length} icon={<Icon name="help" size={15} />} color="#f59e0b" foot="还没定的" />
+        <Stat label="已接受" value={rows.filter((r) => r.decision === 'accepted').length} icon={<Icon name="check" size={15} />} color="#3b82f6" foot="定下来的" />
+        <Stat label="最高月折算" value={rows.length ? `¥${Math.round(Math.max(...rows.map((r) => monthly(r)))).toLocaleString('zh-CN')}` : '—'} icon={<Icon name="money" size={15} />} color="#e8443a" foot="日薪按 21.75 天折算" />
       </div>
 
       <section className="card">
@@ -183,9 +184,9 @@ export default function Offers({ onChanged }: PageProps) {
                   <tr key={row.id}>
                     <td>
                       <div className="cell-main">{row.company}</div>
-                      <div className="cell-sub">{row.title ?? '—'}</div>
+                      <div className="cell-sub">{row.title ?? '暂无'}</div>
                     </td>
-                    <td>{row.city ?? '—'}</td>
+                    <td>{row.city ?? '暂无'}</td>
                     <td className="small">
                       {row.daily_rate ? `¥${row.daily_rate}/天` : '—'}
                       <br />

@@ -3,6 +3,7 @@ import { cloud } from './cloud'
 import { getProfile, listRows } from './lib/api'
 import { useSession } from './lib/hooks'
 import type { Profile } from './types'
+import { Icon, type IconName } from './components/Icon'
 import AiLab from './pages/AiLab'
 import ApplyKit from './pages/ApplyKit'
 import CalendarPage from './pages/CalendarPage'
@@ -23,31 +24,31 @@ const NAV = [
   {
     group: '工作台',
     items: [
-      { key: 'overview', label: '总览', icon: '📊' },
-      { key: 'square', label: '岗位广场', icon: '🏛' },
-      { key: 'jobs', label: '岗位池', icon: '🎯' },
-      { key: 'crawler', label: '抓取任务', icon: '🕸' },
-      { key: 'pipeline', label: '投递看板', icon: '🗂' },
-      { key: 'interviews', label: '面试跟进', icon: '🎤' },
-      { key: 'offers', label: 'Offer 对比', icon: '🏆' },
+      { key: 'overview', label: '总览', icon: 'overview' },
+      { key: 'square', label: '岗位广场', icon: 'square' },
+      { key: 'jobs', label: '岗位池', icon: 'jobs' },
+      { key: 'crawler', label: '抓取任务', icon: 'crawler' },
+      { key: 'pipeline', label: '投递看板', icon: 'pipeline' },
+      { key: 'interviews', label: '面试跟进', icon: 'interviews' },
+      { key: 'offers', label: 'Offer 对比', icon: 'offers' },
     ],
   },
   {
     group: '资产',
     items: [
-      { key: 'resumes', label: '简历库', icon: '📄' },
-      { key: 'applykit', label: '网申填写包', icon: '🧾' },
-      { key: 'ai', label: 'AI · JD 评估', icon: '🤖' },
-      { key: 'coach', label: '项目教练', icon: '🧭' },
-      { key: 'calendar', label: '提醒日历', icon: '🗓' },
-      { key: 'knowledge', label: '个人知识库', icon: '📚' },
+      { key: 'resumes', label: '简历库', icon: 'resumes' },
+      { key: 'applykit', label: '网申填写包', icon: 'applykit' },
+      { key: 'ai', label: 'AI · JD 评估', icon: 'ai' },
+      { key: 'coach', label: '项目教练', icon: 'coach' },
+      { key: 'calendar', label: '提醒日历', icon: 'calendar' },
+      { key: 'knowledge', label: '个人知识库', icon: 'knowledge' },
     ],
   },
   {
     group: '配置',
-    items: [{ key: 'settings', label: '目标条件', icon: '⚙️' }],
+    items: [{ key: 'settings', label: '目标条件', icon: 'settings' }],
   },
-]
+] as const
 
 const TITLES: Record<string, string> = {
   overview: '总览',
@@ -150,7 +151,9 @@ export default function App() {
             <div className="side-group">{group.group}</div>
             {group.items.map((item) => (
               <button key={item.key} className={page === item.key ? 'nav-item active' : 'nav-item'} onClick={() => setPage(item.key)}>
-                <span>{item.icon}</span>
+                <span className="nav-ico">
+                  <Icon name={item.icon as IconName} />
+                </span>
                 <span className="label">{item.label}</span>
                 {badge(item.key) ? <span className="count">{badge(item.key)}</span> : null}
               </button>
