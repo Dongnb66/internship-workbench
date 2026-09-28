@@ -117,7 +117,7 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
 - 最近提交（倒序）：日期口径收敛成一条 + CI 加时区守卫 → 时区守卫第一跑抓出的第二批
   （followup / pace / companyHistory + 4 处夹具）→ 出厂模板不再把发起人身份灌进陌生用户画像（0.8.2 止血）
   → 锁与 package.json 一致性进 CI → CI 触发器指向不存在的分支（四道门从未跑过）→ 版本号升 0.8.1。更早的见 `CHANGELOG.md`。
-- **`origin/master` = 本地 = `383aafc`**；CI run **36378774891 全绿**（lint → typecheck → tests →
+- **`origin/master` = 本地 = `78f6f6a`**；CI run **36378774891 全绿**（lint → typecheck → tests →
   **换非 UTC 时区再跑一遍** → build → 产物上传，全程 41 秒）。这是本项目**第一次 CI 真的绿**：
   `CI 触发器` 那条修完之后，四道门才第一次在 CI 上跑到，而第一跑就红了四轮（全红在 `Unit tests`）。
 - **日期口径只有一条规则**（`format.ts#parseDate`）：纯日期串按**本地零点**构造、带 `Z`/偏移的时间戳保留时区语义；
@@ -126,10 +126,14 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
   ⚠️ **本机验证的坑（实测）**：Windows 上的 Node **只认 POSIX 形式**的 `TZ`（`EST5EDT` / `GMT+12` 有效），
   `TZ=America/New_York` 这类 IANA 名会被**静默忽略**、回落到系统时区（UTC+8）——
   拿 IANA 名"验证过多时区"等于没验证，本机要么用 POSIX 写法，要么交给 CI（Ubuntu 认 IANA）。
-- **线上站 = `0b9da0b` 的前端构建**：2026-09-28 实测 `curl -s <线上>/ | grep app-version` →
-  `<meta name="app-version" content="0.8.2" />`，首页 HTTP 200，域名仍是 `-47024`。
-  **注意 master 已到 `383aafc`（0.8.3），比线上新两个提交 —— 差一次发布**；按 §12 流程发完，判据是
-  `app-version` 命中 `0.8.3`。
+- **线上站 = `78f6f6a` 的前端构建（与 master 同步，已无落差）**：2026-09-28 13:0x 发布并实测
+  `curl -s <线上>/ | grep app-version` → `<meta name="app-version" content="0.8.3" />`，首页 HTTP 200，
+  域名仍是 `-47024`，sandbox 仍是 `f15f04a3222d4d6b87b8720b95f52d07`（复用原应用，未新建）。
+  产物逐字节对上本目录 `npm run build`：`index-D_NrNBsL.js` **585,664 字节**、
+  sha256 `eceed8d428df06e2dbe7ce6a0e8ba7c5fcd48ea9e0cada8021fda8f48d3653b0`；
+  首屏引用的 3 个资源（`index-D_NrNBsL.js` / `index-BnkVttEc.css` / `favicon.svg`）全 200。
+  止血复核（0.8.2 引入、本版延续）：live bundle 内 `杨运栋` / `吉首` / `Dongnb66` / `2088417049` **各 0 命中**，
+  `【姓名，与证件一致】` / `【学校全称 · 只进网申表单，不进打招呼话术】` 等占位符命中，`github.com/...` 无一命中。
 - 历史（2026-09-27）：线上站曾是 `6ce185f` 的前端构建。
    **那是本项目第一次能自证成功的发布**，因为判别器换成了内容型：
   `curl -s <线上>/ | grep app-version` → 实测命中 `<meta name="app-version" content="0.8.1" />`
