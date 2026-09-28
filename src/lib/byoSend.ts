@@ -61,7 +61,7 @@ function cannotSend(preset: ChannelPreset): string {
   return (
     `${preset.label} 现在发不出去：实测它的响应不带跨域头，浏览器直发一定会被挡。` +
     '换一个能直发的厂商（DeepSeek / Kimi / OpenRouter / 阿里云百炼）或本机 Ollama。' +
-    '这里**不会改用本应用的额度**——那等于让应用创建者替你付钱。'
+    '这里**不会改用本应用的额度**，那等于让应用创建者替你付钱。'
   )
 }
 

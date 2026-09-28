@@ -433,6 +433,6 @@ export function probeJobFile(name: string, text: string): { kind: 'collector' | 
 
   return {
     kind: 'text',
-    hint: `已作为纯文本读入（${raw.length} 字）。${oddExt ? `文件后缀是 .${ext}，不是 .json/.txt —— 如果读出来是乱码，直接把内容复制粘贴进来。` : '接着选「仅本地拆分」或「AI 结构化解析」。'}`,
+    hint: `已作为纯文本读入（${raw.length} 字）。${oddExt ? `文件后缀是 .${ext}，不是 .json/.txt，如果读出来是乱码，直接把内容复制粘贴进来。` : '接着选「仅本地拆分」或「AI 结构化解析」。'}`,
   }
 }

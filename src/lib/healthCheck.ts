@@ -63,7 +63,7 @@ export function profileHealth(profile: Profile | null, resumeCount: number): Hea
     {
       ok: skills.length >= 5,
       label: `技能关键词 ≥ 5 个（当前 ${skills.length}）`,
-      fix: '太少会让本地匹配分失真 —— 关键词命中率是打分的主要来源',
+      fix: '太少会让本地匹配分失真：关键词命中率是打分的主要来源',
     },
     {
       ok: directions.length > 0,
@@ -78,7 +78,7 @@ export function profileHealth(profile: Profile | null, resumeCount: number): Hea
     {
       ok: summary.length >= 40 && /\d/.test(summary),
       label: '项目数字口径已写入「项目与可验证事实」',
-      fix: '把「5 个项目 / 6 个仓库 / 508 条测试」这类可 clone 核对的数字写进去 —— AI 话术只引用这里的事实',
+      fix: '把「5 个项目 / 6 个仓库 / 508 条测试」这类可 clone 核对的数字写进去。AI 话术只引用这里的事实',
     },
     {
       ok: has(p.available_days),

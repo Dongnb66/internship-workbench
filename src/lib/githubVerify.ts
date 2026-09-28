@@ -196,7 +196,7 @@ export function checkPackAcceptance(
   if (text && WHY_RE.test(text)) {
     passed.push({ field: '设计说明', detail: 'README 里有「为什么这样设计 / 取舍」相关内容' })
   } else {
-    gaps.push({ field: '设计说明', detail: 'README 缺「为什么这样设计、被否掉的方案是什么」——面试第二轮问的就是这个' })
+    gaps.push({ field: '设计说明', detail: 'README 缺「为什么这样设计、被否掉的方案是什么」，面试第二轮问的就是这个' })
   }
 
   manual.push({

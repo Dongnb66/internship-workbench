@@ -77,7 +77,7 @@ export default function JobImportModal({ existing, profile, onClose, onDone }: P
       return
     }
     applyDrafts(blocks.map((b) => guessFromBlock(b)))
-    setNote(`已按本地规则拆成 ${blocks.length} 段，字段大多需要手动补——这是一次不消耗额度的预演。`)
+    setNote(`已按本地规则拆成 ${blocks.length} 段，字段大多需要手动补，这是一次不消耗额度的预演。`)
   }
 
   /**
@@ -91,7 +91,7 @@ export default function JobImportModal({ existing, profile, onClose, onDone }: P
       return
     }
     applyDrafts(next)
-    setNote(`已读取采集/抓取的 ${next.length} 个岗位，没有消耗模型额度。请核对公司与岗位名 —— 程序读不到的字段是空的，它不会替你猜。`)
+    setNote(`已读取采集/抓取的 ${next.length} 个岗位，没有消耗模型额度。请核对公司与岗位名：程序读不到的字段是空的，它不会替你猜。`)
   }
 
   /** 选一个本地文件：本地抓取器的产出、扩展的采集结果，或任何你存下来的岗位文本 */
@@ -153,7 +153,7 @@ export default function JobImportModal({ existing, profile, onClose, onDone }: P
     applyDrafts(collected)
     setNote(
       collected.length
-        ? `拆出 ${collected.length} 个岗位。请逐个核对公司名与岗位名 —— 模型认不出来的字段是空的，它不会替你猜。${failed ? `（其中 ${failed} 段走了本地兜底）` : ''}`
+        ? `拆出 ${collected.length} 个岗位。请逐个核对公司名与岗位名：模型认不出来的字段是空的，它不会替你猜。${failed ? `（其中 ${failed} 段走了本地兜底）` : ''}`
         : '没有解析出任何岗位，换一段更完整的文本试试。',
     )
   }

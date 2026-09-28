@@ -29,7 +29,7 @@ export function emailProblem(value: string): string | null {
   const v = value.trim()
   if (!v) return '请先填写邮箱'
   if (!v.includes('@')) {
-    return `「${v}」不是邮箱地址 —— 缺了「@域名」，应该填成像 ${v}@qq.com 这样`
+    return `「${v}」不是邮箱地址：缺了「@域名」，应该填成像 ${v}@qq.com 这样`
   }
   if (!EMAIL_SHAPE.test(v)) {
     return `「${v}」格式不对，应形如「用户名@域名」，例如 example@qq.com`

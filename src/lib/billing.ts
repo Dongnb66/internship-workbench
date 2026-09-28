@@ -32,7 +32,7 @@ import { BYO_PRESETS, type ChannelPreset } from './aiChannels'
 export const BYO_SETUP_STEPS: readonly string[] = [
   '打开「目标条件」页里的「AI 通道」，选一家能被浏览器直发的厂商（DeepSeek / Kimi / OpenRouter / 阿里云百炼）；',
   '把那一家控制台里建的 Key 粘进去，再填上要用的模型名；',
-  '点「自检一下」，绿了再回来 —— 之后 AI 只走你选的这一条，钱记在你自己的账户上。',
+  '点「自检一下」，绿了再回来。之后 AI 只走你选的这一条，钱记在你自己的账户上。',
 ]
 
 /** 创建者试用开关（默认关） */
@@ -77,7 +77,7 @@ export function decideAccess(input: AccessInput): AccessDecision {
       paidBy: 'nobody',
       reason:
         '你选的自备 Key 通道现在发不出去：那一家厂商实测不能被浏览器直发，或者本机模型服务还没启动。' +
-        '这里不会改用本应用的额度——那等于让应用创建者替你付钱。' +
+        '这里不会改用本应用的额度，那等于让应用创建者替你付钱。' +
         '换一家能直发的厂商（DeepSeek / Kimi / OpenRouter / 阿里云百炼），或把本机 Ollama 跑起来。',
     }
   }
