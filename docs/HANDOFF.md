@@ -103,7 +103,7 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
    并把测试数变化写进提交信息（当前基线 **716**，54 个测试文件；另有 59 条真浏览器夹具断言，见第 6 节）。
 6. **提交信息写「为什么」**，不写「改了什么」。历次提交都遵循这个风格，可以 `git log` 看。
 
-## 5. 当前状态快照（2026-09-27）
+## 5. 当前状态快照（2026-09-28）
 
 - **`docs/AGENT_PLAN.md` 四步全部落地**：限额护栏 → ReAct 循环 → 投递决策智能体 → 项目教练。
 - **计费与通道改造落地**：AI 默认走「用户自备 Key」，且是**浏览器直发**（用户的 Key 不过本项目任何服务端）；
@@ -111,15 +111,27 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
   **注册是默认开放**——同日先收成邀请码、当天被推翻（理由见 `CHANGELOG.md` Unreleased/Changed 与
   `src/lib/registration.ts` 文件头）：自备 Key 之后开号不再产生创建者成本，而码的代价是"每来一个用户都要亲自发一次"。
   旋钮仍在：`INVITE_CODES` 里填进真码就自动回到"要码"模式。
-- 测试：**54 个文件 / 716 条断言全绿**；另有 **59 条真浏览器夹具断言**（`cd crawler && npm run selftest`，
+- 测试：**54 个文件 / 722 条断言全绿**，且在 **13 个时区配置**下逐个跑过（偏移 UTC-14 … UTC+14）；
+  另有 **59 条真浏览器夹具断言**（`cd crawler && npm run selftest`，
   对着 `extension/__fixtures__/` 的 7 个页面跑本机 Edge）；`tsc -b`、`oxlint`（0 error / 26 warning）、`vite build` 均通过。
-- 最近提交（倒序）：版本号升 0.8.1（让 app-version 标记能区分代际）→ 构建期注入版本标记 →
-  实习僧乱码不是反爬、是我们把干净数据压掉了 → 抓取器三件（CLI 入口可测 / 详情页 JD 不许静默 / OfferBiu 一条一岗）→
-  writeOutput 少了 log 参数（真跑必崩）→ 发布源目录事实写进 HANDOFF → 线上站发到 `7feb9a7` 的产物核对。
-- **`origin/master` = 本地 = `6ce185f`**（`git ls-remote origin master` 实测一致，无 ahead/behind）。
-- **线上站 = `6ce185f` 的前端构建**（2026-09-27 由 WorkBuddy 发布，仍是原域名 `-47024`；发布源是
-  `Documents\GitHub` 那份 clone，我实测其 `HEAD=6ce185f`、`git status` 0 项、`miniprogram/` 48 个文件已还原）。
-   **这次是本项目第一次能自证成功的发布**，因为判别器换成了内容型：
+- 最近提交（倒序）：日期口径收敛成一条 + CI 加时区守卫 → 时区守卫第一跑抓出的第二批
+  （followup / pace / companyHistory + 4 处夹具）→ 出厂模板不再把发起人身份灌进陌生用户画像（0.8.2 止血）
+  → 锁与 package.json 一致性进 CI → CI 触发器指向不存在的分支（四道门从未跑过）→ 版本号升 0.8.1。更早的见 `CHANGELOG.md`。
+- **`origin/master` = 本地 = `383aafc`**；CI run **36378774891 全绿**（lint → typecheck → tests →
+  **换非 UTC 时区再跑一遍** → build → 产物上传，全程 41 秒）。这是本项目**第一次 CI 真的绿**：
+  `CI 触发器` 那条修完之后，四道门才第一次在 CI 上跑到，而第一跑就红了四轮（全红在 `Unit tests`）。
+- **日期口径只有一条规则**（`format.ts#parseDate`）：纯日期串按**本地零点**构造、带 `Z`/偏移的时间戳保留时区语义；
+  「按本地日历日比较」由 `daysLeft` / `daysFrom` / `staleApplications` / `followupDue` / `companyHistory` 共用。
+  跨端一致性由 `crawler/__tests__/contract.test.mjs` 钉住，时区敏感性由 CI 的 `America/New_York` + `Asia/Shanghai` 两遍复跑钉住。
+  ⚠️ **本机验证的坑（实测）**：Windows 上的 Node **只认 POSIX 形式**的 `TZ`（`EST5EDT` / `GMT+12` 有效），
+  `TZ=America/New_York` 这类 IANA 名会被**静默忽略**、回落到系统时区（UTC+8）——
+  拿 IANA 名"验证过多时区"等于没验证，本机要么用 POSIX 写法，要么交给 CI（Ubuntu 认 IANA）。
+- **线上站 = `0b9da0b` 的前端构建**：2026-09-28 实测 `curl -s <线上>/ | grep app-version` →
+  `<meta name="app-version" content="0.8.2" />`，首页 HTTP 200，域名仍是 `-47024`。
+  **注意 master 已到 `383aafc`（0.8.3），比线上新两个提交 —— 差一次发布**；按 §12 流程发完，判据是
+  `app-version` 命中 `0.8.3`。
+- 历史（2026-09-27）：线上站曾是 `6ce185f` 的前端构建。
+   **那是本项目第一次能自证成功的发布**，因为判别器换成了内容型：
   `curl -s <线上>/ | grep app-version` → 实测命中 `<meta name="app-version" content="0.8.1" />`
   （`0.8.1` 这个值只存在于 `6ce185f` 之后 ⇒ 线上构建必然 ≥ 该提交）；bundle 也逐字节对上：
   `index-Dg4AeK0-.js` 585,961 字节，sha256 前缀 `fd80e6f2`，与本目录 `npm run build` 完全一致；
@@ -329,6 +341,7 @@ inline config（优先级高于配置文件），从而真正监听 `$PORT`。
 ```bash
 curl -s -o /dev/null -w "%{http_code}\n" https://internship-workbench-47024.app.workbuddy.host/   # 期望 200
 curl -s https://internship-workbench-47024.app.workbuddy.host/ | grep -o "<title>[^<]*</title>"    # 期望「实习管理工作台」
+curl -s https://internship-workbench-47024.app.workbuddy.host/ | grep app-version                   # 期望 content="0.8.3"（当前版本）
 ```
 
 站点管理入口在平台侧：**设置—数据管理—应用**。
