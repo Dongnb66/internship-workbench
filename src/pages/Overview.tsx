@@ -4,6 +4,7 @@ import { Empty, Stat } from '../components/ui'
 import AgentSteps from '../components/AgentSteps'
 import { getQuotaSnapshot } from '../lib/ai'
 import { listRows, updateRow } from '../lib/api'
+import { BYO_SETUP_STEPS, currentAccess } from '../lib/billing'
 import { STAGES } from '../lib/constants'
 import { daysLeft, fmtDate, fmtDateTime, leftText, recentDays, todayISO } from '../lib/format'
 import { todayPicks } from '../lib/daily'
@@ -163,6 +164,29 @@ export default function Overview({ profile, go }: PageProps) {
 
   return (
     <div className="grid" style={{ gap: 16 }}>
+      {/**
+       * AI 未接上时先在首屏说清，而不是等用户点了按钮吃一句抛错：
+       * 这条产品口径是"AI 只走使用者自备的 Key"，所以拒绝不是故障，是需要一步配置。
+       * 文案与拒绝时那句话同源（`billing.ts` 的 BYO_SETUP_STEPS）。
+       */}
+      {currentAccess().access === 'none' ? (
+        <section className="card">
+          <div className="card-head">
+            <h3>AI 还没接上</h3>
+            <span className="spacer" />
+            <button className="btn sm ghost" onClick={() => go('settings')}>
+              去接 AI 通道
+            </button>
+          </div>
+          <div className="small mb8">本应用的额度记在创建者账号上，不默认替使用者承担 —— 所以 AI 要走你自己的模型通道。三步：</div>
+          <ol className="small">
+            {BYO_SETUP_STEPS.map((s) => (
+              <li key={s}>{s}</li>
+            ))}
+          </ol>
+          <div className="small muted mt8">不想用 Key 也可以选「本机 Ollama」档：花的是自己电脑的算力，需要先把它装好并启动。</div>
+        </section>
+      ) : null}
       <div className="grid grid-5">
         <Stat label="岗位池" value={jobs.length} foot={`本周新增 ${jobs.filter((j) => String(j.created_at ?? '').slice(0, 10) >= weekAgo).length}`} icon="🎯" color="#3b82f6" />
         <Stat label="已投递" value={apps.length} foot={`本周 +${appliedThisWeek}`} icon="📮" color="#f2542d" />

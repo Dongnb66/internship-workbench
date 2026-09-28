@@ -19,6 +19,22 @@
  */
 import { BYO_PRESETS, type ChannelPreset } from './aiChannels'
 
+/**
+ * 「怎么把 AI 接上」这三步是**这一文件的唯一一份**，两处共用：
+ * `decideAccess` 的拒绝文案，和总览页那条未配置提示。
+ *
+ * 为什么写死成常量：这条产品口径是「AI 只走使用者自备的 Key，不默认花创建者的钱」，
+ * 而拒绝文案原先只在**用户点了 AI 按钮之后**以抛错形式出现 —— 一个刚注册的人不会先去
+ * 设置页，他看到的是"这功能坏了"。指引要有入口名，所以这里写的是界面上真实存在的标题
+ * （`Settings.tsx` 的 `AI 通道` 卡与「自检一下」按钮，`App.tsx` 里那一栏叫「目标条件」），
+ * 不是我们内部叫法。改界面上的名字时，记得同时改这里。
+ */
+export const BYO_SETUP_STEPS: readonly string[] = [
+  '打开「目标条件」页里的「AI 通道」，选一家能被浏览器直发的厂商（DeepSeek / Kimi / OpenRouter / 阿里云百炼）；',
+  '把那一家控制台里建的 Key 粘进去，再填上要用的模型名；',
+  '点「自检一下」，绿了再回来 —— 之后 AI 只走你选的这一条，钱记在你自己的账户上。',
+]
+
 /** 创建者试用开关（默认关） */
 export const OWNER_TRIAL_KEY = 'wb_owner_trial'
 /** 用户自备 Key，只存在本机 localStorage；本项目**不在服务端保管任何人的 Key** */
@@ -71,10 +87,11 @@ export function decideAccess(input: AccessInput): AccessDecision {
     access: 'none',
     paidBy: 'nobody',
     reason:
-      'AI 功能需要自备模型 Key（DeepSeek / Kimi / OpenRouter / 阿里云百炼，花你自己账户的余额），' +
-      '或者选「本机 Ollama」（不花钱，但要自己在电脑上装好并启动），' +
-      '或由应用创建者在「设置 — AI 通道」里开启「用本应用的额度试用」。' +
-      '本应用的额度记在创建者账号上，不默认替使用者承担。',
+      // 步骤与首屏那条指引是同一份（见 BYO_SETUP_STEPS）：两句话版本分家，
+      // 用户就会在"点按钮看到的"和"页面告诉他的"之间得到两套说法。
+      'AI 现在还没接上：本应用的额度记在创建者账号上，不默认替使用者承担。接上它只要三步：' +
+      BYO_SETUP_STEPS.map((s, i) => ` ${i + 1}. ${s}`).join('') +
+      ' 不想用 Key 也可以选「本机 Ollama」档，花的是自己电脑的算力。',
   }
 }
 

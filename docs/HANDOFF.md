@@ -188,6 +188,10 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
    **每加一个用户你都要亲自发一次码**——正好挡住你想吸引的人。
    仍然开着的两个真实成本都不花钱但会脏：验证邮件额度（套餐上限，代码查不到）、
    岗位广场公共库的写入（注册者就能投稿）。真被灌了就先上锁、再清表，可逆。
+   —— **上面那半句 2026-09-28 作废**：`jobs_public` 只有 `GRANT SELECT ... TO authenticated, anon`（`db/exec/004`）
+   加一条 `jobs_public_read_all` 读策略（005/006），客户端只有 `listRows('jobs_public')`（`src/lib/api.ts:62`），
+   广场页自己写着「所有人可读、无人可写」，入库走 owner 执行的 SQL。**所以注册者写不进公共库**，
+   这一条清单上现在只剩"验证邮件额度"一项。原文留着不抹，理由见 `CHANGELOG.md` 顶部那条更正。
 2. **决定要不要"本应用额度"这一档**：`src/lib/ownerAccount.ts` 的 `OWNER_EMAIL` 出厂是空串 = 谁都不算创建者，
    所以试用开关对谁都不显示。填成你自己的登录邮箱、用该账号登录，设置页才会出现那道勾。
 3. **发布**：见第 6 节（先把 `miniprogram/` 移出目录）。

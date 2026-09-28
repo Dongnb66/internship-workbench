@@ -60,7 +60,7 @@ const stub = {
 ;(globalThis as any).localStorage = stub
 ;(globalThis as any).sessionStorage = stub
 
-const { decideAccess } = await import('../billing')
+const { decideAccess, BYO_SETUP_STEPS } = await import('../billing')
 const {
   BYO_KEY_KEY,
   BYO_PRESET_KEY,
@@ -287,5 +287,40 @@ describe('streamChat 上真的挂了这道门', () => {
     await expect(streamChat({ system: 's', user: 'u', task: 'JD 评估' })).rejects.toThrow(/发不出去|没接通|未接通/)
     expect(byoCalls).toBe(0)
     expect(createCalls).toBe(0)
+  })
+})
+
+
+describe('AI 未配置时，第一屏就得给出自备 Key 的出路（发起人定的口径：不花创建者的钱）', () => {
+  /**
+   * 为什么值得钉住：`decideAccess` 的 `none` 分支原先只在用户**点了 AI 按钮之后**
+   * 以抛错的形式冒出来（`streamChat` 里 throw）。一个刚注册的陌生人不会先去设置页，
+   * 他的路径是"进来 → 点 AI → 看到一句拒绝"，而那句话里既没有入口也没有步骤。
+   * 下面三条断言各挡一种退化：
+   *  - 步骤被删空 / 变成一句口号；
+   *  - 拒绝文案与步骤分家（改了步骤忘了改文案，用户看到两套话）；
+   *  - 首屏根本没用这份指引（只在抛错里出现）。
+   */
+  it('指引至少三步，每步都能落地（含入口、Key、自检）', () => {
+    expect(BYO_SETUP_STEPS.length).toBeGreaterThanOrEqual(3)
+    // 断言的是**界面上真实存在的名字**（App.tsx 那一栏叫「目标条件」，
+    // Settings.tsx 的卡叫「AI 通道」、按钮叫「自检一下」），不是我们的内部叫法。
+    const all = BYO_SETUP_STEPS.join(' ')
+    expect(all).toMatch(/目标条件/)
+    expect(all).toMatch(/AI 通道/)
+    expect(all).toMatch(/Key/)
+    expect(all).toMatch(/自检一下/)
+    for (const s of BYO_SETUP_STEPS) expect(s.trim().length).toBeGreaterThan(6)
+  })
+
+  it('被拒时那句话是把同一份步骤拼出来的，不是第二套文案', () => {
+    const a = decideAccess({ byoConfigured: false, byoSendable: false, ownerTrial: false })
+    expect(a.allowed).toBe(false)
+    expect(a.access).toBe('none')
+    for (const step of BYO_SETUP_STEPS) {
+      expect(a.reason).toContain(step)
+    }
+    // 仍然要说清钱在谁身上，否则用户以为是自己账号坏了
+    expect(a.reason).toMatch(/不默认替使用者承担|记在创建者/)
   })
 })
