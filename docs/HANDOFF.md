@@ -14,10 +14,16 @@
 | 技术栈 | React 19 + Vite + TypeScript（前端）/ 平台云服务 BaaS（DB + Auth + Storage + LLM） |
 | 线上地址 | https://internship-workbench-47024.app.workbuddy.host/ （发布方式见第 12 节） |
 | 远程仓库 | `git@github.com:Dongnb66/internship-workbench.git` —— **已转 public**（匿名可读，2026-09-28 15:33 +0800 实测 `github.com/...` 与 `api.github.com/...` 均 200） |
-| 分支 | `master`，跟踪 `origin/master`；HEAD = `7b51717`，与远端对齐（`0 0`），工作树干净 |
-| 规模 | **266** 个已跟踪文件 / **56 个测试文件 / 738 条断言全绿** + 59 条真浏览器夹具断言（`cd crawler && npm run selftest`）（2026-09-28 15:33 +0800 `npm test` 实测） |
+| 分支 | `master`，跟踪 `origin/master`；HEAD = `f99a665`，与远端对齐，工作树干净（2026-09-30 09:48 +0800 实测） |
+| 规模 | **271** 个已跟踪文件 / **60 个测试文件 / 764 条断言全绿** + 59 条真浏览器夹具断言（`cd crawler && npm run selftest`）（2026-09-30 09:48 +0800 `npm test` 实测 → `Test Files 60 passed` / `Tests 764 passed`） |
+| 版本 | `package.json` = **0.8.13**；线上 `app-version` = **0.8.13**，HTTP **200**（2026-09-30 09:48 +0800 实测，两端**一致**） |
+| 本地四道门 | `typecheck` **0 错** · `lint` **0 error / 26 warning** · `build` **通过（2.25s）** · `test` **764 全绿**（2026-09-30 09:48 +0800 实测） |
+| CI 结论 | ⚠️ **本次取不到**（`api.github.com` 连续 3 次报 `schannel: CRYPT_E_NO_REVOCATION_CHECK`）。按三态原则记为「**未取到**」——**既不判红也不判绿**，见第 13 节 |
 
 > ⚠️ **本表在 2026-09-28 15:33 前写的是「私有 / 260 文件 / 54 文件 716 条」——两者都已过期，原文按本仓库惯例不抹、在此更正。**
+> ⚠️ **第二次腐坏（2026-09-30 09:48 +0800 重算）**：改前本表写的是「`7b51717` / 266 文件 / 56 文件 738 条」，
+> **四项全部过期**（实际 `f99a665` / 271 文件 / 60 文件 764 条）。这恰好实证了本文件自己第 4.5 条的告诫：
+> **基线数字活得比任何文档都短，唯一权威是 `npm test` 自己打印的 `Tests N passed`。**
 > 私有→public 的变更发生在 15:00 前后（`docs/sync/README.md` 规则 2 那条更正里已记：转 public 后匿名
 > `GET /actions/runs` 从 404 变 200）。**这一条对交接影响最大**：第 11 节的授权步骤整节失效，见该节更正。
 
@@ -104,12 +110,34 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
 4. **扫描/解析类断言要先「钉住扫描本身」**（如「至少扫到 N 个且包含已知文件」），
    否则扫描逻辑一失效，下游断言全部假绿。
 5. **改完必须跑 `npm run typecheck && npm test && npm run lint && npm run build` 四件套**，
-   并把测试数变化写进提交信息（当前基线 **738**，56 个测试文件；另有 59 条真浏览器夹具断言，见第 6 节）。
-   基线由 `npm test` 打印的 `Tests N passed` 为准，**不要抄这份文档里的数字**——它已经错过 4 次。
+   并把测试数变化写进提交信息（当前基线 **764**，60 个测试文件；另有 59 条真浏览器夹具断言，见第 6 节）。
+   基线由 `npm test` 打印的 `Tests N passed` 为准，**不要抄这份文档里的数字**——它已经错过 5 次。
    （`.github/workflows/ci.yml` 注释里那个「716 条全绿」是**当时**的描述，属历史记录，不改。）
 6. **提交信息写「为什么」**，不写「改了什么」。历次提交都遵循这个风格，可以 `git log` 看。
 
-## 5. 当前状态快照（2026-09-28）
+## 5. 当前状态快照
+
+### 5a. 最新重算（2026-09-30 09:48 +0800，交接前现场实测）
+
+| 项 | 实测值 | 取数命令 |
+| --- | --- | --- |
+| HEAD | `f99a6651ae1046431ccb99c80c4f8b38742ea9fe` | `git rev-parse HEAD` |
+| 提交数 | **129** | `git rev-list --count HEAD` |
+| 已跟踪文件 | **271** | `git ls-files \| wc -l` |
+| 工作树 | clean（`0` 行改动） | `git status --porcelain \| wc -l` |
+| 测试基线 | **60 个文件 / 764 条断言全绿** | `npm test` → `Test Files 60 passed` / `Tests 764 passed` |
+| typecheck | 通过（无输出） | `npm run typecheck`（`tsc -b`） |
+| lint | **0 error / 26 warning**，171 文件 116 规则 | `npm run lint`（oxlint） |
+| build | 通过，2.25s；有「chunk > 500 kB」提示（既有，非本轮引入） | `npm run build` |
+| 版本 | `0.8.13`（package.json 与线上 `app-version` 一致） | `grep version package.json` + `curl … \| grep app-version` |
+| 线上站 | HTTP **200** | `curl -o /dev/null -w "%{http_code}"` |
+| 仓库可见性 | **public**（`api.github.com/repos/…` 匿名 200） | 匿名 curl |
+| CI 结论 | ⚠️ **未取到**（非红非绿） | 见第 13 节 |
+| 与远端 | 本地 = `origin/master` = `f99a665`；另有一条远端分支 `ui-overhaul`（`cfda55d`） | `git ls-remote origin` |
+
+> 远端除 `master` 外还有 **`ui-overhaul`**（`cfda55d8`）——**它不是 master 的祖先**，接手时别误删、也别默认它已合并。
+
+**以下为 2026-09-28 的快照，保留作历史对照**（数字以 5a 为准）：
 
 - **`docs/AGENT_PLAN.md` 四步全部落地**：限额护栏 → ReAct 循环 → 投递决策智能体 → 项目教练。
 - **计费与通道改造落地**：AI 默认走「用户自备 Key」，且是**浏览器直发**（用户的 Key 不过本项目任何服务端）；
@@ -118,13 +146,14 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
   `src/lib/registration.ts` 文件头）：自备 Key 之后开号不再产生创建者成本，而码的代价是"每来一个用户都要亲自发一次"。
   旋钮仍在：`INVITE_CODES` 里填进真码就自动回到"要码"模式。
 - 测试：**56 个文件 / 738 条断言全绿**（2026-09-28 15:33 +0800 本机实测 `npm test` → `Test Files 56 passed`、`Tests 738 passed`，
+  **⚠️ 已被 5a 的 60 文件 / 764 条取代**；
   该文档此前写的「54 个文件 / 722 条」是 09-28 早间的旧读数），部分历史轮次在 **13 个时区配置**下逐个跑过（偏移 UTC-14 … UTC+14）；
   另有 **59 条真浏览器夹具断言**（`cd crawler && npm run selftest`，
   对着 `extension/__fixtures__/` 的 7 个页面跑本机 Edge）；`tsc -b`、`oxlint`（0 error / 26 warning）、`vite build` 均通过。
 - 最近提交（倒序）：日期口径收敛成一条 + CI 加时区守卫 → 时区守卫第一跑抓出的第二批
   （followup / pace / companyHistory + 4 处夹具）→ 出厂模板不再把发起人身份灌进陌生用户画像（0.8.2 止血）
   → 锁与 package.json 一致性进 CI → CI 触发器指向不存在的分支（四道门从未跑过）→ 版本号升 0.8.1。更早的见 `CHANGELOG.md`。
-- **`origin/master` = 本地 = `78f6f6a`**；CI run **36378774891 全绿**（lint → typecheck → tests →
+- **`origin/master` = 本地 = `78f6f6a`**（⚠️ 历史读数，**当前已是 `f99a665`**，见 5a）；CI run **36378774891 全绿**（lint → typecheck → tests →
   **换非 UTC 时区再跑一遍** → build → 产物上传，全程 41 秒）。这是本项目**第一次 CI 真的绿**：
   `CI 触发器` 那条修完之后，四道门才第一次在 CI 上跑到，而第一跑就红了四轮（全红在 `Unit tests`）。
 - **日期口径只有一条规则**（`format.ts#parseDate`）：纯日期串按**本地零点**构造、带 `Z`/偏移的时间戳保留时区语义；
@@ -133,6 +162,7 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
   ⚠️ **本机验证的坑（实测）**：Windows 上的 Node **只认 POSIX 形式**的 `TZ`（`EST5EDT` / `GMT+12` 有效），
   `TZ=America/New_York` 这类 IANA 名会被**静默忽略**、回落到系统时区（UTC+8）——
   拿 IANA 名"验证过多时区"等于没验证，本机要么用 POSIX 写法，要么交给 CI（Ubuntu 认 IANA）。
+- **⚠️ 线上站现状（2026-09-30 09:48 +0800 实测）：`app-version` = `0.8.13`、HTTP 200** —— 下列 0.8.6 / 0.8.5 的记录为历史，保留作**发布方法学**对照（内容型判别器、临时 worktree 重建比 sha256 等做法仍然有效）。
 - **线上站 = `9c7ba8c` 的前端构建（0.8.6，0.8.5 那处泄露已清）**：2026-09-28 14:32 发布并实测
   `curl -s <线上>/ | grep app-version` → `<meta name="app-version" content="0.8.6" />`，首页 HTTP 200，
   域名仍是 `-47024`，sandbox 仍是 `f15f04a3222d4d6b87b8720b95f52d07`（复用原应用，未新建）。
@@ -270,8 +300,8 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
 
 按顺序做，别跳：
 
-1. `npm install && npm run typecheck && npm test` —— 确认基线是 **738 全绿 / 56 个文件**（不是就先查环境）。
-   历史教训：这份文档里的基线数字曾连续 4 处写旧（716/722/54），**照抄它会把正常环境误判成坏了**。
+1. `npm install && npm run typecheck && npm test` —— 确认基线是 **764 全绿 / 60 个文件**（不是就先查环境）。
+   历史教训：这份文档里的基线数字已连续 **5 次**写旧（716 / 722 / 54 文件 / 738 / 56 文件），**照抄它会把正常环境误判成坏了**。
    唯一权威是 `npm test` 自己打印的 `Tests N passed`。
 2. `git log --oneline -15` 读提交信息，理解近期决策的「为什么」。
 3. 读 `AGENTS.md` 的硬约束 + 本文件第 3 节的不变量。
@@ -284,7 +314,7 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
 ```bash
 # 已转 public ⇒ 匿名 HTTPS 即可，无需任何凭据（2026-09-28 15:33 +0800 实测）
 git clone https://github.com/Dongnb66/internship-workbench.git
-cd internship-workbench && npm install && npm run typecheck && npm test   # 基线 738 全绿 / 56 个文件
+cd internship-workbench && npm install && npm run typecheck && npm test   # 基线 764 全绿 / 60 个文件
 
 # 本机（同一台 Windows）要推送时走 SSH：
 # git remote set-url origin git@github.com:Dongnb66/internship-workbench.git
@@ -437,3 +467,116 @@ curl -s https://internship-workbench-47024.app.workbuddy.host/ | grep app-versio
 再 grep 一遍 `IDENTITY`（姓名/学校/GitHub 名/邮箱），**必须全 0** —— 见 `docs/sync/INBOX.md` #7/#8/#9。
 
 站点管理入口在平台侧：**设置—数据管理—应用**。
+
+## 13. CI 结论的三态读法（本轮实测：取不到 ≠ 绿）
+
+**2026-09-30 09:48 +0800 实测**：连试 3 次匿名查 CI，全部失败，报错原文：
+
+```
+curl: (35) schannel: next InitializeSecurityContext failed:
+  CRYPT_E_NO_REVOCATION_CHECK (0x80092012) - 吊销功能无法检查证书是否吊销。
+```
+
+这是 **Windows schannel 的证书吊销检查**失败，不是 GitHub 侧的问题。**注意：同一台机器上
+`curl -o /dev/null -w "%{http_code}" https://api.github.com/repos/...` 在同一时段曾返回过 200**
+—— 所以「同一主机、同一时段，一次成功一次失败」是常态，**不能用一次成功就下结论**。
+
+**判据必须是「body 里有没有 `workflow_runs` 字段」，不是 HTTP 状态码**：
+
+| 状态 | 表现 | 正确处置 |
+| --- | --- | --- |
+| **有值** | body 含 `workflow_runs`，且 `total_count > 0` | 可引用具体 run 的 `status` / `conclusion` |
+| **结果为空** | body 含 `workflow_runs`，`total_count: 0` | 说明**该提交没有跑过 CI**，不是绿 |
+| **取不到** | body 无该字段（配额耗尽时是合法 JSON 的 `message` 字段；本例直接连不上） | ⚠️ **既不判红也不判绿**，单列一态并让退出码可区分 |
+
+> **为什么这条值得单独成节**：一个把「没测到」和「测了没问题」输出成同一个字符串的核对脚本，
+> 本身就是假绿的来源。本项目已经因为「把读不到误读成没有 run / 全绿」吃过一次亏（见 `docs/sync/INBOX.md` #19 的 `cancelled` 教训：
+> **job 的 `conclusion` 是 `cancelled` 时，steps 仍可能逐条显示 success** —— 引用 CI 必须同时贴
+> `status` / `conclusion` 与 steps，只贴 steps 会把「没落定」读成「跑过了」）。
+
+**本轮交接的 CI 结论：`⚠️ 未取到`。** 接手方请在能稳定复现的环境里重取，**不要**把本节读成「CI 是绿的」。
+
+## 14. 架构设计交付物（2026-09-29 产出，**尚未落地到代码**）
+
+**这是本项目最新的一份设计资产，也是接手方最容易漏掉的一块** —— 它不在本仓库里，是一套独立产出的架构文档。
+由 WorkBuddy 的「AICoding 架构专家团」（业务 / 系统 / 平台 / 安全 / 产品 五域 + 资料摄入 / 调研两增强角色）
+以 `internship-workbench` **v0.8.13 线上基线**为对象做增量演进设计，跑了 G0→G6 全部门禁后交付。
+
+### 14.1 交付物位置与规模（2026-09-30 复核）
+
+本机路径：`C:/Users/dong/WorkBuddy/2026-09-29-11-02-18/delivery/`（同内容另存于同级 `.workbuddy\output\`）
+
+| 文件 | 版本 | 行数 | 作用 |
+| --- | --- | --- | --- |
+| `高层架构设计.md` | v0.3 | 592 | 业务边界、痛点表 PT-1~PT-5、验证指标 V1~V5、范围外项 O1~O6 |
+| `系统设计.md` | v1.4 | 3,341 | DDD 边界、模块分解、API 契约、数据设计、数据分级 L1~L3（§7.2.2 为权威源） |
+| `UserStory.md` | v0.4 | 668 | 角色旅程、场景 SC-1~SC-7、验收 AC-1~AC-6、待澄清项 C-1~C-7 |
+| `部署设计.md` | v1.2 | 792 | 网络分区 / VPC / 安全组 / 端口（§3 为权威源）、四环境矩阵、成本估算 |
+| `安全设计.md` | v0.4 | 1,080 | STRIDE 威胁、信任边界 B1~B4、密钥分级、审计保留期、边界待确认 CB-01~CB-08 |
+| `material_digest.md` | v0.1 | 481 | 资料摘要 D1~D22 ⚠️ **含个人信息，见 14.4** |
+| `research_report.md` | v0.1 | 461 | 行业调研、标杆系统 B1~B5、调研待确认 U-1~U-5 |
+| `部署拓扑图.drawio` | — | 238 | 可二次编辑的拓扑图（36 mxCell） |
+| `交付一致性校对表.md` | v1.2 | 275 | **G6 审核支撑材料**：指纹、术语统一、引用一致、冲突裁决、delta 清单、已知缺陷 |
+
+### 14.2 四项已冻结的架构裁决（与仓库现状的关系）
+
+| 裁决 | 结论 | 与仓库现状 |
+| --- | --- | --- |
+| **X1** 数字口径 | **`518 = 156 + 71 + 79 + 48 + 164` 为唯一权威** | ⚠️ **仓库仍硬编码 508**（`146 + 71 + 79 + 48 + 129 + 35`）→ **需要落地，见 14.3** |
+| **X7** 自动投递 / 发送 | **维持不自动发送**（仅人工点击） | ✅ 与 `AGENTS.md` §2.3 一致，无需改 |
+| **X9** 多用户公网形态 | **维持多用户公网 BaaS**，仅收紧对外商用措辞 | ✅ 与现状一致 |
+| **O6** 对外 SaaS 商用化 | **不做** | ✅ 与现状一致 |
+
+其余三项用户裁决（G6 当场作出）：**C-3 无障碍等级 → 暂不定级、登记待补**；**C-5 小程序服务器域名 ICP 备案主体一致性 → 登记为平台方待确认项（并入《部署设计》附录 B.3 的 `U-03`）**；**C-6 完整版 F13~F18 排序 → 维持当前顺序**。三项均属确认现状，**未产生代码改动**。
+
+### 14.3 ⚠️ 交接的首个可执行动作：508 → 518（**需要发起人先点头**）
+
+架构裁决 X1 已明确 518 为唯一权威，**而仓库仍输出 508**。这是一条**静默的错误**：不报错，
+但会出现在用户可见的简历话术与 AI 文案里，HR 一 `git clone` 就对不上。
+
+**落点共 6 处代码/文档 + 1 处契约测试**（2026-09-30 09:48 +0800 现场 grep 复核）：
+
+| # | 文件 | 行 | 内容 |
+| --- | --- | --- | --- |
+| 1 | `src/lib/constants.ts` | L128 | `GREETING_RULES` 里的「5 个项目 / 6 个仓库 / 508 条测试（146 + 71 + 79 + 48 + 129 + 35）」 |
+| 2 | `miniprogram/utils/constants.js` | L64 | 同一条规则的**移植版**（改一边必须改另一边） |
+| 3 | `src/lib/healthCheck.ts` | L81 | 体检项提示文案 |
+| 4 | `src/pages/AiLab.tsx` | L478 | 界面提示文案 |
+| 5 | `src/pages/ApplyKit.tsx` | L197 | 界面提示文案 |
+| 6 | `AGENTS.md` | L43 | 硬约束条文 §2.2 |
+| 7 | `crawler/__tests__/contract.test.mjs` | L81/L92 | **跨端契约测试**：`PARTS = ['508','146','71','79','48','129','35']` |
+
+**为什么不能顺手改**：① 1–5 是**产品代码**，改完必须升版本 + 重新发布才生效，否则线上继续输出旧数字
+（发布流程见第 12 节，且**只能在 WorkBuddy 平台完成**）；② 第 7 条是**跨端契约测试**，
+改数字等于同时改 Web 与小程序两端的白名单，**漏掉第 2 处直接红**；
+③ 数字口径是**发起人决策**（`AGENTS.md` §2.2），不该由 agent 单方面改。
+**⇒ 接手方：先问发起人，再改，7 处一起改，改完跑四件套并升版本。**（沿用本节 §5 原有口径：「先问，再改」。）
+
+### 14.4 ⚠️ 这套文档不能原样进本仓库（**仓库是 public**）
+
+| 文件 | 身份串命中数（2026-09-30 实测） | 处置 |
+| --- | --- | --- |
+| `material_digest.md` | **8 处**：姓名 ×2、校名 ×1、地名 ×1、GitHub 名 ×2、届数 ×2 | ❌ **不得进公开仓**，需先脱敏 |
+| `交付一致性校对表.md` | **2 处**：姓名 ×1、GitHub 名 ×1（§9 另有一张敏感信息清单表） | ⚠️ 入仓前需先脱敏 §9 |
+| `部署设计.md` | **1 处**：GitHub 名（L334 代码仓地址，属技术事实） | ➖ 与本仓 `README` / `LICENSE` 同类，可接受 |
+| `UserStory.md` | **1 处**：届数 | ➖ 与本仓既有文档同类，可接受 |
+| `高层架构设计.md` / `系统设计.md` / `安全设计.md` / `research_report.md` | **0 处** | ✅ 可直接入仓 |
+
+> **本节刻意不写出任何身份串原文** —— 本仓库的既定做法是「拼开写，仓库里不留完整串」
+> （见第 11b 节：`profileTemplate.test.mjs` 的 `IDENTITY` 也是这么处理的）。一条「警告别人别泄露」
+> 的条文如果自己把姓名写进去，就是自相矛盾的。
+> 注意这几处命中的**性质不同**：`材料摘要` 是**个人材料摘要**（属高风险，整份都不宜公开）；
+> 其余是**仓库地址 / 届数**这类本来就该公开的信息。
+
+> **先例提醒**：本仓库已有一次教训 —— 一条 INBOX 条目贴 `curl` 返回体时把**公网出口 IP** 写进了公开仓库（已脱敏）。
+> 往 `docs/` 写任何「原始输出」之前，先问：**这段里有 IP / 邮箱 / cookie / 会话片段吗？**
+
+### 14.5 读这套文档的正确姿势
+
+1. **先读《交付一致性校对表》**——它是 G6 的审核结论，含**已知缺陷**（含一个校验脚本假阳性：
+   `validate_template_compliance.py` 在文件缺失时也会报「✅ 全部通过」）与**待确认项台账**，比逐份读正文快得多。
+2. **注意「引用指向 vs 数值副本」两条纪律**（校对表 §5.3）：跨文档不复制上游数值；任何与权威源并存的第二处记录都是副本。
+   读文档时若发现第二处数值，**以权威源为准**，不要以为是双口径。
+3. **文档写的是「应该是什么」，不代表代码「已经是什么」**——例如 11 张表、配额三闸 `20/8/60`、预筛阈值 `45`、
+   网关 `127.0.0.1:5178` 等，**落地前请逐条到代码里核对**，这本身就是接手后的第一轮任务。
+4. 本次交付**未改动本仓库任何一行代码**（工作树 clean 可证），也没有提交、没有发布。
