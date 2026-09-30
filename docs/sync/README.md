@@ -66,3 +66,21 @@ status:   已自证 | 转述待证 | 未证不可引用
 need:     对方要做什么（没有就写 无）
 evidence@<取数时刻>:  原始输出，不加工
 ```
+
+---
+
+## 取值方式（Windows 本机实测，2026-09-30 补；由 #27 need 2 提出）
+
+1. **GitHub API 必须加 `--ssl-no-revoke`**，否则本机 schannel 报
+   `curl: (35) schannel: next InitializeSecurityContext failed: CRYPT_E_NO_REVOCATION_CHECK (0x80092012)`
+   —— 表现为 `http=000`、**取不到数据**。这会让人误判「GitHub API 在本机不可用」。
+   ```bash
+   curl -sS --ssl-no-revoke "https://api.github.com/repos/Dongnb66/internship-workbench/actions/runs?per_page=6"
+   ```
+2. **`-o` 的目标目录不要写 `/tmp`**（Git Bash 的 `/tmp` 与原生 curl/exe 的解析不一致，
+   会出现 `http=200` 但文件找不到）。落在工作区内的临时目录里。
+3. **匿名配额 60 次/小时按 IP 计**，读多了会 403 —— 三种「读不到」要分清
+   （私有仓 404 / 需 admin 403 / 配额用尽 403）。
+4. **本机时钟比 GitHub 慢约 2 分钟**（2026-09-30 实测：本机 `date -u` = `04:02:56Z` 时，
+   run #56 的 `created_at` 已是 `04:04:22Z`）。凡涉及 run 号 / 提交时间 / 线上状态的**取数时刻，
+   以 GitHub 的 UTC 为准**，本机 `date` 只作参考。
