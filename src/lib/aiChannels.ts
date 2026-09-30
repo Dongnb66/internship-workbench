@@ -61,7 +61,9 @@ export const BYO_PRESETS: ChannelPreset[] = [
     host: 'api.deepseek.com',
     chatPath: '/chat/completions',
     authStyle: 'bearer',
-    models: ['deepseek-chat', 'deepseek-reasoner'],
+    // 名单来源（2026-09-30 核对）：DeepSeek 线上 API 400 报错逐字列出「supported API model names
+    // are deepseek-flash, deepseek-v4-pro」——deepseek-chat / deepseek-reasoner 已不在支持名单。
+    models: ['deepseek-flash', 'deepseek-v4-pro'],
     whoPays: '花你自己的 DeepSeek 账户余额，与应用创建者无关',
     browserDirect: true,
     requiresKey: true,
@@ -72,7 +74,9 @@ export const BYO_PRESETS: ChannelPreset[] = [
     host: 'api.moonshot.cn',
     chatPath: '/v1/chat/completions',
     authStyle: 'bearer',
-    models: ['kimi-k2-0905-preview', 'moonshot-v1-8k'],
+    // 名单来源（2026-09-30 核对）：platform.moonshot.cn 官方快速开始的 model 字段示例逐字
+    // （kimi-k3 为主推默认，kimi-k2.7-code-highspeed 为编程高速档，kimi-k2.6 为通用档）。
+    models: ['kimi-k3', 'kimi-k2.7-code-highspeed', 'kimi-k2.6'],
     whoPays: '花你自己的 Moonshot 账户余额，与应用创建者无关',
     browserDirect: true,
     requiresKey: true,
@@ -83,7 +87,16 @@ export const BYO_PRESETS: ChannelPreset[] = [
     host: 'openrouter.ai',
     chatPath: '/api/v1/chat/completions',
     authStyle: 'bearer',
-    models: ['deepseek/deepseek-chat', 'moonshotai/kimi-k2-instruct'],
+    // 名单来源（2026-09-30 核对）：openrouter.ai/api/v1/models 公开列表逐一核对存在。
+    // moonshotai/kimi-k2-instruct 已从列表下架（核对日不存在），换成 moonshotai/kimi-k3。
+    models: [
+      'deepseek/deepseek-chat',
+      'moonshotai/kimi-k3',
+      'openai/gpt-5',
+      'openai/gpt-5-mini',
+      'anthropic/claude-fable-5.1',
+      'google/gemini-3-flash-preview',
+    ],
     whoPays: '花你自己的 OpenRouter 余额，与应用创建者无关',
     browserDirect: true,
     requiresKey: true,
@@ -94,7 +107,9 @@ export const BYO_PRESETS: ChannelPreset[] = [
     host: 'dashscope.aliyuncs.com',
     chatPath: '/compatible-mode/v1/chat/completions',
     authStyle: 'bearer',
-    models: ['qwen-turbo', 'qwen-plus'],
+    // 名单来源（2026-09-30 核对）：help.aliyun.com/zh/model-studio/models「文本生成」表首行
+    // （qwen-turbo / qwen-plus 为旧一代命名，现役主推是 3.8-max / 3.7-plus / 3.8-flash）。
+    models: ['qwen3.8-max', 'qwen3.7-plus', 'qwen3.8-flash'],
     whoPays: '花你自己的阿里云百炼额度（新用户有免费额度），与应用创建者无关',
     browserDirect: true,
     requiresKey: true,
@@ -105,7 +120,9 @@ export const BYO_PRESETS: ChannelPreset[] = [
     host: 'open.bigmodel.cn',
     chatPath: '/api/paas/v4/chat/completions',
     authStyle: 'bearer',
-    models: ['glm-4.7-flash', 'glm-4.6', 'glm-4.5-air'],
+    // 名单来源（2026-09-30 核对）：docs.bigmodel.cn GLM-5.3 模型页调用示例逐字
+    // （glm-5.3 为现役旗舰，glm-5.2 为其基础模型的上一代 ID）。
+    models: ['glm-5.3', 'glm-5.2'],
     whoPays: '花你自己的智谱账户额度，与应用创建者无关',
     // 实测两条路径的响应都不带 access-control-allow-origin：浏览器直发必被 CORS 挡掉。
     browserDirect: false,
@@ -117,7 +134,9 @@ export const BYO_PRESETS: ChannelPreset[] = [
     host: '127.0.0.1',
     chatPath: '/v1/chat/completions',
     authStyle: 'none',
-    models: ['qwen3:4b', 'deepseek-r1:7b'],
+    // 名单来源（2026-09-30 核对）：ollama.com/library 各模型 tags 页逐一核对存在
+    // （qwen3:4b / deepseek-r1:7b 沿用且仍存在，新增 qwen3.5:4b / gpt-oss:20b 两个常用小体积 tag）。
+    models: ['qwen3:4b', 'qwen3.5:4b', 'deepseek-r1:7b', 'gpt-oss:20b'],
     whoPays: '跑在你自己电脑上，不花任何人的钱（慢一些，也没有额度这回事）',
     browserDirect: true,
     requiresKey: false,
@@ -253,7 +272,7 @@ export function assertForwardTarget(url: string): ForwardCheck {
 }
 
 /** 形如 sk-xxxx / rk-xxxx / pk-xxxx 的密钥串（长度门槛避免误伤普通文本） */
-const KEY_SHAPE = /\b(?:sk|rk|pk|wt|api)[-_][A-Za-z0-9]{12,}\b/g
+const KEY_SHAPE = /\b(?:sk|rk|pk|wt|api)[-][A-Za-z0-9]{12,}\b/g
 
 function mask(one: string): string {
   return `${one.slice(0, 6)}${'*'.repeat(10)}（${one.length} 位已隐藏）`
