@@ -17,8 +17,8 @@ const { interviewFactGate } = await import('../factGate')
 
 const profile: Profile = {
   resume_summary:
-    '5 个开源项目 / 6 个仓库，合计 508 条测试（python-learning-agent 146 · campus-mutual-aid 71 · travel-rank 79 · mcp-toolkit 48 · offer-pipeline 前端 129 + agent-platform-java 后端 35）。',
-  self_intro: '2028 届计算机本科在读，独立完成 5 个开源项目（6 个仓库、508 条测试），9 条评测。',
+    '5 个开源项目 / 6 个仓库，合计 518 条测试（python-learning-agent 156 · campus-mutual-aid 71 · travel-rank 79 · mcp-toolkit 48 · offer-pipeline 前端 129 + agent-platform-java 后端 35）。',
+  self_intro: '2028 届计算机本科在读，独立完成 5 个开源项目（6 个仓库、518 条测试），9 条评测。',
 }
 
 function iv(id: number, text: string): Row {
@@ -26,9 +26,9 @@ function iv(id: number, text: string): Row {
 }
 
 describe('interviewFactGate（面试数字 vs 仓库口径）', () => {
-  it('口径内的数字不报：146 条测试、508 条合计、9 条评测', () => {
+  it('口径内的数字不报：156 条测试、518 条合计、9 条评测', () => {
     const items = interviewFactGate(
-      [iv(1, '面试官问测试：我说主项目 146 条 pytest，全仓合计 508 条测试，另有 9 条评测')],
+      [iv(1, '面试官问测试：我说主项目 156 条 pytest，全仓合计 518 条测试，另有 9 条评测')],
       profile,
     )
     expect(items).toHaveLength(0)

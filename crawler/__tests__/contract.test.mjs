@@ -78,18 +78,19 @@ describe('Web ↔ 小程序 常量口径', () => {
     expect(mpKeys).toEqual(webKeys)
   })
 
-  it('PROFILE_TEMPLATE 的可验证数字两端一致（508 条测试口径不能漂）', () => {
+  it('PROFILE_TEMPLATE 的可验证数字两端一致（518 条测试口径不能漂）', () => {
     const nums = (s) => String(s).match(/\d+/g) ?? []
     expect(nums(mpConstants.PROFILE_TEMPLATE.self_intro)).toEqual(nums(PROFILE_TEMPLATE.self_intro))
     expect(nums(mpConstants.PROFILE_TEMPLATE.resume_summary)).toEqual(nums(PROFILE_TEMPLATE.resume_summary))
   })
 
   it('GREETING_RULES 两端都钉住了完整的拆分数字（只写总数挡不住模型自己编分解）', () => {
-    // 踩过的坑：小程序这份只写了「合计 508 条测试」，Web 端才是完整的
-    // 「508 条测试（146 + 71 + 79 + 48 + 129 + 35）、9 条评测」。
-    // 只断言出现过「508」是挡不住的 —— 拆分项一个不少才算钉住。
+    // 踩过的坑：小程序这份只写了「合计 518 条测试」，Web 端才是完整的
+    // 「518 条测试（156 + 71 + 79 + 48 + 129 + 35）、9 条评测」。
+    // 只断言出现过「518」是挡不住的 —— 拆分项一个不少才算钉住。
     // 6 个仓库的测试数必须逐个出现在规则里，模型没有空间自行加减。
-    const PARTS = ['508', '146', '71', '79', '48', '129', '35']
+    // （口径沿革：2026-09-30 依架构裁决 X1 由 508 = 146+… 改为 518，主项目 146→156，发起人已点头。）
+    const PARTS = ['518', '156', '71', '79', '48', '129', '35']
     for (const source of [GREETING_RULES, mpConstants.GREETING_RULES]) {
       for (const n of PARTS) {
         expect(source, `打招呼纪律里缺了测试数拆分项 ${n}`).toContain(n)

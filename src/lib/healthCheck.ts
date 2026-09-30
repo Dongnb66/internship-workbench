@@ -78,7 +78,7 @@ export function profileHealth(profile: Profile | null, resumeCount: number): Hea
     {
       ok: summary.length >= 40 && /\d/.test(summary),
       label: '项目数字口径已写入「项目与可验证事实」',
-      fix: '把「5 个项目 / 6 个仓库 / 508 条测试」这类可 clone 核对的数字写进去。AI 话术只引用这里的事实',
+      fix: '把「5 个项目 / 6 个仓库 / 518 条测试」这类可 clone 核对的数字写进去。AI 话术只引用这里的事实',
     },
     {
       ok: has(p.available_days),

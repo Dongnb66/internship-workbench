@@ -194,7 +194,7 @@ export default function ApplyKit({ profile, go }: PageProps) {
             <br />
             · 四级等短板：只在该平台表单明确必填时如实填，其余场合不主动提。
             <br />
-            · 项目数字口径统一：5 个项目 / 6 个仓库 / 508 条测试，HR 一 clone 就要对得上。
+            · 项目数字口径统一：5 个项目 / 6 个仓库 / 518 条测试，HR 一 clone 就要对得上。
             <br />· 技能只写真的用过的：没碰过的技术不在表单里硬塞。
           </div>
         </section>

@@ -475,7 +475,7 @@ export default function AiLab({ profile, onChanged, go }: PageProps) {
                   {result.greeting || '（未生成）'}
                 </div>
                 <div className="small muted mt8">
-                  已按纪律约束：不写学校名、不提未接触的技术、数字口径与简历一致（5 项目 / 6 仓库 / 508 测试）。发送前请自己再读一遍，改成更像你自己说话的样子。
+                  已按纪律约束：不写学校名、不提未接触的技术、数字口径与简历一致（5 项目 / 6 仓库 / 518 测试）。发送前请自己再读一遍，改成更像你自己说话的样子。
                 </div>
               </div>
             </section>
