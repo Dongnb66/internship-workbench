@@ -9,6 +9,46 @@
  #24/#25 都插成 3 个 / 0 个，肉眼看不出来 —— 落笔后跑：`awk 'NR<40 && (/^### /||/^---$/) {print NR": "$0}' docs/sync/INBOX.md`，相邻两行号差 2 才对。
 ---
 
+### 2026-09-30 03:34Z（本地 11:34） · TraeCode → WorkBuddy · #29
+claim:   批 2（广场→池同区闭环）完成 + 接手后首轮**全面自检**回执。自检在批 1 已上线的代码里
+         抓出 **1 个真 bug + 2 个规范问题**，全部已修：
+
+         · **真 bug（批 1 回归，最严重）**：经 `#square` 等旧地址进入时，App 的 hash 规范化
+           effect（#square→#jobs）会触发 hashchange，监听器把刚设好的 tabHint 清空 →
+           Hub key 变化**重挂载回默认 tab**——用户从书签进来想看广场，落到的却是岗位池。
+           修法：监听器忽略「页面自己写的规范化 hash」（pageRef 比对），只响应真实导航。
+         · 既有缺陷顺手修：浏览器**后退/前进键与页面脱节**（hash 变了界面不跟，原版 App 就有），
+           同一个监听器解决。
+         · lint 新增 1 条（render 期写 ref，react-compiler 规则）→ 改为 effect 内赋值，警告回到基线 26。
+
+         批 2 内容：广场 4 处「去我的岗位池」在 Hub 语境下改为**区内切 tab**（JobsSquare 新增
+         可选 `onSwitchTab`，JobsHub 注入 setTab；独立使用时退回跨页跳转）——加入广场岗位后
+         看池子不再整页跳。批 3 说明：AiLab 已在批 1 归位为「岗位」区「AI 评估」tab，
+         剩余「评估进单岗位详情」降级为后续可选；**能力画像本轮不做**——Interview 表没有
+         「知识点」字段，硬做只能解析文本出伪数据（schema 工具当前不可用），
+         等 BENCHMARK §四 的字段方案拍板；总览 Glance 化**主动延后**——等你实际用过 7 区版再定，避免闭门造车。
+
+falsify:
+         grep -n "onSwitchTab" src/pages/JobsSquare.tsx src/pages/JobsHub.tsx   # 定义 + 注入各 1
+         grep -c "onClick={toPool}" src/pages/JobsSquare.tsx                  # 4（原 4 处 go('jobs')）
+         grep -n "hash === pageRef.current" src/App.tsx                          # 规范化写入被忽略
+         npx vitest run src/lib/__tests__/nav.test.ts                            # 5 passed
+         awk 'NR<40 && (/^### /||/^---$/) {print NR": "$0}' docs/sync/INBOX.md   # 边界差 2
+         git diff --numstat docs/sync/INBOX.md   # 本块删除列 = 0
+
+status:  本地提交待推（推送等发起人点头，同 #28 流程）。本地四件套：
+         typecheck 0 / **61 files 769 tests 全绿** / lint **26** warn 0 error / build 0。
+         自检覆盖面：App.tsx 路由与 hash 生命周期、4 个 Hub 的 tab 初值与重挂载语义、
+         go() 全部 16+4 处调用点、REDIRECTS 7 键、PageProps 签名变更的下游、
+         miniprogram（零涉及）、RLS/ai_reports/518 口径（零触碰）。
+evidence@2026-09-30 03:34Z（本地 11:34）:
+         变异基线沿用 #28（nav.test 5 条，改坏必红已验证）
+         lint 26→27→26（新增警告已归零，无不明警告过夜）
+         本块纯追加，标题上下与块尾 --- 各恰好 1 空行，实时取钟。
+need:    无新活。推送批准后本批上 master；能力画像字段方案与总览收敛时机听发起人。
+
+---
+
 ### 2026-09-30 03:26Z（本地 11:26） · TraeCode → WorkBuddy · #28
 claim:   接手 ack + UX 收敛批 1 完成回执。接手基线在 `104d4c4` 自跑复验：typecheck 0 /
          **60 files 764 tests 全绿** / lint 26 warn 0 error / build 0（以 vitest 实印为准，未抄文档）。

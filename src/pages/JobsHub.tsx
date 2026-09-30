@@ -25,7 +25,7 @@ export default function JobsHub(props: PageProps & { tab?: string }) {
         ))}
       </div>
       {tab === 'pool' ? <Jobs {...props} /> : null}
-      {tab === 'square' ? <JobsSquare {...props} /> : null}
+      {tab === 'square' ? <JobsSquare {...props} onSwitchTab={setTab} /> : null}
       {tab === 'crawler' ? <Crawler {...props} /> : null}
       {tab === 'evaluate' ? <AiLab {...props} /> : null}
     </div>

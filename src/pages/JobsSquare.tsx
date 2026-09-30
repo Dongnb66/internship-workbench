@@ -36,7 +36,9 @@ function isMissingTable(message: string): boolean {
   return /42P01/.test(t) || /does not exist|不存在/.test(t)
 }
 
-export default function JobsSquare({ profile, onChanged, go }: PageProps) {
+export default function JobsSquare({ profile, onChanged, go, onSwitchTab }: PageProps & { onSwitchTab?: (tab: string) => void }) {
+  /** 广场现在住在「岗位」区的 tab 里：去岗位池 = 区内切 tab；被独立使用时退回跨页跳转 */
+  const toPool = () => (onSwitchTab ? onSwitchTab('pool') : go('jobs', 'pool'))
   const [publicJobs, setPublicJobs] = useState<PublicJob[]>([])
   const [poolRows, setPoolRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
@@ -275,7 +277,7 @@ export default function JobsSquare({ profile, onChanged, go }: PageProps) {
             <button className="btn" onClick={() => void load()} disabled={loading}>
               刷新
             </button>
-            <button className="btn primary" onClick={() => go('jobs')}>
+            <button className="btn primary" onClick={toPool}>
               去我的岗位池
             </button>
           </div>
@@ -332,7 +334,7 @@ export default function JobsSquare({ profile, onChanged, go }: PageProps) {
               <button className="btn" onClick={() => void load()} disabled={loading}>
                 重试
               </button>
-              <button className="btn primary" onClick={() => go('jobs')}>
+              <button className="btn primary" onClick={toPool}>
                 先去我的岗位池
               </button>
             </div>
@@ -365,7 +367,7 @@ export default function JobsSquare({ profile, onChanged, go }: PageProps) {
               </div>
             </div>
             <div className="starter-actions">
-              <button className="btn primary" onClick={() => go('jobs')}>
+              <button className="btn primary" onClick={toPool}>
                 去我的岗位池
               </button>
             </div>
@@ -464,7 +466,7 @@ export default function JobsSquare({ profile, onChanged, go }: PageProps) {
               </button>
               <span className="spacer" />
               {inPool(detail, keys) ? (
-                <button className="btn" onClick={() => go('jobs')}>
+                <button className="btn" onClick={toPool}>
                   已在岗位池，去查看
                 </button>
               ) : (

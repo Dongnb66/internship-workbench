@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { cloud } from './cloud'
 import { getProfile, listRows } from './lib/api'
 import { useSession } from './lib/hooks'
 import { NAV_MAIN, REDIRECTS, TITLES } from './lib/nav'
 import type { Profile } from './types'
-import { Icon } from './components/Icon'
+import { Icon, type IconName } from './components/Icon'
 import Growth from './pages/Growth'
 import InterviewsHub from './pages/InterviewsHub'
 import JobsHub from './pages/JobsHub'
@@ -62,6 +62,27 @@ export default function App() {
     window.location.hash = page
   }, [page])
 
+  // 浏览器后退/前进：hash 变了页面必须跟着变，否则地址栏与界面脱节。
+  // 例外：页面状态写入的规范化 hash（#square → #jobs）也会触发本事件，
+  // 那不是导航——不忽略会把重定向刚设好的 tabHint 清掉，用户被踢回默认 tab。
+  const pageRef = useRef(page)
+  useEffect(() => {
+    pageRef.current = page
+  }, [page])
+  useEffect(() => {
+    const onHash = () => {
+      const hash = window.location.hash.replace('#', '')
+      if (hash === pageRef.current) return
+      const target = REDIRECTS[hash]?.page ?? hash
+      if (TITLES[target]) {
+        setTabHint(REDIRECTS[hash]?.tab)
+        setPage(target)
+      }
+    }
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
+
   if (!ready) {
     return (
       <div className="login-wrap">
@@ -110,7 +131,7 @@ export default function App() {
         {NAV_MAIN.map((item) => (
           <button key={item.key} className={page === item.key ? 'nav-item active' : 'nav-item'} onClick={() => go(item.key)}>
             <span className="nav-ico">
-              <Icon name={item.icon as never} />
+              <Icon name={item.icon as IconName} />
             </span>
             <span className="label">{item.label}</span>
             {badge(item.key) ? <span className="count">{badge(item.key)}</span> : null}
