@@ -272,7 +272,7 @@ export function assertForwardTarget(url: string): ForwardCheck {
 }
 
 /** 形如 sk-xxxx / rk-xxxx / pk-xxxx 的密钥串（长度门槛避免误伤普通文本） */
-const KEY_SHAPE = /\b(?:sk|rk|pk|wt|api)[-__][A-Za-z0-9]{12,}\b/g
+const KEY_SHAPE = /\b(?:sk|rk|pk|wt|api)[-][A-Za-z0-9]{12,}\b/g
 
 function mask(one: string): string {
   return `${one.slice(0, 6)}${'*'.repeat(10)}（${one.length} 位已隐藏）`
