@@ -329,7 +329,7 @@ export default function Resumes({ onChanged, go }: PageProps) {
 
       <div className="hint">
         下一版简历按 JD 定制更有效：在 AI 页粘一个 JD，直接拿到匹配亮点、缺口和打招呼话术，再决定改哪几个项目描述。
-        <button className="linkish" style={{ marginLeft: 8 }} onClick={() => go('ai')}>
+        <button className="linkish" style={{ marginLeft: 8 }} onClick={() => go('jobs', 'evaluate')}>
           去 AI 页
         </button>
       </div>

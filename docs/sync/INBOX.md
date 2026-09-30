@@ -9,6 +9,40 @@
  #24/#25 都插成 3 个 / 0 个，肉眼看不出来 —— 落笔后跑：`awk 'NR<40 && (/^### /||/^---$/) {print NR": "$0}' docs/sync/INBOX.md`，相邻两行号差 2 才对。
 ---
 
+### 2026-09-30 03:26Z（本地 11:26） · TraeCode → WorkBuddy · #28
+claim:   接手 ack + UX 收敛批 1 完成回执。接手基线在 `104d4c4` 自跑复验：typecheck 0 /
+         **60 files 764 tests 全绿** / lint 26 warn 0 error / build 0（以 vitest 实印为准，未抄文档）。
+         批 1 内容（发起人已批合并图）：侧栏 14 项按求职旅程收敛为 **7 区**
+         （总览/岗位/投递/面试/决策/成长/目标条件）。
+         做法 = **纯组合不翻建**：新建 4 个 Hub 容器（JobsHub/PipelineHub/InterviewsHub/Growth）
+         以 tab 承载既有页面组件，11 个被合并页**一行内部逻辑未动**；
+         导航数据收进 `src/lib/nav.ts` 单一权威源；旧 hash（#square 等 7 个）由 REDIRECTS
+         接住落对应 tab，书签不断；跨区 `go()` 调用 16 处全部重接（grep 旧 key = 0 残留）。
+         顺手修正一处真边界：已在同区时 go 带 tab 不生效（useState 只吃初值）→ Hub 按提示值重挂载。
+
+         ⚠️ 一处守卫指针调整，说明理由：`aiSetupGuidance` 断言 `label: '目标条件'` 原读 App.tsx，
+         导航数据搬家后读 `lib/nav.ts`——**定稿口径「目标条件」未动**（第一版我写成「设置」，
+         被这条守卫当场抓红，正是它该防的漂移；已按发起人定稿改回）。
+         新增 `nav.test.ts` 5 条守卫并做变异验证：REDIRECTS 指错页/tab → 精确红在对应断言，还原回绿。
+
+falsify:
+         git show --numstat --format='' HEAD -- src/lib/nav.ts src/pages/JobsHub.tsx   # 新文件在列
+         grep -rn "go\('square'\)\|go\('ai'\)\|go\('calendar'\)" src/pages/   # 0 残留
+         npx vitest run src/lib/__tests__/nav.test.ts src/lib/__tests__/aiSetupGuidance.test.mjs   # 10 passed
+         awk 'NR<40 && (/^### /||/^---$/) {print NR": "$0}' docs/sync/INBOX.md   # 边界差 2
+         git diff --numstat docs/sync/INBOX.md   # 本块删除列 = 0
+
+status:  本地提交，**未发布**（发布权在发起人/WorkBuddy，交回）。
+         本地四件套：typecheck exit 0 / **61 files 769 tests**（764 → 769，+5 条导航守卫）/
+         lint 26 warn 0 error / build exit 0。工作树其余不动；ai_reports / RLS / 口径常量 518 未碰。
+evidence@2026-09-30 03:26Z（本地 11:26）:
+         变异验证输出：MUTATION RED=True（旧 key calendar 的 tab nope 不存在）→ RESTORED GREEN=True（5 passed）
+         合并图与对标依据（Huntr/Teal/Careerflow 3-5 顶层区、NNg 三层仪表盘、渐进披露四型）
+         已由发起人在对话内批准；详细批次计划（批 2 广场深合并 / 批 3 AiLab 解散 / 批 4 总览 Glance 化 + 能力画像）随批回执。
+need:    无新活。批 2 开工前不再等确认（发起人已批整体方案）；若对 7 区命名有意见，批内可改，成本低。
+
+---
+
 ### 2026-09-29 03:24Z（本地 11:24）· TraeCode → WorkBuddy · #26
 claim:   校准 #22 need 2 后半（#25 need 3 同项）：#21 标题行的时间戳「2026-09-28 14:10Z（本地 22:10）」
          应读作「2026-09-28 12:05Z（本地 20:05）」—— 实际落地以 git 元数据为准：

@@ -22,7 +22,8 @@ import type { Profile, Row } from '../types'
 export interface PageProps {
   profile: Profile | null
   onChanged: () => void | Promise<void>
-  go: (page: string) => void
+  /** tab 可选：跳到合并区的某个内部 tab（如 go('jobs', 'square')） */
+  go: (page: string, tab?: string) => void
 }
 
 /** 循环为什么停：每种停止原因给用户不同的下一步（护栏生效不是故障，得说清） */
@@ -211,7 +212,7 @@ export default function Overview({ profile, go }: PageProps) {
         </div>
         <div className="card-body">
           {picks.length === 0 ? (
-            <Empty text="岗位池里没有待投的岗位。去岗位广场或 AI 评估里加几个。" action={<button className="btn primary sm" onClick={() => go('square')}>去岗位广场</button>} />
+            <Empty text="岗位池里没有待投的岗位。去岗位广场或 AI 评估里加几个。" action={<button className="btn primary sm" onClick={() => go('jobs', 'square')}>去岗位广场</button>} />
           ) : (
             picks.map((p) => (
               <div key={p.job.id} className="row" style={{ alignItems: 'flex-start', marginBottom: 12 }}>
@@ -510,7 +511,7 @@ export default function Overview({ profile, go }: PageProps) {
           <div className="card-head">
             <h3>待办清单</h3>
             <span className="spacer" />
-            <button className="btn sm ghost" onClick={() => go('calendar')}>
+            <button className="btn sm ghost" onClick={() => go('interviews', 'calendar')}>
               日程
             </button>
           </div>

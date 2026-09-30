@@ -406,7 +406,7 @@ export default function Jobs({ profile, onChanged, go }: PageProps) {
 
   function sendToAi(row: Row) {
     window.sessionStorage.setItem('iwb:ai-prefill', JSON.stringify({ company: row.company, title: row.title, jd: row.jd_text ?? '' }))
-    go('ai')
+    go('jobs', 'evaluate')
   }
 
   return (
@@ -590,7 +590,7 @@ export default function Jobs({ profile, onChanged, go }: PageProps) {
             </div>
 
             <div className="starter-actions">
-              <button className="btn primary" onClick={() => go('square')}>
+              <button className="btn primary" onClick={() => go('jobs', 'square')}>
                 去岗位广场挑岗位
               </button>
               <button className="btn" onClick={() => setImportOpen(true)}>

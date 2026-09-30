@@ -2,87 +2,44 @@ import { useCallback, useEffect, useState } from 'react'
 import { cloud } from './cloud'
 import { getProfile, listRows } from './lib/api'
 import { useSession } from './lib/hooks'
+import { NAV_MAIN, REDIRECTS, TITLES } from './lib/nav'
 import type { Profile } from './types'
-import { Icon, type IconName } from './components/Icon'
-import AiLab from './pages/AiLab'
-import ApplyKit from './pages/ApplyKit'
-import CalendarPage from './pages/CalendarPage'
-import Coach from './pages/Coach'
-import Crawler from './pages/Crawler'
-import Interviews from './pages/Interviews'
-import Jobs from './pages/Jobs'
-import JobsSquare from './pages/JobsSquare'
-import Knowledge from './pages/Knowledge'
+import { Icon } from './components/Icon'
+import Growth from './pages/Growth'
+import InterviewsHub from './pages/InterviewsHub'
+import JobsHub from './pages/JobsHub'
 import Login from './pages/Login'
 import Offers from './pages/Offers'
 import Overview from './pages/Overview'
-import Pipeline from './pages/Pipeline'
-import Resumes from './pages/Resumes'
+import PipelineHub from './pages/PipelineHub'
 import Settings from './pages/Settings'
 
-const NAV = [
-  {
-    group: '工作台',
-    items: [
-      { key: 'overview', label: '总览', icon: 'overview' },
-      { key: 'square', label: '岗位广场', icon: 'square' },
-      { key: 'jobs', label: '岗位池', icon: 'jobs' },
-      { key: 'crawler', label: '抓取任务', icon: 'crawler' },
-      { key: 'pipeline', label: '投递看板', icon: 'pipeline' },
-      { key: 'interviews', label: '面试跟进', icon: 'interviews' },
-      { key: 'offers', label: 'Offer 对比', icon: 'offers' },
-    ],
-  },
-  {
-    group: '资产',
-    items: [
-      { key: 'resumes', label: '简历库', icon: 'resumes' },
-      { key: 'applykit', label: '网申填写包', icon: 'applykit' },
-      { key: 'ai', label: 'AI · JD 评估', icon: 'ai' },
-      { key: 'coach', label: '项目教练', icon: 'coach' },
-      { key: 'calendar', label: '提醒日历', icon: 'calendar' },
-      { key: 'knowledge', label: '个人知识库', icon: 'knowledge' },
-    ],
-  },
-  {
-    group: '配置',
-    items: [{ key: 'settings', label: '目标条件', icon: 'settings' }],
-  },
-] as const
-
-const TITLES: Record<string, string> = {
-  overview: '总览',
-  square: '岗位广场',
-  jobs: '岗位池',
-  crawler: '抓取任务',
-  pipeline: '投递看板',
-  interviews: '面试跟进',
-  offers: 'Offer 对比',
-  resumes: '简历库',
-  applykit: '网申填写包',
-  ai: 'AI · JD 评估',
-  calendar: '提醒日历',
-  knowledge: '个人知识库',
-  settings: '目标条件与账号',
-}
-
+/**
+ * 侧栏保留「岗位池/岗位广场」等旧 key 不再存在的导航 —— 2026-09-30 UX 收敛：
+ * 14 项平铺按求职旅程收敛为 7 区，被合并的旧地址由 REDIRECTS 接住，
+ * 老用户的书签（#square 等）落进新区的对应 tab，肌肉记忆不断。
+ */
 export default function App() {
   const { session, ready } = useSession()
   const [page, setPage] = useState(() => {
     const hash = window.location.hash.replace('#', '')
-    return hash && TITLES[hash] ? hash : 'overview'
+    const target = REDIRECTS[hash]?.page ?? hash
+    return TITLES[target] ? target : 'overview'
+  })
+  const [tabHint, setTabHint] = useState<string | undefined>(() => {
+    const hash = window.location.hash.replace('#', '')
+    return REDIRECTS[hash]?.tab
   })
   const [profile, setProfile] = useState<Profile | null>(null)
-  const [counts, setCounts] = useState({ jobs: 0, applications: 0, interviews: 0, offers: 0, tasks: 0 })
+  const [counts, setCounts] = useState({ jobs: 0, applications: 0, interviews: 0, offers: 0 })
 
   const refreshShared = useCallback(async () => {
     try {
-      const [jobs, apps, ivs, ofs, tks, prof] = await Promise.all([
+      const [jobs, apps, ivs, ofs, prof] = await Promise.all([
         listRows('jobs', { limit: 500 }),
         listRows('applications', { limit: 500 }),
         listRows('interviews', { limit: 500 }),
         listRows('offers', { limit: 200 }),
-        listRows('tasks', { limit: 500 }),
         getProfile(),
       ])
       setProfile(prof)
@@ -91,7 +48,6 @@ export default function App() {
         applications: apps.length,
         interviews: ivs.filter((r) => (r.result ?? 'pending') === 'pending').length,
         offers: ofs.length,
-        tasks: tks.filter((t) => !t.done).length,
       })
     } catch {
       // 未登录 / 网络异常：各页面自行提示，这里静默
@@ -130,11 +86,16 @@ export default function App() {
     if (key === 'pipeline') return counts.applications
     if (key === 'interviews') return counts.interviews
     if (key === 'offers') return counts.offers
-    if (key === 'calendar') return counts.tasks
     return null
   }
 
-  const pageProps = { profile, onChanged: refreshShared, go: setPage }
+  /** 跨区跳转带 tab 提示：只有目标区真是合并区时 tab 才生效（Hub 自己校验） */
+  const go = (next: string, tab?: string) => {
+    setPage(next)
+    setTabHint(tab)
+  }
+
+  const pageProps = { profile, onChanged: refreshShared, go }
 
   return (
     <div className="app">
@@ -146,19 +107,14 @@ export default function App() {
             <span>Internship Desk</span>
           </h1>
         </div>
-        {NAV.map((group) => (
-          <div key={group.group}>
-            <div className="side-group">{group.group}</div>
-            {group.items.map((item) => (
-              <button key={item.key} className={page === item.key ? 'nav-item active' : 'nav-item'} onClick={() => setPage(item.key)}>
-                <span className="nav-ico">
-                  <Icon name={item.icon as IconName} />
-                </span>
-                <span className="label">{item.label}</span>
-                {badge(item.key) ? <span className="count">{badge(item.key)}</span> : null}
-              </button>
-            ))}
-          </div>
+        {NAV_MAIN.map((item) => (
+          <button key={item.key} className={page === item.key ? 'nav-item active' : 'nav-item'} onClick={() => go(item.key)}>
+            <span className="nav-ico">
+              <Icon name={item.icon as never} />
+            </span>
+            <span className="label">{item.label}</span>
+            {badge(item.key) ? <span className="count">{badge(item.key)}</span> : null}
+          </button>
         ))}
         <span className="spacer" />
         <div className="side-group">数据存于云端 · 仅本人可见</div>
@@ -179,18 +135,11 @@ export default function App() {
 
         <div className="content">
           {page === 'overview' ? <Overview {...pageProps} /> : null}
-          {page === 'square' ? <JobsSquare {...pageProps} /> : null}
-          {page === 'jobs' ? <Jobs {...pageProps} /> : null}
-          {page === 'crawler' ? <Crawler {...pageProps} /> : null}
-          {page === 'pipeline' ? <Pipeline {...pageProps} /> : null}
-          {page === 'interviews' ? <Interviews {...pageProps} /> : null}
+          {page === 'jobs' ? <JobsHub key={'jobs:' + (tabHint ?? '')} {...pageProps} tab={tabHint} /> : null}
+          {page === 'pipeline' ? <PipelineHub key={'pipeline:' + (tabHint ?? '')} {...pageProps} tab={tabHint} /> : null}
+          {page === 'interviews' ? <InterviewsHub key={'interviews:' + (tabHint ?? '')} {...pageProps} tab={tabHint} /> : null}
           {page === 'offers' ? <Offers {...pageProps} /> : null}
-          {page === 'resumes' ? <Resumes {...pageProps} /> : null}
-          {page === 'applykit' ? <ApplyKit {...pageProps} /> : null}
-          {page === 'ai' ? <AiLab {...pageProps} /> : null}
-          {page === 'coach' ? <Coach {...pageProps} /> : null}
-          {page === 'calendar' ? <CalendarPage {...pageProps} /> : null}
-          {page === 'knowledge' ? <Knowledge {...pageProps} /> : null}
+          {page === 'growth' ? <Growth key={'growth:' + (tabHint ?? '')} {...pageProps} tab={tabHint} /> : null}
           {page === 'settings' ? <Settings {...pageProps} /> : null}
         </div>
       </div>

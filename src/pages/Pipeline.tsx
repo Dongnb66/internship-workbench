@@ -398,7 +398,7 @@ export default function Pipeline({ profile, onChanged, go }: PageProps) {
 
       <div className="hint">
         提示：每次改完阶段，总览与提醒日历会同步更新；面试 / 笔试日程建议用「记一笔流程」登记，日历页会显示。
-        <button className="linkish" style={{ marginLeft: 8 }} onClick={() => go('calendar')}>
+        <button className="linkish" style={{ marginLeft: 8 }} onClick={() => go('interviews', 'calendar')}>
           去看日历
         </button>
       </div>

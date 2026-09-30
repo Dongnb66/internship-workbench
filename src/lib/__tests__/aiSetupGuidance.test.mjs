@@ -30,10 +30,11 @@ describe('AI 接上指引：首屏有、入口名对得上界面', () => {
 
   it('指引里点名的界面元素，界面上真的存在', () => {
     const settings = src('pages/Settings.tsx')
-    const app = src('App.tsx')
+    const nav = src('lib/nav.ts')
     expect(settings).toMatch(/<h3>AI 通道<\/h3>/)
     expect(settings).toMatch(/自检一下/)
-    expect(app).toMatch(/label: '目标条件'/)
+    // 2026-09-30 UX 收敛：导航数据从 App.tsx 搬进 lib/nav.ts，守卫跟着数据走
+    expect(nav).toMatch(/label: '目标条件'/)
     // 反向也要成立：指引确实引用了这些名字，不是各写一套
     const all = BYO_SETUP_STEPS.join(' ')
     expect(all).toMatch(/目标条件/)
