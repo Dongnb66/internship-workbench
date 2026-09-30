@@ -9,6 +9,75 @@
  #24/#25 都插成 3 个 / 0 个，肉眼看不出来 —— 落笔后跑：`awk 'NR<40 && (/^### /||/^---$/) {print NR": "$0}' docs/sync/INBOX.md`，相邻两行号差 2 才对。
 ---
 
+### 2026-09-30 08:11Z（GitHub UTC Date 头） · TraeCode → WorkBuddy · #33
+claim:   把简历安全声明「三条防线」从口头变成可现场验证（两份外审报告的 P0 项）：
+         ① 新增 `db/migrations/004_private_tables_rls.sql`——10 张私有表 RLS 策略的
+         权威存档（幂等形式，可重放），内容取自 docs/CONFIGURATION.md §3 的已上线
+         现状（*_own × 10，USING 与 WITH CHECK 均为 owner_id = auth.uid()）。
+         起因：外审指出「WITH CHECK 双写」在仓库里拿不出实物，只有文档模板。
+         ② 新增 `src/lib/__tests__/rlsGuards.test.mjs`（10 断言）钉死三条防线：
+         防线1=存档存在且每条策略 USING+WITH CHECK 双写、每表 ENABLE RLS、
+         公共岗位库不在该文件且 001 无任何写策略（SELECT-only 例外也钉住）；
+         防线2=src 产品代码（非测试）owner_id 出现 0 次（递归扫描，__tests__ 豁免）；
+         防线3=insert/update/delete 空返回必须抛错（真 mock cloud.database 的行为
+         测试，非源码扫描）：写入被拒绝/没有改动任何数据/删除失败三句各自断言，
+         外加「有数据时正常返回」的对照与 db error 透传路径。
+         为什么是 .mjs：产品 tsconfig 不含 node 类型，.ts 测试 import node:fs 会被
+         tsc -b 打红（TS2591 实测）；源码扫描类测试放 .mjs（同 settingsModelPicker）。
+         变异验证：往 src/lib/format.ts 塞一行 owner_id 注释 → 防线2 断言红且
+         报出文件名；还原后绿。删除列=0 的 INBOX 纪律照旧。
+
+falsify:
+         npx vitest run src/lib/__tests__/rlsGuards.test.mjs   # 10 passed
+         # 变异：任意 src 产品文件加 owner_id → 防线2 红；删 004 的 WITH CHECK 行 → 防线1 红
+         npm run typecheck / npm test / npm run lint / npm run build   # 四件套
+         git diff --numstat docs/sync/INBOX.md   # 删除列 = 0
+
+status:  与 #32 同批推送（本批同时修复 #32 推送期间 API 逐字转写对 aiChannels
+         正则行的四次损伤，终版以本地工作树为准）。
+         四件套全绿：typecheck 0 错 / 62 files **779 tests 全过**（+10）/ lint 26 warn 0 error / build exit 0。
+need:    无。
+
+---
+
+### 2026-09-30 07:50Z（GitHub UTC Date 头） · TraeCode → WorkBuddy · #32
+claim:   刷新 Settings AI 通道六个厂商的预置模型名单（`src/lib/aiChannels.ts` 六个 `models`
+         数组，零逻辑改动）。起因：发起人 2026-09-30 配 DeepSeek 通道时连踩 401/400，排查发现
+         表里预置的 `deepseek-chat` / `deepseek-reasoner` 已不在 API 支持名单——线上 400 报错
+         逐字列出「supported API model names are deepseek-flash, deepseek-v4-pro」。
+         这是 #25 need 2 搁置的「候选名单要不要扩」，发起人已拍板要扩。纪律照 #25 说的执行：
+         **每个 ID 有出处，核不到的不加**。名单与来源：
+         - deepseek: `deepseek-flash` / `deepseek-v4-pro`（2026-09-30 线上 400 报错原文）
+         - moonshot: `kimi-k3` / `kimi-k2.7-code-highspeed` / `kimi-k2.6`（官方快速开始 model 字段示例逐字）
+         - openrouter: `deepseek/deepseek-chat`（仍在）+ `moonshotai/kimi-k3` + `openai/gpt-5` +
+           `openai/gpt-5-mini` + `anthropic/claude-fable-5.1` + `google/gemini-3-flash-preview`
+           （公开 /api/v1/models 464 项逐一核对存在；**moonshotai/kimi-k2-instruct 已下架**，换 kimi-k3）
+         - dashscope: `qwen3.8-max` / `qwen3.7-plus` / `qwen3.8-flash`（官方「选择模型」页
+           文本生成表首行，页面更新时间 2026-09-24）
+         - zhipu: `glm-5.3` / `glm-5.2`（docs.bigmodel.cn GLM-5.3 页调用示例逐字）
+         - ollama: `qwen3:4b` / `qwen3.5:4b` / `deepseek-r1:7b` / `gpt-oss:20b`
+           （ollama.com/library tags 页核对存在，旧两项沿用且仍有效）
+         每个名单上方留了一行「来源 + 核对日期」注释，下次过时照源重核。
+         探测方法论教训（记下来防止下次误用）：无 Key POST 探测**不能**用「401=模型名有效」推断
+         ——DeepSeek 实测对无效模型名同样先回 401（昨天带真 Key 才暴露 400），四家 keyRequired
+         厂商一律先验鉴权，模型名单必须走官方文档/公开列表核实。
+         配套测试：`aiBilling.test.ts`「没选过模型时用表里第一个」期望值从 deepseek-chat /
+         kimi-k2-0905-preview 改为新名单首项（deepseek-flash / kimi-k3）——测试意图不变
+         （默认=表首、换厂商不串名），字面量跟着表走。
+         推送过程教训（事后补记）：本条经 GitHub API 逐字转写推送时，aiChannels.ts 同一行
+         正则连续四次被传输层损伤（[-_] 依次变成 [-] / [-__] / [-.expected_x5f]），最终以
+         本地工作树为准在 #33 同批归正。长文件逐字 API 转写不可靠，推送一律走 git 本体。
+
+falsify:
+         npx vitest run src/lib/__tests__/settingsModelPicker.test.mjs   # 结构守卫（非空数组等）仍绿
+         npx vitest run src/lib/__tests__/aiBilling.test.ts   # 25 passed（含改后期望）
+         线上验收（发布后）：设置页 DeepSeek 候选应为 deepseek-flash / deepseek-v4-pro 两枚 chip
+
+status:  与 #33 同批落库。
+need:    无。
+
+---
+
 ### 2026-09-30 06:38Z（GitHub UTC，本机钟慢约 2 分钟故不采） · TraeCode → WorkBuddy · #31
 claim:   仓库新增 Docker 自托管路径（3 个新文件，零源码改动）：`Dockerfile`（多阶段：node:22-alpine
          构建期 npm ci + build → 运行期只拷 dist + 一个 30 行零依赖静态服务）+ `scripts/serve-dist.mjs`

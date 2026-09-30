@@ -165,11 +165,11 @@ describe('「配置好了」跟着选的那一档走', () => {
   })
 
   it('没选过模型时用那一档表里的第一个；换了厂商不会带上一家的模型名', () => {
-    expect(getByoModel()).toBe('deepseek-chat')
-    setByoModel('deepseek', 'deepseek-reasoner')
-    expect(getByoModel()).toBe('deepseek-reasoner')
+    expect(getByoModel()).toBe('deepseek-flash')
+    setByoModel('deepseek', 'deepseek-v4-pro')
+    expect(getByoModel()).toBe('deepseek-v4-pro')
     mem.set(BYO_PRESET_KEY, 'moonshot')
-    expect(getByoModel()).toBe('kimi-k2-0905-preview')
+    expect(getByoModel()).toBe('kimi-k3')
   })
 
   it('档位只认表里存在的 id：写脏值等于写回默认档，而不是留下一个下次读会崩的东西', () => {
