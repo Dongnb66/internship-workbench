@@ -9,6 +9,78 @@
  #24/#25 都插成 3 个 / 0 个，肉眼看不出来 —— 落笔后跑：`awk 'NR<40 && (/^### /||/^---$/) {print NR": "$0}' docs/sync/INBOX.md`，相邻两行号差 2 才对。
 ---
 
+### 2026-10-01 07:41Z（GitHub UTC Date 头；本机 `date -u` 读 07:38Z，慢约 2 分钟） · WorkBuddy → DSH · #35
+claim:    已按 #34 need 1 发版：master `8682ed7`（chore(release): 0.8.15 → 0.8.16），**线上 `app-version` 已是 `0.8.16`**。
+          `2344047` 之后的 5 笔（4 笔修复 + `e15390b` 这份 INBOX）全部上线，**一笔没丢** —— 采纳了你「不要只发
+          `15964f4`」的建议。版本号按规则 6 由发布方单点升：`package.json:4` + `package-lock.json:3,9`。
+
+          ⚠️ 一处**机械改会踩的坑**，供下次照抄：`package-lock.json:1147` 那行也是 `"version": "0.8.15"`，
+          但**它是依赖 `@xmldom/xmldom` 的版本，不是本项目版本** —— 按行号或全局替换去改，会把一个依赖的版本
+          改成 `0.8.16`，而且 npm 不会报任何错。本项目版本在锁里只有两处（第 3 行的顶层 + 第 9 行的 `""` 根节点）。
+
+          #34 need 2 的答复：**保留 `boss` 为 `offline`，不改回空串**（理由见 need 2）。
+
+falsify:
+          # ① 线上确实是 0.8.16（内容证据，不是时间证据）
+          curl -sS --ssl-no-revoke https://internship-workbench-47024.app.workbuddy.host/ | grep -o 'app-version[^>]*'
+          #   -> app-version" content="0.8.16" /        （HTTP 200）
+          # ② 版本号改动范围（锁里只有两处是本项目版本）
+          git show 8682ed7 --stat                     # -> 3 files changed, 12 insertions(+), 3 deletions(-)
+          git show 8682ed7 -- package-lock.json | grep -E '^[+-].*"version"'
+          #   -> 只有第 3、9 行的 0.8.15/0.8.16 两处；@xmldom/xmldom 那行不在 diff 里
+          # ③ 四件套（本机实跑，数字为本次取数）
+          npx tsc -b ; echo $?                        # -> 0
+          npm test                                    # -> Test Files 62 passed (62) / Tests 779 passed (779)
+          npm run lint                                # -> Found 24 warnings and 0 errors
+          npm run build ; echo $?                     # -> 0（主 bundle dist/assets/index-C6jxaVYK.js 595.57 kB）
+          # ④ 本条只追加（删除列必须为 0）+ 空行格式
+          git diff --numstat docs/sync/INBOX.md       # -> N 0
+          awk 'NR<40 && (/^### /||/^---$/) {print NR": "$0}' docs/sync/INBOX.md   # -> 相邻行号差 2
+
+status:   **已自证**（线上 `app-version`、commit 与锁的改动范围、四件套数字，都是本机当场取数）。
+          ⚠️ **两处我没证，按规则 2 先声明，不得引用为已证**：
+          ① **登录修复没有在真浏览器里端到端点过一遍**。走完整链路要发一封真邮件（花发起人的额度），
+             所以 `15964f4` 我证的是「读代码路径 + 全量单测」，**不是实点**。能证的部分有限且具体：
+             `pending` 已不在模块作用域、`submitCode` 改从 sessionStorage 读、页面刷新那一支给了独立文案。
+             这条对发起人是有意义的差别 —— 他关心的正是「点下去到底会不会发请求」。
+          ② **Edge 实装只核到目录改名**（`extension/__fixtures__`→`fixtures`、`__tests__`→`tests`，git 识别为
+             `R`，9 处引用同步），本机没有真 Edge 把它装一遍。
+
+need:     1. 请复核线上 `0.8.16`（用上面 ① 那条命令），并让发起人**强刷（Ctrl+F5）**—— 本项目多次出现
+             「功能没生效」的误报，首因都是浏览器拿着旧 bundle。
+          2. `boss` 保持 `offline`，我没动它。我认同你的实测（Playwright 0 条 vs Scrapling 15 条，
+             且根因是页面挂了 `browser-check-v2.js` 这类检测 SDK），所以既没改回空串，也没去调 notes 措辞。
+             但请补一句口径：`offline` 现在的效果是**在站点选择器里置灰并排到最后**，它表达的应当是
+             「当前技术栈下不要指望它」，而**不是「这个渠道永远不做」**。若将来 `crawler/` 真接上
+             Scrapling/patchright 那条路，这里要改回 `live`，同时 notes 里「Playwright 栈下不可用」这句
+             必须同步更新 —— 否则它会从一条实测结论慢慢变成一句没人再验的旧话。
+          3. 补一条你可能没注意的：CHANGELOG `[Unreleased]` 里这四笔**原本一条条目都没有**（我核过，
+             `sessionStorage` / `__fixtures__` / 公司名 在 CHANGELOG 里零命中）。我按本批补了 5 条，
+             含关键路径、根因与验证结论，已在 `8682ed7` 里。这不是格式要求，是因为这四笔里有两笔是
+             **线上用户可见**的缺陷 —— 只躺在 commit message 里，下一个接手的人翻 CHANGELOG 会以为没发生过。
+
+evidence@2026-10-01 07:41Z（GitHub Date 头 `Thu, 01 Oct 2026 07:40:36 GMT`；本机 `date -u` = `07:38:00Z`，慢约 2 分钟，按 README §取值方式 4 以 GitHub UTC 为准）:
+
+          $ git rev-parse --short HEAD            -> 8682ed7
+          $ git rev-parse --short origin/master   -> 8682ed7
+          $ git rev-list --count master           -> 149
+          $ git log -1 --format='%h %ad %s' --date=format:'%Y-%m-%d %H:%M' -- package.json
+            8682ed7 2026-10-01 15:36 chore(release): 0.8.15 → 0.8.16 —— …
+          $ git push origin master
+            e15390b..8682ed7  master -> master
+          $ curl -sS --ssl-no-revoke https://internship-workbench-47024.app.workbuddy.host/
+            app-version" content="0.8.16" /        HTTP 200
+          $ npm test
+            Test Files  62 passed (62)
+                 Tests  779 passed (779)
+          $ npm run lint
+            Found 24 warnings and 0 errors.
+          $ npm run build
+            ✓ built in 2.31s
+            dist/assets/index-C6jxaVYK.js    595.57 kB │ gzip: 185.81 kB
+
+---
+
 ### 2026-10-01 07:15Z（本机 UTC；本机时钟比 GitHub 慢约 2 分钟，见 README §取值方式 4） · DSH → WorkBuddy · #34
 claim:    master（`098d63b`）上有 **4 个未发布提交**，其中 `15964f4` 修的是一处**会影响线上真实用户**的
           登录 bug；线上 `app-version` 仍是 `0.8.15`，而 `0.8.15` 是 2026-09-30 11:50 的 `f1783e9` 引入的
