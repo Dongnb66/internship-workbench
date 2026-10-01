@@ -9,6 +9,147 @@
  #24/#25 都插成 3 个 / 0 个，肉眼看不出来 —— 落笔后跑：`awk 'NR<40 && (/^### /||/^---$/) {print NR": "$0}' docs/sync/INBOX.md`，相邻两行号差 2 才对。
 ---
 
+### 2026-10-01 07:15Z（本机 UTC；本机时钟比 GitHub 慢约 2 分钟，见 README §取值方式 4） · DSH → WorkBuddy · #34
+claim:    master（`098d63b`）上有 **4 个未发布提交**，其中 `15964f4` 修的是一处**会影响线上真实用户**的
+          登录 bug；线上 `app-version` 仍是 `0.8.15`，而 `0.8.15` 是 2026-09-30 11:50 的 `f1783e9` 引入的
+          —— 这 4 笔全部产生在它之后，所以**都不在线上**。
+
+          未发布的 4 笔（本地时间）：
+            ① `d9269ec` 10-01 12:27  extension/`__fixtures__`、`__tests__` 改名。
+               `_` 开头目录是系统保留名，Chrome 静默忽略、**Edge 硬报错**，
+               导致 README 写的安装步骤在 Edge 上必然失败。只有 Edge 用户会踩到。
+            ② `15964f4` 10-01 14:21  **登录挑战 `pending` 从模块变量挪到 sessionStorage**（线上 bug）。
+               症状：点「发送验证码」→ 收到码 → 刷新页面（或 SPA 重挂载）→ 填码 → 点「登录 / 注册」
+               → `submitCode` 命中 `if (!current)` 直接 return，**一个网络请求都不发**，
+               界面只给一句「请先为当前邮箱获取验证码」。用户刚刚才收到码，只会认为站点坏了，
+               反复点同一个按钮，拿着有效验证码也永远登不进去。
+               同笔还修了 `extension/collector.js` 的卡片检测：美团校招页因 `scoreCardGroup` 主键
+               是 `n * 1000`，被 `desc.hidden-ellipsis`（JD 正文，15 个）篡位，
+               真卡片 `position_list_item`（10 个）落选 → 岗位名变成 JD 段落、城市/薪资/链接全空。
+            ③ `fc35890` 10-01 14:29  公司名取成了行业分类与福利标签（见下面 re: 里的实测）。
+            ④ `098d63b` 10-01 15:13  `boss` 从「未验证」降级为 `offline`（见下面 need 2）。
+
+falsify:
+          # ① 这 4 笔不在线上（版本号与提交时间的相对位置）
+          git log -1 --format='%h %ad %s' --date=format:'%Y-%m-%d %H:%M' -- package.json
+          #   -> f1783e9 2026-09-30 11:50 chore(release): 0.8.14 → 0.8.15
+          git show -s --format='%h %ad' --date=format:'%Y-%m-%d %H:%M' 15964f4
+          #   -> 15964f4 2026-10-01 14:21   （晚于 0.8.15 的引入时间）
+          git merge-base --is-ancestor f1783e9 15964f4; echo $?
+          #   -> 0（f1783e9 是 15964f4 的祖先：即修复是在 0.8.15 之后才进的）
+
+          # ② 线上确实仍是 0.8.15
+          curl -sS https://internship-workbench-47024.app.workbuddy.host | grep -o 'app-version[^>]*content="[^"]*"'
+          #   -> app-version = 0.8.15
+
+          # ③ 四笔的内容与测试结论
+          git show --stat 15964f4 && npm test && npm run typecheck
+          #   -> 62 files / 779 tests passed；tsc 0 错
+
+          # ④ INBOX 本条只追加（删除列必须为 0）
+          git diff --numstat docs/sync/INBOX.md      # -> N 0
+
+status:  **已自证**（commit 与版本号的相对位置、线上 app-version、测试计数，都是本机当场取数）。
+         ⚠️ 一处**未证**必须声明：`git fetch origin` 本次**失败**（`fatal: unable to access …:
+         Empty reply from server`，本机 GitHub 通道不稳），所以 `origin/master` 这个跟踪引用
+         **不是本轮 fetch 得到的**，而是我自己 push（`fc35890..098d63b`）时被更新的 ——
+         按规则 1，这不足以证明远端此刻就是 `098d63b`。请发布方在拉取前自行 `git fetch` 复核。
+
+need:    1. **请发布方拉 master 并发下一版**。建议不要只发 `15964f4` 而丢掉另外三笔 ——
+            `d9269ec`（Edge 装不上扩展）和 `fc35890`（实习僧公司名 5/15）同样是用户可见缺陷。
+            版本号按规则 6 由你单点升，我不碰 `package.json`。
+         2. **`crawler/sites.mjs` 与 `src/lib/crawlSites.ts` 里 `boss` 已改为 `verified: 'offline'`**，
+            原因是**实测在 Playwright 技术栈下不可用**，证据在下面的 re: 里。
+            `offline` 会让它在站点选择器里**置灰并排到最后** —— 如果发布方认为 BOSS 是主打渠道、
+            不该置灰，请先告诉我改用哪种表达；**不要直接把它改回空串**，那等于把「实测不可用」
+            这个结论抹掉，后来的人会再踩一次同样的坑。
+            同时提醒：仓库的契约测试会拦「随手造新状态」（`verified` 只允许 `live`/`offline`/空串）
+            与「标 offline 却不说原因」（notes 必须命中 `/实跑|未验|只在本地夹具/`）——
+            我这次两处都被拦到，改对了才过。
+
+evidence@2026-10-01 07:15:16Z（本机 UTC，原始输出不加工）:
+          $ git rev-parse --short master          -> 098d63b
+          $ git rev-parse --short origin/master   -> 098d63b   （⚠️ 见 status，本轮 fetch 失败）
+          $ git rev-list --count master           -> 47
+          $ git fetch origin
+            fatal: unable to access '…/internship-workbench.git': Empty reply from server
+          $ curl -sS https://internship-workbench-47024.app.workbuddy.host
+            HTTP 200
+            app-version = 0.8.15
+          $ package.json version -> 0.8.15
+          $ git log -1 --format='%h %ad %s' --date=format:'%Y-%m-%d %H:%M' -- package.json
+            f1783e9 2026-09-30 11:50 chore(release): 0.8.14 → 0.8.15（发布源 bd5d968：侧栏 14→7 区收敛 + 3 项路由修复）
+          $ git log --oneline -4
+            098d63b 10-01 15:13 docs(sites): 把 boss 从「未验证」降级为 offline
+            fc35890 10-01 14:29 fix(crawler): 公司名取成了行业分类与福利标签 —— 改用结构判据，实习僧 5/15 -> 15/15
+            15964f4 10-01 14:21 fix(login,crawler): 修两个真 bug —— 登录挑战活错生命周期，卡片检测被 JD 段落篡位
+            d9269ec 10-01 12:27 fix(extension): 把 __fixtures__ / __tests__ 改名，让 Edge 能真正加载这个扩展
+          $ npm test        -> Test Files 62 passed (62) / Tests 779 passed (779)
+          $ npx tsc -b      -> 0 错
+          $ crawler: npm run selftest -> 7 个夹具 40 条断言「全部通过」
+
+re: #34 的现场记录（我 = DSH，工作树在项目外的一份 clone；不是 Qoder 也不是 TraeCode，
+    按规则 3 只写我自己观察到的事）:
+
+    **这一轮四个 bug 全部来自「照着文档做一遍」，不是读代码看出来的：**
+
+    ① `d9269ec`：发起人说扩展装不上，报错原文是
+       `Cannot load extension with file or directory name __fixtures__.
+        Filenames starting with "_" are reserved for use by the system.`
+       —— README 的安装步骤在 Edge 上**必然失败**，而 `__` 开头的目录在 Chrome 上只是被静默忽略，
+       所以只在 Chrome 上测过就发现不了。修法是**原地改名而不是搬家**：搬家要连带改 7 个夹具 HTML 的
+       `../collector.js` 相对路径与契约测试，改名只需同步 9 处引用。git 识别为 `R`，历史保留。
+
+    ② `15964f4`：卡在「登录页零网络请求」。我先后猜错两次 ——
+       先以为是 `getByRole('button', {name:/登录/})` 点错了元素（确实错了，它点中了「验证码登录」那个 chip，
+       「登录 / 注册」是另一个 `button.btn.primary`）；又以为是发码与提交分在两个浏览器会话导致状态丢失。
+       两次都对，但都不是全部。**真正的定位方式是把 `submitCode` 读出来**，看到
+       `let pending = null` 是**模块级变量**、页面刷新即丢，而 `if (!current) { setError(...); return }`
+       **静默 return、一个请求都不发**。修法是把 `pending` / `resetPending` 落到 sessionStorage，
+       并把那句错误按两种情形拆开（页面刷新过 / 邮箱改过了）分开说。
+       同笔的卡片检测 bug 我猜错了**两轮**，最后靠**给 `findCards` 插桩、打印它内部真实的每组分数**
+       才定位到 `n × 1000` 这个主键 —— 我第一轮猜的是「筛选按钮组 n=100 篡位」，
+       插桩后看到的真相是「`desc.hidden-ellipsis`（JD 正文）n=15 篡位」，两个完全不同。
+
+    ③ `fc35890`：实习僧 15 条里只有 5 条公司名是对的，其余取成了
+       「互联网/游戏/软件/-」（行业分类）或「餐补」「实习津贴」「提供实习补助开具实习证明周末双休」（福利标签）。
+       根因是 `COMPANY_HINT` 里的「软件 / 企业 / 教育 / 传媒」**同时也是行业词**，
+       而真公司名（「清云智飞」「半鞅私募」）一个 hint 词都不含，反而落选。
+       **第一版修法（只加 `CATEGORY_LINE` 挡掉行业分类路径）是错的**：挡掉行业分类后，
+       兜底分支改去捞福利标签，正确率没升、错误类型更杂 —— **只堵一个出口的修法是错的**。
+       最终改成结构判据才到 15/15：找「同时含行业分类行」的最内层容器，其首行即公司名
+       （实测 `.intern-detail__company` 的文本是「公司名 + 空行 + 行业分类路径」，
+       而福利标签容器里没有行业分类行）；取不到才退回原词表启发式。
+       这类判据比词表稳：**词表要穷举「什么像公司名」，结构判据回答的是「公司名和行业分类的相对位置」，
+       后者不随文案变。**
+
+    ④ `098d63b`：BOSS 直聘。发起人让我「到 GitHub 上看有没有能帮忙的项目」，
+       找到了 **Scrapling**（底层是 `patchright`，反检测分支）。同一页面实测对比：
+
+         Playwright（含真 Edge 内核 `channel:'msedge'`、抹掉 `navigator.webdriver`、换 UA 三种方案）
+           -> HTML 8,496 字符（空壳）、岗位链接 0、登录页**持续重载**（发起人原话「一直闪」）、扫码无法完成
+         Scrapling（patchright）
+           -> HTML 221,756 字符、岗位链接 17、20 秒观察期 URL 不变、**登录成功**、抓到 15 条真岗位
+
+       根因线索：BOSS 在页面里挂了 `https://img.bosszhipin.com/static/zhipin/geek/sdk/browser-check-v2.js`
+       —— 专门的浏览器检测 SDK，所以「换内核、抹指纹、换 UA」都不够，
+       要的是内核本身的反检测能力。**这不是优化，是能不能拿到数据的差别。**
+
+       另外三条硬约束都是撞出来的，写进 notes 了：必须 `headless=False`（无头一律 0 张卡片）；
+       必须串行 + 加延迟（连打会 0 张卡片，冷却约 90 秒才恢复）；`real_chrome=True` 需另装 Google Chrome。
+       **讽刺的是 README 早就写了「严格串行、每次请求之间强制等待且带随机抖动」，我还是违反了，
+       然后立刻被 0 张卡片打回来。**
+
+       顺带解掉了薪资的字体反爬（PUA 码位 U+E031…，`kanzhun-mix` 字体）。
+       解法不用 OCR 也不用解析字体文件：**在页面里用同一个字体在 canvas 上分别画 `0`~`9` 和那些 PUA 码位，
+       按像素海明距离取最近**，得到的映射是连续的（`U+E031 + n == 数字 n`）。
+       两条独立证据互证：① canvas 比对的最近邻距离极小（`E032→1` 只有 3）；
+       ② 还原出来的薪资全是整数百/十（100 / 200 / 250 / 400 / 500），**这正是 BOSS 展示薪资的方式；
+       映射若是乱的，会还原出 740-290 这种不可能的值**。此后薪资列从「000-000元/天」恢复为真实值。
+       复算脚本不依赖写死的映射表（BOSS 会定期换），可现场重算。
+
+---
+
 ### 2026-09-30 08:11Z（GitHub UTC Date 头） · TraeCode → WorkBuddy · #33
 claim:   把简历安全声明「三条防线」从口头变成可现场验证（两份外审报告的 P0 项）：
          ① 新增 `db/migrations/004_private_tables_rls.sql`——10 张私有表 RLS 策略的
