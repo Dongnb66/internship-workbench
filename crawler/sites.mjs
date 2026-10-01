@@ -260,7 +260,8 @@ export const SITES = [
     strategy: 'auto',
     wait: 3500,
     needsLogin: true,
-    notes: '必须先跑 `node login.mjs --site boss` 在本机登录一次；抓取器只用你已经登录的那个会话读页面，不代填账号密码',
+    notes: '⚠️ 在 Playwright 技术栈下不可用。实跑：BOSS 挂了 browser-check-v2.js 检测，登录页持续重载（扫码无法完成），渲染后的 DOM 也拿不到 —— HTML 只有 8.5KB 空壳、0 张卡片；换真 Edge 内核、抹掉 navigator.webdriver、换 UA 都无效。实测可用路径见 Scrapling 方案（patchright 内核 + headed + 串行 + 页间 12 秒），能正常登录并抓到 15 条。不追求自动化就用 extension/，在本机浏览器里读当前页，更稳',
+    verified: 'offline',
   },
   {
     id: 'moka',

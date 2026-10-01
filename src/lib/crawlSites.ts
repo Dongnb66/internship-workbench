@@ -49,7 +49,7 @@ export const CRAWL_SITES: CrawlSite[] = [
   { id: 'lenovo', name: '联想招聘', channel: '官网投递', needsLogin: false, kwSearch: false, urlOnly: false, verified: 'offline' },
   { id: 'nowcoder', name: '牛客校招', channel: '牛客', needsLogin: false, kwSearch: false, urlOnly: false, verified: '' },
   { id: 'shixiseng', name: '实习僧', channel: '实习僧', needsLogin: false, kwSearch: true, urlOnly: false, verified: '' },
-  { id: 'boss', name: 'BOSS直聘', channel: 'BOSS直聘', needsLogin: true, kwSearch: true, urlOnly: false, verified: '' },
+  { id: 'boss', name: 'BOSS直聘', channel: 'BOSS直聘', needsLogin: true, kwSearch: true, urlOnly: false, verified: 'offline' },
   { id: 'moka', name: 'Moka 托管页', channel: '官网投递', needsLogin: false, kwSearch: false, urlOnly: false, verified: '' },
   { id: 'feishu', name: '飞书招聘托管页', channel: '官网投递', needsLogin: false, kwSearch: false, urlOnly: true, verified: '' },
   { id: 'beisen', name: '北森托管页', channel: '官网投递', needsLogin: false, kwSearch: false, urlOnly: true, verified: '' },
