@@ -80,7 +80,7 @@ export const SITES = [
     strategy: 'auto',
     wait: 3000,
     needsLogin: false,
-    notes: '校招岗位列表。实跑：1 页 10 条，公司/标题/城市全对（修复「JD 正文被当成岗位名」的卡片检测 bug 之后）',
+    notes: '校招岗位列表。实跑：1 页 10 条，公司/标题/城市全对。注意这页筛选栏与 JD 段落都很多，卡片检测靠 collector.js 的跨组包含判据才选得对',
     verified: 'live',
   },
   {

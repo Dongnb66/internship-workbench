@@ -6,12 +6,62 @@ import { registrationMode, signupGate } from '../lib/registration'
 
 type Mode = 'otp' | 'password' | 'reset'
 
+type Pending = { email: string; verificationId: string; isExistingUser: boolean }
+
 /**
  * 验证码挑战保存在事件处理函数之外：发码与校验是两个独立动作。
  * 发码必须显式触发，校验只读这里存下的结果 —— 否则重试验证码时会重复发码。
+ *
+ * **为什么存 sessionStorage 而不是模块变量。**
+ * 原先这里是 `let pending = null` —— 一个模块级内存。它会在**页面刷新时静默消失**：
+ * 用户点「发送验证码」→ 去邮箱取码 → 顺手刷新一下页面（或 SPA 被重新挂载）→
+ * 回来填码 → 点「登录 / 注册」→ 命中 `if (!current)` 直接 return，**一个网络请求都不发**。
+ * 界面只给一句「请先为当前邮箱获取验证码」，而用户刚刚才收到码，于是他只会认为
+ * 「这个站的登录坏了」，反复重试同一个动作 —— 拿到码也永远登不进去。
+ *
+ * 换成 sessionStorage 后，同一个标签页内刷新不再丢；换标签页 / 关掉浏览器仍然会丢
+ * （验证码本来就该是一次性的短时凭证），这与语义相符。
  */
-let pending: { email: string; verificationId: string; isExistingUser: boolean } | null = null
-let resetPending = false
+const PENDING_KEY = 'iwb.login.pending'
+const RESET_PENDING_KEY = 'iwb.login.resetPending'
+
+function readPending(): Pending | null {
+  try {
+    const raw = sessionStorage.getItem(PENDING_KEY)
+    if (!raw) return null
+    const v = JSON.parse(raw) as Partial<Pending> | null
+    if (!v || typeof v.email !== 'string' || typeof v.verificationId !== 'string') return null
+    return { email: v.email, verificationId: v.verificationId, isExistingUser: v.isExistingUser === true }
+  } catch {
+    return null
+  }
+}
+
+function writePending(v: Pending | null) {
+  try {
+    if (v) sessionStorage.setItem(PENDING_KEY, JSON.stringify(v))
+    else sessionStorage.removeItem(PENDING_KEY)
+  } catch {
+    /* 无痕模式等场景下 sessionStorage 可能不可用；退化回「只活这一次交互」，不阻断登录 */
+  }
+}
+
+function readResetPending(): boolean {
+  try {
+    return sessionStorage.getItem(RESET_PENDING_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function writeResetPending(v: boolean) {
+  try {
+    if (v) sessionStorage.setItem(RESET_PENDING_KEY, '1')
+    else sessionStorage.removeItem(RESET_PENDING_KEY)
+  } catch {
+    /* 同上 */
+  }
+}
 
 export default function Login() {
   // 默认落在「验证码登录」：已有账号与新邮箱共用这一步（口径与开关见 registration.ts）
@@ -61,7 +111,7 @@ export default function Login() {
           setError(errText(started.error))
           return
         }
-        resetPending = true
+        writeResetPending(true)
         setInfo(`验证码已发送到 ${email}，请查收（含垃圾箱）`)
         setCodeSent(true)
         startCountdown()
@@ -73,7 +123,7 @@ export default function Login() {
         setError(errText(sent.error))
         return
       }
-      pending = { email, verificationId: sent.data.verificationId, isExistingUser: sent.data.isExistingUser }
+      writePending({ email, verificationId: sent.data.verificationId, isExistingUser: sent.data.isExistingUser })
       setIsNewEmail(sent.data.isExistingUser === false)
       setInfo(
         sent.data.isExistingUser === false
@@ -118,9 +168,17 @@ export default function Login() {
 
   /** 校验验证码：新邮箱走注册（必须设密码），已存在的邮箱直接登录 */
   async function submitCode() {
-    const current = pending
-    if (!current || current.email !== email) {
-      setError('请先为当前邮箱获取验证码')
+    const current = readPending()
+    /**
+     * 两种「拿不到挑战」要分开说 —— 以前合成一句「请先为当前邮箱获取验证码」，
+     * 而用户刚刚才收到码，看到这句只会以为站点坏了，然后一直点同一个按钮。
+     */
+    if (!current) {
+      setError('这个页面上的验证码已失效（页面刷新过，或换过标签页）。请重新点「发送验证码」。')
+      return
+    }
+    if (current.email !== email) {
+      setError('邮箱已经改过了，请为当前填的邮箱重新获取验证码。')
       return
     }
     if (!current.isExistingUser && password.length < 6) {
@@ -153,7 +211,7 @@ export default function Login() {
         setError('验证码不正确或已过期，可重新获取')
         return
       }
-      pending = null
+      writePending(null)
     } catch (e) {
       setError(errText(e))
     } finally {
@@ -162,8 +220,8 @@ export default function Login() {
   }
 
   async function submitReset() {
-    if (!resetPending) {
-      setError('请先点击「发送验证码」')
+    if (!readResetPending()) {
+      setError('请先点击「发送验证码」（页面刷新过的话，验证码要重新获取）')
       return
     }
     if (newPassword.length < 6) {
@@ -183,7 +241,7 @@ export default function Login() {
         setError(errText(done.error))
         return
       }
-      resetPending = false
+      writeResetPending(false)
     } catch (e) {
       setError(errText(e))
     } finally {
@@ -198,8 +256,8 @@ export default function Login() {
     setCodeSent(false)
     setInvite('')
     setIsNewEmail(false)
-    pending = null
-    resetPending = next === 'reset'
+    writePending(null)
+    writeResetPending(next === 'reset')
   }
 
   const tabs: Array<{ key: Mode; label: string }> = [
@@ -248,8 +306,9 @@ export default function Login() {
             value={email}
             onChange={(e) => {
               setEmail(e.target.value)
-              // 换了收件邮箱，之前那份挑战作废
-              if (pending && pending.email !== e.target.value) setCodeSent(false)
+              // 换了收件邮箱，之前那份挑战作废 —— 挑战现在存在 sessionStorage 里，刷新也不丢
+              const p = readPending()
+              if (p && p.email !== e.target.value) setCodeSent(false)
             }}
             placeholder="you@example.com"
           />

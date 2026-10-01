@@ -152,7 +152,22 @@
       groups.get(sig).push(el)
     }
 
-    let best = null
+    /**
+     * 先收集所有过门的候选组，再在两轮里选：
+     *   ① **跨组包含**：若本组的多数元素被别的候选组元素「包住」，本组是别人内部的碎片。
+     *      组内包含已由上面的 `inner` 过滤处理；这里处理的是**跨组**的那一类 ——
+     *      实测美团校招页：`desc.hidden-ellipsis`（JD 正文，15 个，47 字）被
+     *      `position_list_item`（真卡片，10 个，139 字）逐张包住。
+     *      真卡片包含 JD 正文，反过来不成立，所以这个方向是可靠的。
+     *   ② 剩下的人里比 `scoreCardGroup`。
+     *
+     * 为什么必须补①：`scoreCardGroup` 的主键是数量（`n * 1000`）——
+     * 那是为了压住「卡内碎片往往数量更多」，但它意味着**任何一个数量更多的组都能篡位**。
+     * 美团这次 JD 组 15 > 卡片组 10，`parentOversize` 虽然把 JD 组判成 2.0（刚过 ≥2 门槛）、
+     * 把真卡片判成 10.4，可 20 分的差距填不平 5000 分的数量差，于是选错。
+     * 与其去调 `parentOversize` 的门槛（那只是把阈值挪个地方），不如用一个方向明确的硬判据。
+     */
+    const candidates = []
     for (const list of groups.values()) {
       if (list.length < 4) continue
       // 同一指纹里若存在包含关系，只保留最内层（真正的卡片）
@@ -185,7 +200,25 @@
         linked: linked / inner.length,
         cardLen,
       })
-      if (!best || score > best.score) best = { score, list: inner }
+      candidates.push({ score, list: inner })
+    }
+
+    // 跨组包含：把「大多数元素被别的候选组包住」的组剔掉，只留下最外层的那几个。
+    const finalists = candidates.filter(
+      (c) =>
+        !candidates.some(
+          (o) =>
+            o !== c &&
+            c.list.filter((el) => o.list.some((oe) => oe !== el && oe.contains(el))).length >=
+              c.list.length / 2,
+        ),
+    )
+
+    // 全部被剔掉（互为包含的死锁）时退回完整候选，宁可给旧行为也不要给空结果。
+    const pool = finalists.length ? finalists : candidates
+    let best = null
+    for (const c of pool) {
+      if (!best || c.score > best.score) best = c
     }
     return best ? best.list : []
   }
