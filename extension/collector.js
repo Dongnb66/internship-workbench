@@ -48,6 +48,16 @@
    */
   const PIPE_LINE = /[｜|]/
 
+/**
+ * 行业分类路径：「互联网/游戏/软件/-」「企业服务/咨询/-」「金融/经济/投资/财会/-」。
+ *
+ * 判据是**结构**不是词表：这类标签是「A/B/C」多段路径，斜杠 ≥ 2；公司名里几乎不会出现，
+ * 所以不会误伤「XX 科技/股份有限公司」这种带一个斜杠的写法。
+ * 为什么必须单独挡：`COMPANY_HINT` 里的「软件 / 企业 / 教育 / 传媒」同时也是行业词，
+ * 只靠词表分不开「XX 软件」和「互联网/游戏/软件」。
+ */
+const CATEGORY_LINE = /\/[^/]{1,12}\/[^/]{1,12}/
+
   const txt = (el) => String(el.innerText || el.textContent || '').replace(/\u00a0/g, ' ').replace(/[ \t]+/g, ' ').trim()
 
   const linesOf = (el) =>
@@ -279,7 +289,46 @@
 
     // 公司名：带「公司/科技/集团…」这类后缀的短行最可信；退一步用最后一个短文本行。
     // 带竖线的行一律不当公司名 —— 那是「技术 ｜ 应届毕业生 ｜CDG」这种标签行。
+    //
+    // ⚠️ `COMPANY_HINT` 里的词同时也是**行业词**，所以「互联网/游戏/软件/-」「企业服务/咨询/-」
+    // 「教育/培训/-」这些**行业分类路径**会被误判成公司名。实测实习僧：15 条里 7 条的公司名
+    // 取成了行业分类，而真正的公司名（「清云智飞」「半鞅私募」）因为不含任何 hint 词反而落选。
+    // 判据用**结构**而不是词表：行业分类是「A/B/C」这种多段路径（≥2 个斜杠），公司名几乎不会。
+    //
+    // ① 首选：找「同时含行业分类行」的**最内层**容器，它的首行就是公司名。
+    //    依据是招聘卡片的排版惯例：公司名与行业分类粘在同一个容器里
+    //    （实测实习僧 `.intern-detail__company` = "清云智飞\n\n互联网/游戏/软件/-"），
+    //    而福利标签的容器（`.intern-label` = "一对一导师"）里**没有**行业分类行。
+    //    这一条比词表可靠：`COMPANY_HINT` 的词同时也是行业词，只靠词表分不开
+    //    「XX 软件」和「互联网/游戏/软件」；而福利标签（「餐补」「实习津贴」）根本不含任何 hint 词，
+    //    只会在兜底分支里被捞成公司名 —— 实测 15 条里 10 条如此。
     let company = ''
+    {
+      const holders = []
+      for (const el of card.querySelectorAll('*')) {
+        const t = txt(el)
+        if (t.length > 400) continue
+        if (CATEGORY_LINE.test(t)) holders.push(el)
+      }
+      // 最内层 = 文本最短的那个（外层容器会把整张卡片都算进去）
+      holders.sort((a, b) => txt(a).length - txt(b).length)
+      for (const h of holders) {
+        const first = linesOf(h)[0]
+        if (
+          first &&
+          first.length >= 2 &&
+          first.length <= 30 &&
+          !CATEGORY_LINE.test(first) &&
+          !PIPE_LINE.test(first) &&
+          !META_LINE.test(first) &&
+          !SALARY_RE.test(first)
+        ) {
+          company = first
+          break
+        }
+      }
+    }
+    // ② 退回原有词表启发式
     const companyCandidates = lines.filter(
       (l) =>
         l.length >= 2 &&
@@ -289,14 +338,17 @@
         l !== cityLine &&
         COMPANY_HINT.test(l) &&
         !META_LINE.test(l) &&
-        !PIPE_LINE.test(l),
+        !PIPE_LINE.test(l) &&
+        !CATEGORY_LINE.test(l),
     )
-    if (companyCandidates.length) company = companyCandidates[0]
+    if (!company && companyCandidates.length) company = companyCandidates[0]
     if (!company) {
       for (let i = lines.length - 1; i >= 0; i -= 1) {
         const l = lines[i]
         // 兜底分支同样要挡竖线行：它是「市场 ｜ 应届毕业生 ｜CDG」这类标签行唯一能钻的空子
         if (PIPE_LINE.test(l)) continue
+        // 行业分类路径也不是公司名（实习僧的「行业大咖，牛人团队…」那类标签同理：长度超限会自然落选）
+        if (CATEGORY_LINE.test(l)) continue
         if (isNotJobLine(l, title, salary, city) && l.length >= 2 && l.length <= 24 && !COMPANY_HINT.test(l)) {
           company = l
           break
