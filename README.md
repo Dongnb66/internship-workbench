@@ -2,25 +2,45 @@
 
 [![CI](https://github.com/Dongnb66/internship-workbench/actions/workflows/ci.yml/badge.svg)](https://github.com/Dongnb66/internship-workbench/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-f2542d.svg)](./LICENSE)
-[![React](https://img.shields.io/badge/React-19-3b82f6.svg)](https://react.dev)
-[![TypeScript](https://img.shields.io/badge/TypeScript-6-3178c6.svg)](https://www.typescriptlang.org)
-[![Vite](https://img.shields.io/badge/Vite-8-8b5cf6.svg)](https://vite.dev)
 [![Tests](https://img.shields.io/badge/tests-779%20passed-12a150.svg)](./src/lib/__tests__)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-f59e0b.svg)](../../pulls)
 
-一个面向在校生的实习 / 校招求职工作台：**岗位池 → 投递看板 → 沟通台账 → 面试跟进 → Offer 对比**，全流程一条线管到底。
+![实习管理工作台](docs/images/hero.png)
 
-**线上地址：<https://internship-workbench-47024.app.workbuddy.host/>**
+**求职最烦的不是投，是记不住** —— 投过谁、什么时候投的、下一轮该跟进谁，到第三十家就全乱了。
 
-Web 端（React + TypeScript + Vite）+ 微信小程序端（原生，共用同一套云后端）+ 云服务后端（数据库 / 认证 / 大模型），外加一个 Chrome 扩展做岗位采集与网申表单自动填充。
+这个工作台把 **岗位池 → 投递看板 → 沟通台账 → 面试跟进 → Offer 对比** 串成一条线，
+**保证每一条线索都不会因为流程混乱而丢掉**。它不替你做决策。
+
+### 10 秒试一下
+
+**<https://internship-workbench-47024.app.workbuddy.host/>** —— 填邮箱收个验证码就能进，不用注册密码。
+（AI 功能要你自己的模型 Key；**选「本机 Ollama」则不花钱**。数据存在你自己的账号里。）
+
+### 它做了什么
+
+| | |
+| --- | --- |
+| **岗位自己进来** | 一个浏览器扩展采 BOSS / 实习僧的当前页；一个本地抓取器跑 27 个招聘站（含 BOSS、腾讯、美团、海康…）—— **只读页面，不代填账号密码** |
+| **投递不再靠 Excel** | 五列看板，拖拽改阶段；超期卡片标红；每个投递一条沟通时间线 |
+| **到手的 Offer 能比** | 七维评分（技能 / 经验 / 成长 / 薪资 / 强度 / 稳定性 / 通勤）排序与逐项对比 |
+| **AI 是你自己的** | 免密钥的平台通道，或你自己的 DeepSeek / Kimi / 百炼 / 智谱 Key，或**本机 Ollama（不花钱）** |
+
+> 更多截图：[岗位池](docs/images/01-岗位池.png) · [投递看板](docs/images/02-投递看板.png) · [Offer 决策](docs/images/03-决策.png) · [总览](docs/images/04-总览.png)
+
+---
+
+## 技术构成
+
+Web 端（React 19 + TypeScript + Vite）+ 微信小程序端（原生，共用同一套云后端）+ 云服务后端（数据库 / 认证 / 大模型），外加一个浏览器扩展做岗位采集与网申表单自动填充。
 完整架构图见 [`docs/architecture.html`](docs/architecture.html)。
-
-> 参考产品形态：Offerbiu（投递管理工作台）、ai-job-search-cn（JD 七维评估）、本地「秋招工作台」（岗位池 + 投递记录看板）、Offertong（网申一键填表）。
 
 ## 它解决什么问题
 
 求职信息散在 BOSS、实习僧、邮箱、备忘录、Excel 里，导致三件事做不好：**该投的没投、投了的没跟进、聊过的忘了聊到哪。**
 这个工作台不替你做决策，只保证每一条线索都不会因为流程混乱而丢掉。
+
+> 参考产品形态：Offerbiu（投递管理工作台）、ai-job-search-cn（JD 七维评估）、本地「秋招工作台」（岗位池 + 投递记录看板）、Offertong（网申一键填表）。
 
 ## 功能
 
