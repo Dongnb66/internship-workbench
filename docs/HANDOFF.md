@@ -68,7 +68,7 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
 | `src/lib/constants.ts` | 字段清单的**唯一事实源**（填写包、渠道、岗位类型…） | `APPLY_KIT_FIELDS` 有三个消费者，别在别处再抄一份 |
 | `src/lib/score.ts` | 本地关键词预筛 + 硬门槛拦截 | 批量 AI 评分靠它省额度，顺序不能反 |
 | `src/pages/*.tsx` | 页面 | `ApplyKit.tsx` 的取值映射类型是 `Record<ApplyKitLabel, string>`，加字段会编译报错 |
-| `extension/` | Chrome MV3 扩展：岗位采集 + 网申一键填表 | 与填写包字段清单有契约测试（`extension/__tests__/contract.test.mjs`） |
+| `extension/` | Chrome MV3 扩展：岗位采集 + 网申一键填表 | 与填写包字段清单有契约测试（`extension/tests/contract.test.mjs`） |
 | `crawler/` | 本地抓取器（DOM 翻页）+ `sources/offerbiu.mjs`（API 源） | 两条通道**产出同一套 JSON 契约**，字段名必须逐字一致 |
 | `gateway/server.mjs` | 本地网关（`npm run gateway`） | 与部署无关，别当成后端 |
 | `db/` | 迁移 SQL + `db/exec/` 可粘贴执行的拆分脚本 | schema 工具当前不可用，新增表要手工执行并同步文档 |
@@ -149,7 +149,7 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
   **⚠️ 已被 5a 的 60 文件 / 764 条取代**；
   该文档此前写的「54 个文件 / 722 条」是 09-28 早间的旧读数），部分历史轮次在 **13 个时区配置**下逐个跑过（偏移 UTC-14 … UTC+14）；
   另有 **59 条真浏览器夹具断言**（`cd crawler && npm run selftest`，
-  对着 `extension/__fixtures__/` 的 7 个页面跑本机 Edge）；`tsc -b`、`oxlint`（0 error / 26 warning）、`vite build` 均通过。
+  对着 `extension/fixtures/` 的 7 个页面跑本机 Edge）；`tsc -b`、`oxlint`（0 error / 26 warning）、`vite build` 均通过。
 - 最近提交（倒序）：日期口径收敛成一条 + CI 加时区守卫 → 时区守卫第一跑抓出的第二批
   （followup / pace / companyHistory + 4 处夹具）→ 出厂模板不再把发起人身份灌进陌生用户画像（0.8.2 止血）
   → 锁与 package.json 一致性进 CI → CI 触发器指向不存在的分支（四道门从未跑过）→ 版本号升 0.8.1。更早的见 `CHANGELOG.md`。

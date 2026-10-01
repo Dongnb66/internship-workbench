@@ -18,7 +18,7 @@ import { pathToFileURL } from 'node:url'
 
 import { COLLECTOR, launchBrowser, msgOf } from './lib/browser.mjs'
 
-const FIXTURES = path.join(import.meta.dirname, '..', 'extension', '__fixtures__')
+const FIXTURES = path.join(import.meta.dirname, '..', 'extension', 'fixtures')
 
 const LIST_EXPECTED = [
   { title: 'AI Agent 应用开发实习生', salary: '200-300元/天', city: '广州', company: '示例·星野智能科技', url: 'https://example.com/job_detail/1000.html' },

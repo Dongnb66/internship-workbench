@@ -118,7 +118,7 @@ JD 是从 BOSS / 官网 / 岗位广场**抓来的陌生人写的文本**，简�
 2. `ApplyKit.tsx` 按清单生成，取值映射类型为 `Record<ApplyKitLabel, string>` ——
    以后往清单里加字段却忘了给取值，**`tsc -b` 直接失败**，不靠人记得。
 3. `extension/content.js` 补齐 `性别` / `技能关键词` 两条规则。
-4. 新增 `extension/__tests__/contract.test.mjs`（并入 `vitest include`）：正向断言"每个可填字段都有规则"，
+4. 新增 `extension/tests/contract.test.mjs`（并入 `vitest include`）：正向断言"每个可填字段都有规则"，
    配合主键归属与条数一致构成双射。**契约测试的价值在于新增/改名时自动报错**，
    而不是靠人记得去两个文件里同步。
 

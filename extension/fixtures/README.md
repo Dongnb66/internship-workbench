@@ -24,7 +24,7 @@
 "/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe" \
   --headless=new --disable-gpu --no-sandbox --allow-file-access-from-files \
   --virtual-time-budget=4000 --dump-dom \
-  "file:///<仓库绝对路径>/extension/__fixtures__/mock-job-list.html"
+  "file:///<仓库绝对路径>/extension/fixtures/mock-job-list.html"
 ```
 
 在输出的 DOM 里找 `<pre id="iwb-out">`，里面就是采集结果。

@@ -297,7 +297,7 @@ describe('浏览器采集结果导入', () => {
 
 /**
  * 扩展的「复制为文本」形态：带标签、用 --- 分隔。
- * 这段文本是从 extension/__fixtures__/mock-job-list.html 实跑出来的，
+ * 这段文本是从 extension/fixtures/mock-job-list.html 实跑出来的，
  * 逐字抄进测试是为了钉住两端的契约 —— 采集器改了输出格式没人发现的话，
  * 这里的断言会先红。
  */

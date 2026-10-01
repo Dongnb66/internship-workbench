@@ -283,7 +283,7 @@
    * `main` / `.content` 这类合规名字给一个装饰性壳子：实习僧实测 `main` 只有 19 个字
    * （一条面包屑），JD 挂在不认识的 `div.inn_detail` 上。命中即停的结果是 raw 只有 19 字，
    * 比列表页那条摘要（125 字）还短，抓取器的合并规则反过来判给列表摘要，
-   * 于是症状是「补全 0 条 JD、不报错」。由 extension/__fixtures__/mock-job-detail-trap.html
+   * 于是症状是「补全 0 条 JD、不报错」。由 extension/fixtures/mock-job-detail-trap.html
    * 与 crawler/selftest.mjs 的 ④ 钉住。
    */
   const DETAIL_CONTAINERS = 'main, article, .content, #content, #job-detail, .job-detail'

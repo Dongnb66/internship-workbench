@@ -146,7 +146,7 @@ npm install          # 装云服务 SDK
 - **采集岗位**：在招聘结果页点「采集本页岗位」→ 自动复制 → 工作台「岗位池 → 批量导入」粘贴 → 入库。只读当前已渲染的 DOM，权限仅 `activeTab` + `scripting` + `storage`，不发网络请求。
 - **网申填表**：导入工作台导出的 `applykit.json` → 一键填充。
 
-提取逻辑用本地模拟页面验证，可复跑：见 [`extension/__fixtures__/README.md`](extension/__fixtures__/README.md)。
+提取逻辑用本地模拟页面验证，可复跑：见 [`extension/fixtures/README.md`](extension/fixtures/README.md)。
 
 ## 本地抓取器（`crawler/`）
 

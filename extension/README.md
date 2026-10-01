@@ -25,7 +25,7 @@
 
 **想要自动翻页 + 批量跑多个站点？** 用仓库里的 [`crawler/`](../crawler/README.md)（本地抓取器）：它跑在你自己的机器上，驱动你已装的 Edge / Chrome，**注入的就是本目录的 `collector.js`** —— 同一份提取实现，所以两条通道读出来的字段一定一致，区别只在「谁来点」。
 
-想验证提取逻辑本身，见 [`__fixtures__/README.md`](__fixtures__/README.md)：里面有两个本地模拟页面和无头浏览器的跑法，也可以直接 `cd crawler && npm run selftest`（同两个夹具，自动断言）。
+想验证提取逻辑本身，见 [`fixtures/README.md`](fixtures/README.md)：里面有两个本地模拟页面和无头浏览器的跑法，也可以直接 `cd crawler && npm run selftest`（同两个夹具，自动断言）。
 
 ## 功能二：网申填表
 
