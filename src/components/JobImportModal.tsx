@@ -24,6 +24,8 @@ import type { Profile, Row } from '../types'
 interface Props {
   existing: Row[]
   profile: Profile | null
+  /** 预填文本：本地抓取跑完后，抓取任务页把岗位拼成导入格式带进来，进门即是可核对的预览 */
+  initialText?: string
   onClose: () => void
   onDone: () => void | Promise<void>
 }
@@ -40,14 +42,28 @@ const MAX_FILE_BYTES = 5 * 1024 * 1024
  * 2) 每次解析前显示本地草稿。模型不可用时（没额度、超时）流程依然能走完，
  *    退化成「本地正则 + 人工补字段」，不会白粘一次。
  */
-export default function JobImportModal({ existing, profile, onClose, onDone }: Props) {
-  const [text, setText] = useState('')
-  const [drafts, setDrafts] = useState<JobDraft[]>([])
-  const [picked, setPicked] = useState<boolean[]>([])
+export default function JobImportModal({ existing, profile, initialText, onClose, onDone }: Props) {
+  // 本地抓取跑完后，抓取任务页把岗位拼成导入文本带进来（initialText）：
+  // 初始值直接按本地规则拆好，进门就是可核对的预览表，不用再点一次「仅本地拆分」。
+  // 不消耗模型额度，「入库前必须人工确认」这道闸门保持原样。
+  const bootstrap = useMemo(() => {
+    if (!initialText?.trim()) return null
+    const chunks = splitJobBlocks(initialText)
+    if (!chunks.length) return null
+    return {
+      drafts: chunks.map((b) => guessFromBlock(b)),
+      note: `已按本地规则解析出 ${chunks.length} 个岗位（本地抓取带入，未消耗模型额度）。核对公司名与岗位名后勾选导入。`,
+    }
+  }, [initialText])
+  const [text, setText] = useState(initialText ?? '')
+  const [drafts, setDrafts] = useState<JobDraft[]>(() => bootstrap?.drafts ?? [])
+  const [picked, setPicked] = useState<boolean[]>(() =>
+    (bootstrap?.drafts ?? []).map((d) => isDraftUsable(d) && Boolean(d.title)),
+  )
   const [parsing, setParsing] = useState(false)
   const [progress, setProgress] = useState({ index: 0, total: 0 })
   const [importing, setImporting] = useState(false)
-  const [note, setNote] = useState('')
+  const [note, setNote] = useState(bootstrap?.note ?? '')
   const abortRef = useRef(false)
   const fileRef = useRef<HTMLInputElement>(null)
 

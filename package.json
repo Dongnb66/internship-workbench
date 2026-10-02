@@ -15,7 +15,8 @@
     "preview": "vite preview --host 0.0.0.0",
     "serve": "node scripts/serve.mjs",
     "invites": "node scripts/invites.mjs",
-    "gateway": "node gateway/server.mjs"
+    "gateway": "node gateway/server.mjs",
+    "agent": "node crawler/agent/server.mjs"
   },
   "dependencies": {
     "@tencent-ai/workbuddy-cloud-sdk": "^0.1.2-dev.1b37f73.202609222026",
