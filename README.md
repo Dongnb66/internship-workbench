@@ -193,6 +193,7 @@ npm run selftest                             # 用真浏览器跑本地夹具自
 | 文档 | 内容 |
 | --- | --- |
 | [`docs/QUICKSTART.md`](docs/QUICKSTART.md) | 5 分钟跑起来 + 第一次使用建议顺序 |
+| [`docs/上手.md`](docs/上手.md) | **新用户从这里开始**：3 步看到东西 → 让岗位自己进来 → 常见卡点 → 架构一图 |
 | [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) | 云端配置、RLS 策略 SQL、新增表的完整步骤、节奏配置字段 |
 | [`docs/FAQ.md`](docs/FAQ.md) | 设计取舍问答：为什么不做自动投递、为什么不用 UI 库、匹配度怎么算 |
 | [`docs/architecture.html`](docs/architecture.html) | 手绘架构图（单文件，随代码版本管理） |
