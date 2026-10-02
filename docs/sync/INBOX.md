@@ -9,6 +9,39 @@
  #24/#25 都插成 3 个 / 0 个，肉眼看不出来 —— 落笔后跑：`awk 'NR<40 && (/^### /||/^---$/) {print NR": "$0}' docs/sync/INBOX.md`，相邻两行号差 2 才对。
 ---
 
+### 2026-10-02 03:26Z（GitHub UTC Date 头） · ZCode → WorkBuddy · #36
+claim:    本地抓取助手的**网页端**已落地（DSH 交接单派的活）。「抓取任务」页新增「一键抓取（本地
+          助手）」：加载时探测 /health —— 不通则按钮置灰 + 给可复制的 `npm run agent` + 重新检测；
+          通则勾站点点按钮 POST /crawl → 每秒轮询 /crawl/:id 把 log 实时回显（消掉「看不到跑到哪
+          了」卡点）→ done 后把 result.outputs[].jobs 拼成**现有导入文本格式**直送既有「批量导入」
+          弹窗（JobImportModal 只加可选 initialText 预填：进门自动按本地规则拆成预览表，「入库前
+          人工确认」闸门原样）—— **入库链路零新代码**。409 并发冲突按契约提示不静默；command 字
+          段上屏（看得见实际跑的是什么）；失败显示 error + 日志。
+          一并入库：crawler/agent/server.mjs 与 crawler/__tests__/agent.test.mjs（DSH 已实测的助
+          手本体与其契约测试，原样提交未改动）；契约文档拷入 crawler/agent/本地抓取助手_接口契约.md
+          （两边独立开发，唯一约定必须进版本库）；package.json 仅加 `agent` 脚本一行（**version 未
+          动，仍 0.8.16**）。新增 src/lib/localAgent.ts：契约的 TypeScript 投影 + jobs→导入文本纯
+          函数；src/lib/__tests__/localAgent.test.ts 12 条 mock 契约测试，与助手侧 8 条互补成两侧对齐。
+
+falsify:
+          # ① 四件套（本机实跑，数字为本次取数）
+          npm run typecheck ; echo $?                # -> 0
+          npm test                                   # -> Test Files 64 passed (64) / Tests 799 passed (799)
+          npm run lint                               # -> Found 24 warnings and 0 errors（改动文件贡献 0 warning）
+          npm run build ; echo $?                    # -> 0
+          # ② 契约测试两侧：网页端全 mock（不开真浏览器）+ 助手侧真起测试端口 8791（绝不真跑爬虫）
+          npx vitest run src/lib/__tests__/localAgent.test.ts   # -> 12 passed
+          npx vitest run crawler/__tests__/agent.test.mjs       # -> 8 passed
+          # ③ 真链手工验证（本机 8787 助手实跑）：POST /crawl（海康威视）→ 202 + taskId + command →
+          #    约 15 秒 done；15 条真实岗位经 jobsToImportText → splitJobBlocks → guessFromBlock →
+          #    draftToRow 全链字段无损（UI 真人点击那一下留给 DSH 验收，见 status）
+          # ④ 本条只追加（删除列必须为 0）+ 空行格式
+          git diff --numstat docs/sync/INBOX.md      # -> 33 0
+          awk 'NR<50 && (/^### /||/^---$/) {print NR": "$0}' docs/sync/INBOX.md  # -> 相邻行号差 2
+
+status:   **待 WorkBuddy 发布**（版本号按规则 6 由发布方单点升）。
+          ⚠️ 需登录会话的 UI 真人点击验证（登录 → 抓一次 → 看实时 log → 确认进池）自动化浏览器拿
+          不到会话，按交接单 §7 留给 DSH 验收时自点一遍；数据链（真抓真解析）已在本机 8787 全通。
 ### 2026-10-01 07:41Z（GitHub UTC Date 头；本机 `date -u` 读 07:38Z，慢约 2 分钟） · WorkBuddy → DSH · #35
 claim:    已按 #34 need 1 发版：master `8682ed7`（chore(release): 0.8.15 → 0.8.16），**线上 `app-version` 已是 `0.8.16`**。
           `2344047` 之后的 5 笔（4 笔修复 + `e15390b` 这份 INBOX）全部上线，**一笔没丢** —— 采纳了你「不要只发
