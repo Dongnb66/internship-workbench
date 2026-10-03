@@ -69,6 +69,7 @@ async function exists(file) {
 
 /** 候选顺序：显式环境变量 → 仓库外 venv → 仓库内 venv → PATH 上的 python（且真能 import scrapling） */
 export async function resolvePython(env = process.env) {
+  const foundButLacking = []
   const fromEnv = String(env.IWB_SCRAPLING_PYTHON ?? '').trim()
   if (fromEnv) {
     if (!(await exists(fromEnv))) {
@@ -76,7 +77,7 @@ export async function resolvePython(env = process.env) {
     }
     return (await probe(fromEnv))
       ? { ok: true, python: fromEnv, via: 'IWB_SCRAPLING_PYTHON' }
-      : { ok: false, missing: 'scrapling', reason: `IWB_SCRAPLING_PYTHON 指向的解释器里没装 scrapling：${fromEnv}` }
+      : { ok: false, missing: 'scrapling', foundButLacking: [fromEnv], reason: `IWB_SCRAPLING_PYTHON 指向的解释器里没装 scrapling：${fromEnv}` }
   }
 
   // 存在但没装 scrapling 时**继续往下找**，别在这儿就断言失败：
@@ -85,7 +86,10 @@ export async function resolvePython(env = process.env) {
     [OUTSIDE_VENV_PYTHON, '仓库外的 iwb-engines-venv'],
     [VENV_PYTHON, 'crawler/engines/.venv'],
   ]) {
-    if ((await exists(file)) && (await probe(file))) return { ok: true, python: file, via }
+    if (await exists(file)) {
+      if (await probe(file)) return { ok: true, python: file, via }
+      foundButLacking.push(file)
+    }
   }
 
   for (const candidate of ['python', 'py']) {
@@ -96,6 +100,7 @@ export async function resolvePython(env = process.env) {
   const anyInterpreter = await anyPython(env)
   return {
     ok: false,
+    foundButLacking,
     missing: anyInterpreter ? 'scrapling' : 'python',
     reason: anyInterpreter
       ? '找到 Python 了，但它没有一个装了 scrapling（装法见下面的命令，可直接粘贴）'
@@ -144,38 +149,56 @@ function canRun(cmd) {
  * 判停提示：**原样复制粘贴就能解决**，路径用实际推导出来的，不留 <占位符>。
  * 两种缺失分开写 —— 「请安装 Scrapling」那种没有命令的说法不算可照做。
  */
-export function installHint({ missing = 'python', env = process.env } = {}) {
-  const venv = OUTSIDE_VENV_PYTHON.replace(/[\\/][Ss]cripts[\\/][Pp]ython(\.exe)?$/, '')
-  const py = env.IWB_SCRAPLING_PYTHON || 'python'
+/**
+ * 判停提示：原样复制粘贴就能解决。
+ *
+ * 三条硬要求：
+ *  · 两种缺失给两支不同文案（缺 Python ≠ 缺 scrapling）；
+ *  · 路径是从仓库位置推导出来的**真实值**，不留 <占位符>；
+ *  · 「指一个已装 scrapling 的解释器」这一支**只在本机真探到解释器时才出现** ——
+ *    探不到就不写，从构造上消除占位符，而不是靠我记得填什么。
+ */
+export function installHint({ missing = 'python', env = process.env, foundButLacking = [] } = {}) {
+  const venv = OUTSIDE_VENV_PYTHON.replace(/[\\//][Ss]cripts[\\//][Pp]ython(\.exe)?$/, '')
+  const pipCmd = `  ${venv}\\Scripts\\python.exe -m pip install -i https://mirrors.aliyun.com/pypi/simple/ "scrapling[all]"`
+  const venvCmd = `  ${String(env.IWB_SCRAPLING_PYTHON || 'python').trim()} -m venv ${venv}`
+  const escapeLine = '浏览器内核不用重下：patchright 用的 chromium 与 Playwright 共用 %LOCALAPPDATA%\\ms-playwright 缓存。'
+  const fallback = '不想装 Python：BOSS 改用浏览器扩展采集（extension/），其余 26 个站点用默认路径，完全不碰 Python。'
+
   if (missing === 'python') {
     return [
       '这台机器上没有可用的 Python，而 scrapling 引擎需要它（3.10+）。装一个：',
       '',
       '  winget install -e --id Python.Python.3.12',
-      '     或到 https://www.python.org/downloads/ 下载安装包（勾选 Add to PATH）',
+      '     或到 https://www.python.org/downloads/ 下载安装包（安装时勾选 Add to PATH）',
       '',
-      '装完**重开一个终端**（PATH 要重新读），然后跑：',
-      `  ${py} -m venv ${venv}`,
-      `  ${venv}\\Scripts\\python.exe -m pip install -i https://mirrors.aliyun.com/pypi/simple/ "scrapling[all]"`,
+      '装完**重开一个终端**（PATH 要重新读），然后：',
+      venvCmd,
+      pipCmd,
       '',
-      '浏览器内核不用下载：patchright 用的 chromium 与 Playwright 共用 %LOCALAPPDATA%\\ms-playwright 缓存。',
+      escapeLine,
       '',
-      '不想装 Python：BOSS 改用浏览器扩展采集（extension/），其余 26 个站点用默认路径，完全不碰 Python。',
+      fallback,
     ].join(String.fromCharCode(10))
   }
-  return [
-    'Python 有了，但它没有一个装了 scrapling。复制下面两条就能装好（走阿里云镜像，约 1 分钟）：',
+
+  const lines = [
+    '找到 Python 了，但它没有一个装了 scrapling。复制下面两条就能装好（走阿里云镜像，约 1 分钟）：',
     '',
-    `  ${py} -m venv ${venv}`,
-    `  ${venv}\\Scripts\\python.exe -m pip install -i https://mirrors.aliyun.com/pypi/simple/ "scrapling[all]"`,
+    venvCmd,
+    pipCmd,
     '',
-    '或者指一个已装 scrapling 的解释器给引擎：',
-    `  set IWB_SCRAPLING_PYTHON=<那个环境>\\Scripts\\python.exe`,
-    '',
-    '浏览器内核不用下载：patchright 用的 chromium 与 Playwright 共用 %LOCALAPPDATA%\\ms-playwright 缓存。',
-    '',
-    '不想装 Python：BOSS 改用浏览器扩展采集（extension/），其余 26 个站点用默认路径，完全不碰 Python。',
-  ].join(String.fromCharCode(10))
+  ]
+  if (foundButLacking.length) {
+    lines.push('或者复用本机已探到的解释器（它在，但没装 scrapling）：')
+    for (const one of foundButLacking) lines.push(`  ${one}`)
+    lines.push(`  set IWB_SCRAPLING_PYTHON=${foundButLacking[0]}`)
+    lines.push('')
+  }
+  lines.push(escapeLine)
+  lines.push('')
+  lines.push(fallback)
+  return lines.join(String.fromCharCode(10))
 }
 
 /** 跑一次 Python 引擎。进度走 stderr（直接透传给用户），结果走 stdout 的 JSON。 */

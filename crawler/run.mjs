@@ -586,7 +586,7 @@ async function runEngineTargets({ opts, log, targets, engineName, unsupportedIds
     if (!resolved.ok) {
       log(`✗ ${base.label}：${engineName} 引擎环境不可用（${resolved.reason}），判停这一站，其余站点照常跑`)
       log('')
-      console.error(installHint({ missing: resolved.missing ?? 'python' }))
+      console.error(installHint({ missing: resolved.missing ?? 'python', foundButLacking: resolved.foundButLacking ?? [] }))
       results.push({ ...base, ok: false, jobs: [], stopped: true, stoppedReason: `环境缺失：${resolved.reason}` })
       continue
     }
@@ -681,7 +681,7 @@ async function runEngineLogin({ opts, log, target }) {
   if (!resolved.ok) {
     log(`✗ ${resolved.reason}`)
     log('')
-    console.error(installHint({ missing: resolved.missing ?? 'python' }))
+    console.error(installHint({ missing: resolved.missing ?? 'python', foundButLacking: resolved.foundButLacking ?? [] }))
     return 2
   }
 

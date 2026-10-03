@@ -73,6 +73,17 @@ export function summarizeRun({ results = [], engineLabels = {} }) {
     for (const error of result.errors ?? []) lines.push(`    · ${error}`)
   }
 
+  // 默认值不需要解释，偏离默认才需要 —— 不逐站打「本站走默认内核」，
+  // 但汇总要一眼看出这一轮有几个站不是默认，否则"哪几个不是默认"没有入口。
+  const offDefault = results.filter((r) => r.engine && r.engine !== DEFAULT_ENGINE)
+  if (offDefault.length) {
+    const byEngine = new Map()
+    for (const r of offDefault) byEngine.set(r.engine, (byEngine.get(r.engine) ?? 0) + 1)
+    const parts = [...byEngine.entries()].map(([name, n]) => `${n} 走 ${name}`).join(' / ')
+    lines.push('')
+    lines.push(`引擎构成：${results.length} 个目标中 ${results.length - offDefault.length} 个走默认内核，${parts}`)
+  }
+
   const stops = results.filter((r) => r.stopped)
   if (stops.length) {
     lines.push('')

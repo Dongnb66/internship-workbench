@@ -10,6 +10,8 @@ import { DEFAULT_ENGINE, computeExitCode, routeTargets, summarizeRun } from '../
 import { installHint } from '../lib/engineScrapling.mjs'
 import { findSite } from '../sites.mjs'
 
+const chr = (n) => String.fromCharCode(n)
+
 const ENGINES = ['scrapling']
 
 const site = (id) => {
@@ -138,5 +140,49 @@ describe('判停提示要能照着做（DSH 会签要求 4）', () => {
   it('不想装 Python 的人也有一条路（默认路径与扩展不受影响）', () => {
     expect(installHint({ missing: 'python', env: {} })).toContain('其余 26 个站点用默认路径')
     expect(installHint({ missing: 'scrapling', env: {} })).toContain('其余 26 个站点用默认路径')
+  })
+})
+describe('汇总要能一眼看出偏离默认内核的站（DSH 第十一轮要求 2）', () => {
+  const mixed = [
+    { label: '腾讯', engine: '', ok: true, jobs: [1, 2], read: 2 },
+    { label: 'BOSS直聘', engine: 'scrapling', ok: true, jobs: [3], read: 3 },
+  ]
+
+  it('有非默认内核的目标时，汇总加一行引擎构成', () => {
+    const s = summarizeRun({ results: mixed, engineLabels: { scrapling: 'scrapling' } })
+    const text = s.lines.join(chr(10))
+    expect(text).toContain('引擎构成：2 个目标中 1 个走默认内核，1 走 scrapling')
+  })
+
+  it('全是默认内核时**不打**这行 —— 默认值不需要解释，多打就是噪音', () => {
+    const allDefault = [{ label: 'a', engine: '', ok: true, jobs: [1], read: 1 }]
+    const s = summarizeRun({ results: allDefault })
+    expect(s.lines.join(chr(10))).not.toContain('引擎构成')
+  })
+})
+
+describe('提示里不该留需要用户自己想的空位（DSH 第十一轮要求 4 加强版）', () => {
+  it('本机没探到解释器时，那一支整段不出现 —— 按构造消除占位符', () => {
+    const h = installHint({ missing: 'scrapling', env: {}, foundButLacking: [] })
+    expect(h).not.toContain('IWB_SCRAPLING_PYTHON=')
+    expect(/<[^>]{2,}>/.test(h), '不该出现尖括号占位符').toBe(false)
+    expect(h).not.toContain('$' + '{')
+  })
+
+  it('真探到了才给这一支，且给的是实际路径', () => {
+    const found = ['D:' + chr(92) + 'iwb-engines-venv' + chr(92) + 'Scripts' + chr(92) + 'python.exe']
+    const h = installHint({ missing: 'scrapling', env: {}, foundButLacking: found })
+    expect(h).toContain('set IWB_SCRAPLING_PYTHON=' + found[0])
+  })
+
+  it('两支都含可直接粘贴的真实命令，不是「请安装 Scrapling」那种说法', () => {
+    const noPy = installHint({ missing: 'python', env: {} })
+    const noLib = installHint({ missing: 'scrapling', env: {} })
+    for (const h of [noPy, noLib]) {
+      expect(h).toContain('pip install')
+      expect(h).toContain('mirrors.aliyun.com')
+    }
+    expect(noPy).toContain('winget install')
+    expect(noLib).toContain('python -m venv')
   })
 })
