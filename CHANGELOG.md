@@ -4,6 +4,26 @@
 
 ## [Unreleased]
 
+### Added
+
+- **网页端能一键抓取了 —— 本地抓取助手**（新 `src/lib/localAgent.ts` + `src/pages/Crawler.tsx` 的「一键抓取（本地助手）」卡片 + 新 `src/lib/__tests__/localAgent.test.ts` 12 条契约断言；`package.json` 加 `npm run agent` → 新 `crawler/agent/server.mjs`；接口契约单列 `crawler/agent/本地抓取助手_接口契约.md`）。原先「抓取任务」页只给一条路径：生成命令 → 自己复制到终端 → 等它跑完 → 手动导入，四步都得人手做，而这条路的失败面全在"人有没有照做"上。现在起 `npm run agent` 之后，页面探 `/health` → 勾站点 → 「开始抓取」→ 日志实时轮询回显 → 跑完自动弹导入预览 → 入库。**原来的「生成命令」一条都没删，降级为兜底**：助手没起、或有人就是习惯自己看命令，路径照旧走得通。契约测试钉的是字段名与类型（`id/name/needsLogin/verified/kwSearch`）、`state` 取值、以及三条错误分支：400 原样抛出契约文案、409 并发冲突要提示而不是静默失败、错误响应没有 JSON body 时退回到 HTTP 状态码文案（不能把 `undefined` 印到界面上）。
+- **BOSS 直聘换引擎能真拿到数据了**（新 `crawler/engines/scrapling_boss.py` + `crawler/lib/engineScrapling.mjs`，可选引擎 `--engine scrapling`，底层 patchright 反检测内核）。同一账号同一页面实测：默认 Playwright 内核 HTML 只有 8.5KB 空壳、0 张卡片、登录页持续重载；scrapling 内核 HTML 221KB、岗位链接 17、**抓到 15 条**。两条边界照实写进站点表 notes 而不是藏起来：① 默认**不解字体混淆**（这是项目原有政策，不是这次的选择），要薪资得显式加 `--decode-salary`，实测不带 → 15 条薪资全空、带上 → 15 条薪资有值；② 需要 Python 环境（仓库外 `iwb-engines-venv`），**没装时只判停 BOSS 那一站、其余站点照跑**，整轮退出码非零并给出可照做的安装命令 —— 不整轮停（顺手多勾一站不该拖垮同轮其余几站）、也不静默跳过（那就是假成功）。
+- **引擎由站点表声明决定，`--engine` 降级为显式覆盖开关**（新 `crawler/lib/routing.mjs` 纯函数 + 新 `crawler/__tests__/engineRouting.test.mjs` + `crawler/sites.mjs` 的 `engine` 字段）。会签结论是不做"隐式判断该用哪个内核"，改成**站点表里声明、运行时按声明路由**：`node run.mjs --site boss`（不带任何参数）会自动走 scrapling。**死规矩是「没声明就不路由」** —— 允许隐式判断等于退回"靠人记得"，那张表就白建了。真跑证据：一条命令混合两种内核、不带任何 `--engine`，整轮 exit 0；另一次故意让引擎批抛异常 ⇒ 非零退出，且汇总单列判停站名与原因。
+- **「5 分钟上手」文档 + README 顶部改「3 秒看懂」**（新 `docs/上手.md` + `README.md` 重排 + `docs/images/` 5 张截图）。上手文档的骨架是「3 步看到东西 → 让岗位自己进来（一键 / 命令两条路）→ 9 个卡点的『症状-原因-怎么办』→ ASCII 架构图 + 四条岗位通道对比」；README 顶部把截图与痛点前置、技术栈下移。**卡点按症状写而不是按模块写**：找一个功能的人想起的是"我点了没反应"，不是"哪个文件负责这段"。
+- **引擎环境缺失时的判停提示能照着做了**（`crawler/run.mjs` 的 `installHint({missing})` 两支）。原先提示里留 `<那个环境>` 这类占位符 —— 只有用户自己知道路径，等于把活推回去。现在**改成只在本机真探到解释器时才出现，并直接给出真实路径**（`set IWB_SCRAPLING_PYTHON=<真实路径>`）；探不到就整段不给 —— 按构造消除占位符，而不是靠人记得填。同批删掉旧的 19 行 `PYTHON_HINT`：两份提示文案必然漂移，只留一个来源。每个引擎目标还会打一行「引擎：scrapling —— 站点表声明 engine=scrapling，自动选用」，判停提示也区分「没 Python」与「有 Python 但缺 scrapling」两种，因为这两种该做的事不一样。
+
+### Changed
+
+- **`boss` 从 `offline` 翻成 `live`，站点表与网页端投影同批改**（`crawler/sites.mjs` + `src/lib/crawlSites.ts`，两处是镜像，只改一处等于没改）。翻的依据是引擎实跑通过，不是"看起来能用了"；`verified: 'live'` 的契约要求 notes 里写清实跑结论，所以这次是把实测数字一起写进站点表。`crawler/README.md` 的引擎节同时把 `--engine` 说明成**覆盖开关**（不再是必经步骤），`--help` 同步。
+- **汇总新增一行「引擎构成」**（`crawler/run.mjs`）：`N 个目标中 M 个走默认内核、K 走 scrapling`。**全是默认内核时不打这一行** —— 默认值不需要解释，多打就是噪音。这条自曝一处覆盖度：该行只有单测钉住，没有再真跑一次混合批（再跑一次＝再打一次 BOSS + 冷却 90 秒，而这行的正确性不依赖站点）。
+- **`docs/上手.md` 按新口径复核后收口**：offline 清单退回 5 站、登录那条路改认 scrapling 引擎、薪资段写明「默认不做；要做需要你明确选择」。字面与实现对齐，不是把文案往好处说。
+
+### Fixed
+
+- **退出码不再接受外部旗标 —— 一条「汇总写着判停、退出码却是 0」的静默不一致**（`crawler/run.mjs` `computeExitCode`）。根因是一面平行旗标：`anyStopped` 与 `results` 各自维护，命中安全停止清单时置了 `stopped` 却忘了置旗标，于是**汇总说这站停了、脚本却告诉调用方一切正常**。修法是按构造消除而不是补一次赋值 —— 退出码现在只能从 `results` 推导，没有任何外部旗标能影响它。同批把引擎中途异常从「降格成一句 warning」改成结构化 `fetch_errors`：否则「引擎挂了」和「这站今天就是 0 条」在退出码上同形。
+- **`.gitignore` 补三行结构防护**（`__pycache__/`、`*.py[cod]`、`.venv/`）。新接的 Python 引擎会顺手产出字节码，而 `.venv` 是几百 MB —— 两者都是"只在某台机器上出现、在别人的机器上不会报错"的那类污染：等发现时已经进了历史。**用忽略规则而不是"记得别 add"**，因为后者依赖下一个人的记忆力。
+- 四件套：typecheck exit 0 / **65 files 819 tests** 全绿 / lint 0 error（25 warnings 全在基线）/ build exit 0（主 bundle `index-CJfeBCC_.js` 602.72 kB，gzip 188.19 kB）；`node crawler/selftest.mjs` exit 0；站点表契约 11/11（`src/lib/__tests__/crawlSites.test.ts`，两份站点表逐项一致）、本地助手契约 12/12。
+
 ### Fixed
 
 - **登录页点「发送验证码」后刷新页面就再也登不进去 —— 一个网络请求都不发**（`src/pages/Login.tsx`；版本升到 `0.8.16`）。验证码挑战原本存在模块级变量 `let pending = null`，这是个**活错生命周期**的内存：用户点「发送验证码」→ 收到码 → 刷新页面（或 SPA 重挂载）→ 填码 → 点「登录 / 注册」→ `submitCode` 命中 `if (!current)` **直接 return，一个请求都不发**，界面只给一句「请先为当前邮箱获取验证码」。用户刚刚才收到码，看到这句只会认为站点坏了，于是反复点同一个按钮，拿着有效验证码永远登不进去 —— 这是**线上真实用户会踩到**的一类 bug，而且症状完全指向错误的方向。改法：`pending` / `resetPending` 落到 `sessionStorage`（同标签页刷新不丢，换标签页仍丢 —— 验证码本就是一次性短时凭证，语义相符；无痕模式等 `sessionStorage` 不可用的场景退化回「只活这一次交互」，不阻断登录），并把那一句错误按「页面刷新过」与「邮箱改过了」两种情形拆开说。
