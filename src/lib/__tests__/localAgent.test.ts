@@ -5,6 +5,7 @@ import {
   getTask,
   jobsToImportText,
   listSites,
+  PROBE_TIMEOUT_MS,
   probe,
   startCrawl,
   type AgentJob,
@@ -236,5 +237,27 @@ describe('jobs → 现有导入文本格式', () => {
   it('空数组 / 全空字段不产生垃圾块', () => {
     expect(jobsToImportText([])).toBe('')
     expect(jobsToImportText([{ company: '', title: '', city: '', salary: '', url: '' }])).toBe('')
+  })
+})
+
+describe('请求被浏览器权限闸门挂住时，探测不能永远不返回', () => {
+  it('fetch 既不 resolve 也不 reject（LNA：127.0.0.1 的本地网络权限没给）：到 deadline 必须抛错，界面才落得到 off', async () => {
+    vi.useFakeTimers()
+    try {
+      stubFetch(
+        (_url, init) =>
+          new Promise<StubResponse>((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () =>
+              reject(Object.assign(new Error('The operation was aborted.'), { name: 'AbortError' })),
+            )
+          }),
+      )
+      const pending = probe()
+      const assertion = expect(pending).rejects.toThrow('没有响应')
+      await vi.advanceTimersByTimeAsync(PROBE_TIMEOUT_MS + 1)
+      await assertion
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

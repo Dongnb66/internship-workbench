@@ -44,6 +44,8 @@ export default function Crawler({ profile, onChanged }: PageProps) {
 
   // —— 本地助手（一键抓取）——
   const [agentState, setAgentState] = useState<'checking' | 'off' | 'on'>('checking')
+  /** 探测失败的原因：卡住（浏览器本地网络权限）和「助手没跑」要给不同的话 */
+  const [agentError, setAgentError] = useState<string | null>(null)
   const [agentBusy, setAgentBusy] = useState<string | null>(null)
   const [agentSiteCount, setAgentSiteCount] = useState(0)
   const [task, setTask] = useState<CrawlTask | null>(null)
@@ -73,6 +75,7 @@ export default function Crawler({ profile, onChanged }: PageProps) {
 
   async function probeAgent() {
     setAgentState('checking')
+    setAgentError(null)
     try {
       const health = await probe()
       setAgentBusy(health.busy)
@@ -83,7 +86,8 @@ export default function Crawler({ profile, onChanged }: PageProps) {
       } catch {
         setAgentSiteCount(0)
       }
-    } catch {
+    } catch (error) {
+      setAgentError(errText(error))
       setAgentState('off')
     }
   }
@@ -203,7 +207,9 @@ export default function Crawler({ profile, onChanged }: PageProps) {
         <div className="card-body">
           {agentState === 'off' ? (
             <div className="hint warn mb8">
-              本地助手没在跑，「开始抓取」用不了。在本机项目根目录另开一个终端执行下面的命令，再点「重新检测」：
+              {agentError ?? '本地助手没在跑，「开始抓取」用不了。'}
+              <br />
+              在本机项目根目录另开一个终端执行下面的命令，再点「重新检测」：
               <pre className="mono" style={{ ...PRE_STYLE, marginTop: 8 }}>npm run agent</pre>
               <div className="row mt8">
                 <button className="btn sm" onClick={() => copyText('npm run agent', '已复制，在项目根目录的终端里粘贴运行')}>
@@ -226,6 +232,12 @@ export default function Crawler({ profile, onChanged }: PageProps) {
               <span className="small" style={{ color: '#d97706' }}>本地助手正忙（任务 {agentBusy}），等它结束再开新的。</span>
             ) : null}
           </div>
+          {agentState === 'checking' ? (
+            <div className="small muted mt8">
+              探测中。若浏览器在地址栏弹出「本地网络访问 / 设备上的应用」的授权提示，点「允许」——
+              从线上站访问 127.0.0.1 要过这道权限，没给的话请求会一直挂着。
+            </div>
+          ) : null}
           {!selected.length ? (
             <div className="small muted mt8">
               用下面「选站点 / 任务参数」里勾选的站点和参数；关键词、页数、条数都是同一套。

@@ -15,6 +15,24 @@
 /** 助手固定监听地址（契约：只允许 127.0.0.1；端口可由 --port 改，网页端固定用默认值） */
 export const AGENT_BASE = 'http://127.0.0.1:8787'
 
+/**
+ * 每次调用的兜底时限 —— **必须有**。
+ *
+ * 从线上 https 页面 fetch http://127.0.0.1 是浏览器眼里的「本地网络访问」（LNA，
+ * Chrome/Edge 142+ 起要用户单独授权；Edge 把 127.0.0.1 这一档叫「设备上的应用 /
+ * Apps on device」，对应 loopback-network）。没授权时请求会停在权限提示上 —— fetch
+ * 既不 resolve 也不 reject。0.8.17 线上实测：探测就卡在这种状态，界面永远停在
+ * 「正在探测本地助手…」，连「重新检测」都不给（那个按钮只在 off 状态渲染）。
+ */
+const CALL_TIMEOUT_MS = 15000
+/** 探测要更快落地：卡住时尽早把「重新检测」露出来 */
+export const PROBE_TIMEOUT_MS = 8000
+
+/** 超时文案给的是可执行的下一步，不是「失败了」 */
+const TIMEOUT_HINT =
+  '浏览器可能正在等你允许「本地网络访问 / 设备上的应用」：允许后点「重新检测」；' +
+  '若助手没起，在项目根目录执行 npm run agent。'
+
 /** GET /health —— 探测助手是否在跑 */
 export interface AgentHealth {
   ok: boolean
@@ -86,13 +104,21 @@ export interface CrawlTask {
   result: { outputs: CrawlTaskOutput[] } | null
 }
 
-async function call<T>(path: string, init?: RequestInit): Promise<T> {
+async function call<T>(path: string, init?: RequestInit, timeoutMs = CALL_TIMEOUT_MS): Promise<T> {
+  const ac = new AbortController()
+  const timer = setTimeout(() => ac.abort(), timeoutMs)
   let res: Response
   try {
-    res = await fetch(`${AGENT_BASE}${path}`, init)
+    res = await fetch(`${AGENT_BASE}${path}`, { ...init, signal: ac.signal })
   } catch {
+    // 超时（多半是浏览器权限闸门挡住）与「真的连不上」要分开说
+    if (ac.signal.aborted) {
+      throw new Error(`本地助手 ${timeoutMs / 1000} 秒没有响应（${AGENT_BASE}）。${TIMEOUT_HINT}`)
+    }
     // 连不上时 fetch 抛的是不带业务信息的 TypeError，必须在这里翻译成人话
     throw new Error(`连不上本地助手（${AGENT_BASE}）。在项目根目录执行 npm run agent 启动后重试。`)
+  } finally {
+    clearTimeout(timer)
   }
   let body: unknown = null
   try {
@@ -110,7 +136,8 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 
 /** 探测：页面加载时调一次，决定「一键抓取」通不通 */
 export function probe(): Promise<AgentHealth> {
-  return call('/health')
+  // 探测用更短的 deadline：卡住时一秒内就能点「重新检测」重来
+  return call('/health', undefined, PROBE_TIMEOUT_MS)
 }
 
 /** 站点清单：来自用户本机的 crawler/sites.mjs，可用于确认两端连的是同一份抓取器 */
