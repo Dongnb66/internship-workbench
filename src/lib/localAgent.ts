@@ -25,7 +25,15 @@ export const AGENT_BASE = 'http://127.0.0.1:8787'
  * 没有下载入口**（只有一句可复制的 `npm run agent`，那要求用户有仓库和 Node）。装不上、装坏了
  * 的用户在界面里没有任何出路。平台托管后填进来，卡片上的两处提示就会多一条下载链接。
  */
-export const AGENT_DOWNLOAD_URL = ''
+export const AGENT_DOWNLOAD_URL =
+  'https://internship-workbench-47024.app.workbuddy.host/downloads/internship-workbench-agent.zip'
+
+/**
+ * ⚠️ 运维陷阱（2026-10-03 实测，WorkBuddy 报、DSH 复跑）：这个 zip 放在发布源树的
+ * `public/downloads/` 里，但它**不在 git 里**（本机 `.git/info/exclude` 排除）。少带它的那次发布
+ * **不会 404**，而是返回 200 + `text/html` 的 SPA 回退页 —— 链接形状仍然合法，界面也不会报错。
+ * 所以每次发布前后都要跑：`node scripts/verifyPublish.mjs`（它看 Content-Type，不只看状态码）。
+ */
 
 /**
  * 每次调用的兜底时限 —— **必须有**。
