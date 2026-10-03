@@ -23,6 +23,8 @@ import { pathToFileURL } from 'node:url'
 import { MORE_TEXTS, NEXT_TEXTS, SITES, STRATEGIES, companyFor, detectSiteByUrl, findSite } from './sites.mjs'
 import { COLLECTOR, CRAWLER_DIR, OUT_DIR, PROFILE_DIR, launchBrowser, msgOf, politeDelay } from './lib/browser.mjs'
 import { dailyReportMd, detectStopWall } from './lib/stopRules.mjs'
+import { DEFAULT_ENGINE, computeExitCode, routeTargets, summarizeRun } from './lib/routing.mjs'
+import { ENGINE_NAMES, PYTHON_HINT, SCRAPLING_PROFILE_DIR, resolvePython, runScrapling } from './lib/engineScrapling.mjs'
 import {
   adoptDetail,
   dedupeKey,
@@ -511,7 +513,7 @@ function printHelp() {
 
 用法
   node run.mjs --site tencent --keyword 前端          抓腾讯招聘的「前端」岗
-  node run.mjs --site boss --keyword "AI Agent" --engine scrapling  BOSS：默认内核爬不到，要换这个
+  node run.mjs --site boss --keyword "AI Agent"          BOSS：站点表声明了引擎，自动走 scrapling
   node run.mjs --url https://xxx.jobs.feishu.cn/index  任意招聘页
   node run.mjs --list-sites                            看内置站点表
 
@@ -529,9 +531,12 @@ function printHelp() {
   --include <词>     标题必须包含，可重复
   --exclude <词>     标题不能包含，可重复
   --out <路径>       产出目录或 .json 路径（默认 crawler/output/）
-  --engine <名字>    换抓取内核。目前只有 scrapling（给 BOSS 用，需要 Python，见 crawler/README.md）
-  --login            配 --engine scrapling 用：只开窗口让你登录一次，不抓取
-  --decode-salary    配 --engine scrapling 用：显式解开薪资的字体混淆。**默认不开**，
+  --engine <名字>    覆盖开关：强制用指定内核。**不填时由站点表决定**（sites.mjs 的 engine 字段）
+                     值不认识 ⇒ 直接报错退出，绝不悄悄回落默认内核
+  --login            给「声明了引擎」的站点登录一次（要本人扫码）。
+                     默认内核的站点仍用 node login.mjs --site <id>
+  --decode-salary    配引擎用：显式解开薪资的字体混淆。**默认不开**，
+                     不开时带混淆的薪资一律丢弃为空（政策线见 crawler/README.md）
   --check-salary-font 配 --engine scrapling 用：诊断模式，现场量一遍薪资字体映射并输出
                      每个码位的海明距离。**默认不跑**（实测每轮会误拒 6/9 个码位，刷屏即失效）
                      不开时带混淆的薪资一律丢弃为空（政策线见 crawler/README.md）
@@ -546,77 +551,55 @@ function printHelp() {
 `)
 }
 
-// ---------------------------------------------------------------- 可选引擎：scrapling
+// ---------------------------------------------------------------- 可选引擎（按站点表路由）
 
 /**
- * `--engine scrapling` 这条路**永不回落到默认 Playwright 路径**。
+ * 跑一组「声明了引擎」的目标。**只返回 results，不返回退出码** ——
+ * 汇总与退出码统一由 main() 算，否则「部分成功」会在两处分头汇报，读的人看不出哪一半没成。
  *
- * 为什么这条是硬规矩：回落的后果是「看起来在爬 BOSS、实际拿到 0 张卡片」，
- * 而唯一的线索是一行会被淹掉的日志 —— 那是假成功，比失败危险得多。
- * 所以本函数里所有异常出口都是「非零退出 + 说清下一步」。
- *
- * 也刻意不复用 crawlTarget()：那条函数绑死了 Playwright 的 page/context。
- * 共享的只有产出（makePayload / dailyReportMd），这才是格式一致的真正来源。
+ * 失败边界（DSH 第十轮那张表）：环境缺失只判停这一组，其余站点照跑，整轮退出码非零。
  */
-async function runScraplingEngine({ opts, log, runnable }) {
-  const { ENGINE_NAMES, PYTHON_HINT, SCRAPLING_PROFILE_DIR, resolvePython, runScrapling } = await import('./lib/engineScrapling.mjs')
-
-  const engine = String(opts.engine ?? '').trim().toLowerCase()
-  if (!ENGINE_NAMES.includes(engine)) {
-    log(`✗ 不认识的引擎：--engine ${opts.engine}。可选：${ENGINE_NAMES.join(' / ')}（不带 --engine 就是默认路径）`)
-    return 2
-  }
-
-  // 站点表说了算：哪些站点需要哪个引擎，写在 sites.mjs 的 engine 字段里，
-  // 不在代码里维护第二份「BOSS 特例」名单
-  const offEngine = runnable.filter((t) => t.site.engine !== engine)
-  if (offEngine.length) {
-    log(`✗ ${engine} 引擎只接了站点表里标着 engine: '${engine}' 的那几个，这些站点还得走默认路径：${offEngine.map((t) => targetLabel(t)).join('、')}`)
-    log('  去掉 --engine 重跑就行（默认路径不依赖 Python）。')
-    return 2
-  }
-
+async function runEngineTargets({ opts, log, targets, engineName, unsupportedIds = [] }) {
   const profileDir = opts.profile ? path.resolve(opts.profile) : SCRAPLING_PROFILE_DIR
   await mkdir(profileDir, { recursive: true })
 
-  const resolved = await resolvePython()
-  if (!resolved.ok) {
-    log(`✗ ${resolved.reason}`)
-    console.error(PYTHON_HINT)
-    return 2
-  }
-  log(`Python 引擎：${resolved.python}（探测方式：${resolved.via}）`)
-  log(`档案目录：${path.relative(CRAWLER_DIR, profileDir) || profileDir}（BOSS 登录态存这里，与默认路径的 .profile 分开 —— 两个内核的 profile 互不兼容）`)
-  if (opts.detail) log('  （此引擎只读列表页、不补详情页，--detail 无效：岗位会缺 JD 正文，匹配分明显低于其他站点）')
-  if (opts.delay !== 2600) log('  （此引擎用内置的串行延迟与页间等待，--delay 无效）')
-  // 不替他砍页数：遇验证码会主动停，风险有上界，那就没有静默降值的正当理由。
-  // 建议值写进 README，这里是提醒，不是决定。
-  if (opts.pages > 3) {
-    log(`  你给了 ${opts.pages} 页。BOSS 风控较紧，建议单轮 ≤3 页；本轮约 ${opts.pages * 17} 秒起（页间 12 秒 + 请求前 5 秒），遇验证码会立刻停本站。`)
-  }
-
-  if (opts.login) {
-    log('\n接下来会**弹出一个浏览器窗口**（这一步必须你本人做，程序不会代填账号密码，也不会自动登录）：')
-    log('  1) 在窗口里扫码或用密码/短信登录 BOSS')
-    log('  2) 登成功后**不用管终端** —— 它每 5 秒检查一次，看到登录态就自己存盘退出')
-    log('  3) 最长等 15 分钟。**窗口开着、终端没动静不是卡住**，是在等你扫码')
-    log(`  登录态存进：${path.relative(CRAWLER_DIR, profileDir)}（这个目录不入库）`)
-    const out = await runScrapling({ python: resolved.python, login: true, profileDir })
-    const wall = detectStopWall(out.wall_text ?? '')
-    if (wall.hit) log(`⛔ 命中安全停止清单（${wall.label}）：不尝试绕过，换个时间或网络再登。`)
-    if (out.ok) {
-      log(`\n✅ 登录态已存进 ${path.relative(CRAWLER_DIR, profileDir)}，现在可以：`)
-      log(`   node run.mjs --site boss --keyword "AI Agent" --engine scrapling`)
-      return 0
-    }
-    log('\n❌ 没检测到登录。窗口里没登成功，或超时了。')
-    return 3
-  }
-
   const results = []
-  for (const target of runnable) {
-    const label = targetLabel(target)
-    log(`\n▶ ${label}（scrapling 引擎，headed + 串行）`)
+
+  for (const target of targets) {
+    const base = {
+      label: targetLabel(target),
+      siteId: target.site.id,
+      channel: target.site.channel,
+      kw: target.kw,
+      engine: engineName,
+      pageUrl: urlForPage(target, opts, 1),
+      pageTitle: target.site.name,
+    }
+
+    if (unsupportedIds.includes(target.site.id)) {
+      log(`✗ ${base.label}：${engineName} 引擎没有实现这个站点的解析（是你显式 --engine 覆盖上来的），判停这一站`)
+      results.push({ ...base, ok: false, jobs: [], stopped: true, stoppedReason: `${engineName} 不支持站点 ${target.site.id}` })
+      continue
+    }
+
+    const resolved = await resolvePython()
+    if (!resolved.ok) {
+      log(`✗ ${base.label}：${engineName} 引擎环境不可用（${resolved.reason}），判停这一站，其余站点照常跑`)
+      console.error(PYTHON_HINT)
+      results.push({ ...base, ok: false, jobs: [], stopped: true, stoppedReason: `环境缺失：${resolved.reason}` })
+      continue
+    }
+
+    log(`引擎：${engineName} · Python ${resolved.python}（探测方式：${resolved.via}）`)
+    log(`档案目录：${path.relative(CRAWLER_DIR, profileDir) || profileDir}（与默认内核的 .profile 分开 —— 两个内核的 profile 互不兼容）`)
+    if (opts.detail) log('  （此引擎只读列表页、不补详情页：岗位缺 JD 正文，匹配分明显低于其他站点）')
+    if (opts.delay !== 2600) log('  （此引擎用内置的串行延迟与页间等待，--delay 无效）')
+    if (opts.pages > 3) {
+      log(`  你给了 ${opts.pages} 页。BOSS 风控较紧，建议单轮 ≤3 页；本轮约 ${opts.pages * 17} 秒起（页间 12 秒 + 请求前 5 秒），遇验证码会立刻停本站。`)
+    }
+
+    log(`▶ ${base.label}（引擎 ${engineName}，headed + 串行）`)
+
     let out
     try {
       out = await runScrapling({
@@ -629,72 +612,95 @@ async function runScraplingEngine({ opts, log, runnable }) {
         checkSalaryFont: Boolean(opts.checkSalaryFont),
       })
     } catch (error) {
-      log(`✗ ${label} 引擎调用失败：${msgOf(error)}`)
-      results.push({ label, siteId: target.site.id, ok: false, jobs: [], errors: [msgOf(error)] })
+      const reason = `引擎调用失败：${msgOf(error)}`
+      log(`✗ ${base.label} ${reason}`)
+      results.push({ ...base, ok: false, jobs: [], stopped: true, stoppedReason: reason })
       continue
     }
 
-    // 引擎自己崩了 ≠ 站点没数据：退出码与文案都要分开（那个结构性问题的落地处）
     if (out.engine_error) {
-      log(`✗ ${label} 引擎内部错误（不是站点没数据，也不是风控）：`)
-      for (const line of String(out.engine_error).split('\n').slice(-12)) log(`    ${line}`)
+      log(`✗ ${base.label} 引擎内部错误（不是站点没数据，也不是风控）：`)
+      for (const line of String(out.engine_error).split(String.fromCharCode(10)).slice(-12)) log(`    ${line}`)
       log('  这是引擎自身代码的异常。不要按「抓到 0 条」去排查登录态或风控 —— 那条路会白白等一次冷却。')
-      return 5
-    }
-    const wall = detectStopWall(out.wall_text ?? '')
-    const errors = (out.warnings ?? []).map((w) => `引擎提示：${w}`)
-    const jobs = out.jobs ?? []
-    if (wall.hit) errors.push(`命中安全停止清单（${wall.label}）：按「遇到就停」纪律停止，不重试、不绕过`)
-    if (out.logged_in === false) {
-      errors.push('这个档案里**没有登录态**（BOSS 的列表页要登录才给数据）。登录是一次需要本人的动作：')
-      errors.push(`    node run.mjs --site boss --engine scrapling --login   ← 会弹窗口，你扫码，最长等 15 分钟`)
+      results.push({ ...base, ok: false, jobs: [], stopped: true, stoppedReason: '引擎内部错误（见上面的 traceback）' })
+      continue
     }
 
-    log(`  抓到 ${jobs.length} 条（薪资模式：${out.salary_mode === 'decoded' ? '已按 --decode-salary 解码' : '默认守线，混淆值已丢弃'}）`)
-    if (out.salary_dropped) {
-      log(`  ${out.salary_dropped} 条薪资因字体混淆被丢弃（这是默认行为，不是抓到空值）。要薪资就加 --decode-salary`)
+    // 引擎中途异常要**结构化**地成为判停理由：只塞进 warnings 的话，
+    // 「引擎挂了」和「这站今天真的 0 条」在退出码上会长得一模一样。
+    const fetchErrors = (out.fetch_errors ?? []).map((e) => `引擎抓取异常：${e}`)
+    const wall = detectStopWall(out.wall_text ?? '')
+    const errors = (out.warnings ?? []).map((w) => `引擎提示：${w}`)
+    errors.push(...fetchErrors)
+    const jobs = out.jobs ?? []
+    if (wall.hit) {
+      errors.push(`命中安全停止清单（${wall.label}）：按「遇到就停」纪律停止本站点，不重试、不绕过`)
+    }
+    if (out.logged_in === false) {
+      errors.push('这个档案里没有登录态（BOSS 列表页要登录才给数据）。登录是需要本人做的一个动作：')
+      errors.push(`    node run.mjs --site ${target.site.id} --login     ← 会弹窗口，你扫码，最长等 15 分钟`)
     }
     const undecoded = out.salary_undecoded ?? { count: 0, items: [] }
-    if (undecoded.count) {
-      log(`  ⚠ ${undecoded.count} 条薪资未能解码，那几条的薪资字段是**空的** —— 不是数据源没给，是字体映射对不上：`)
-      for (const item of (undecoded.items ?? []).slice(0, 5)) log(`     第 ${item.index} 条「${item.title}」认不出的码位 ${item.codepoints.join(' / ')}`)
-      if (undecoded.count > 5) log(`     …另 ${undecoded.count - 5} 条见 JSON 里的 salary=null`)
+    if (out.salary_dropped) {
+      log(`  ${out.salary_dropped} 条薪资因字体混淆被丢弃（这是默认行为，不是抓到空值）。要薪资加 --decode-salary`)
     }
+    if (undecoded.count) {
+      log(`  ⚠ ${undecoded.count} 条薪资未能解码，那几条的薪资字段是空的 —— 不是数据源没给，是字体映射对不上：`)
+      for (const item of (undecoded.items ?? []).slice(0, 5)) log(`     第 ${item.index} 条「${item.title}」认不出的码位 ${item.codepoints.join(' / ')}`)
+    }
+    log(`  抓到 ${jobs.length} 条（薪资模式：${out.salary_mode === 'decoded' ? '已按 --decode-salary 解码' : '默认守线，混淆值已丢弃'}）`)
+
+    const noLogin = out.logged_in === false
     results.push({
-      label,
-      siteId: target.site.id,
-      channel: target.site.channel,
-      kw: target.kw,
-      ok: jobs.length > 0 && !wall.hit && out.logged_in !== false,
+      ...base,
+      ok: jobs.length > 0 && !wall.hit && !noLogin && !fetchErrors.length,
       jobs,
       errors,
       read: jobs.length,
-      stoppedLabel: wall.hit ? wall.label : null,
-      pageUrl: urlForPage(target, opts, 1),
-      pageTitle: target.site.name,
+      stopped: noLogin || wall.hit || fetchErrors.length > 0,
+      stoppedReason: noLogin ? '档案里没有登录态' : wall.hit ? `安全停止清单：${wall.label}` : '',
     })
   }
 
-  const written = await writeOutput(results, opts, log)
-  log('\n──────── 汇总 ────────')
-  let total = 0
-  for (const result of results) {
-    total += result.jobs?.length ?? 0
-    log(`${result.ok ? '✓' : '✗'} ${result.label}：${result.jobs?.length ?? 0} 条`)
-    for (const error of result.errors ?? []) log(`    · ${error}`)
-  }
-  log(`合计 ${total} 条`)
-  for (const file of written) log(`已写出：${path.relative(process.cwd(), file.base)}.json（${file.count} 条）`)
+  return { results }
+}
 
-  if (!total) {
-    log('\n一条都没抓到。scrapling 这条路的已知前提（缺任何一个都会 0 条）：')
-    log('  1) 已登录：node run.mjs --site boss --engine scrapling --login')
-    log('  2) 必须 headed：引擎内部固定 headless=False，桌面被占用或被最小化可能拿不到渲染')
-    log('  3) 别连着跑：连续快速请求会被风控，实测要冷却约 90 秒')
-    return 1
+/** 登录：需要本人扫码的一步，无法代做。 */
+async function runEngineLogin({ opts, log, target }) {
+  const profileDir = opts.profile ? path.resolve(opts.profile) : SCRAPLING_PROFILE_DIR
+  await mkdir(profileDir, { recursive: true })
+
+  const resolved = await resolvePython()
+  if (!resolved.ok) {
+    log(`✗ ${resolved.reason}`)
+    console.error(PYTHON_HINT)
+    return 2
   }
-  log('\n下一步：打开工作台 →「岗位池」→「批量导入」→「选择抓取结果文件」，选上面那个 .json。')
-  return 0
+
+  log(`接下来会**弹出一个浏览器窗口**（这一步必须你本人做，程序不代填账号密码，也不会自动登录）：`)
+  log(`  登录目标：${targetLabel(target)} —— 档案按引擎分开存，别和默认内核的 .profile 混用`)
+  log('  1) 在窗口里扫码或用密码/短信登录 BOSS')
+  log('  2) 登成功后**不用管终端** —— 它每 5 秒检查一次，看到登录态就自己存盘退出')
+  log('  3) 最长等 15 分钟。**窗口开着、终端没动静不是卡住**，是在等你扫码')
+  log(`  登录态存进：${path.relative(CRAWLER_DIR, profileDir)}（这个目录不入库）`)
+
+  const out = await runScrapling({ python: resolved.python, login: true, profileDir })
+  if (out.engine_error) {
+    log('✗ 引擎内部错误（不是登录失败）：')
+    for (const line of String(out.engine_error).split(String.fromCharCode(10)).slice(-10)) log(`    ${line}`)
+    return 5
+  }
+  const wall = detectStopWall(out.wall_text ?? '')
+  if (wall.hit) log(`⛔ 命中安全停止清单（${wall.label}）：不尝试绕过，换个时间或网络再登录。`)
+  if (out.ok) {
+    log('')
+    log(`✅ 登录态已存进 ${path.relative(CRAWLER_DIR, profileDir)}，现在可以：`)
+    log(`   node run.mjs --site ${target.site.id} --keyword "AI Agent"`)
+    return 0
+  }
+  log('')
+  log('❌ 没检测到登录。窗口里没登成功，或者超时了。')
+  return 3
 }
 
 // ---------------------------------------------------------------- 入口
@@ -726,91 +732,99 @@ async function main() {
     return 1
   }
 
-  // 可选引擎走完全独立的一条路：下面的浏览器启动、crawlTarget、hydrate 一行都不执行，
-  // 所以没装 Python 的人不受影响，装了 Python 的人也不会被静默改回 Playwright。
-  // 分派必须排在「要求引擎」守卫之前：否则 --engine <拼错> 会被当成没带引擎，提示语反而误导人排查方向。
-  if (opts.engine) return runScraplingEngine({ opts, log, runnable })
-  if (opts.login) {
-    log('✗ --login 只对 --engine scrapling 有意义；默认路径的登录请走 node login.mjs --site <id>')
+  // 路由：站点表里声明了 engine 的自动走该引擎，没声明的一律走默认内核；
+  // --engine 只是**显式覆盖**。不允许多一种"我记得这站要用引擎"的隐式判断 ——
+  // 那条判据由 lib/routing.mjs 实现，并被 __tests__/engineRouting.test.mjs 钉住。
+  const plan = routeTargets({ targets: runnable, requestedEngine: opts.engine, engineNames: ENGINE_NAMES })
+  if (plan.unknownEngine) {
+    log(`✗ 不认识的引擎：--engine ${opts.engine}。可选：${ENGINE_NAMES.join(' / ')}（不带 --engine 时由站点表决定用哪个）`)
     return 2
   }
 
-  // 走到这里就是默认路径。站点表要求特定引擎的，不能放过去拿 0 张卡片 ——
-  // 否则 sites 里标着 live、用户照默认命令跑出空结果，又是一次假成功。
-  const needsEngine = runnable.filter((t) => t.site.engine)
-  if (needsEngine.length) {
-    for (const t of needsEngine) {
-      log(`✗ ${targetLabel(t)} 在默认内核下拿不到数据，必须加 --engine ${t.site.engine}`)
+  const defaultTargets = plan.groups.find((g) => g.engine === DEFAULT_ENGINE)?.targets ?? []
+  const engineGroups = plan.groups.filter((g) => g.engine !== DEFAULT_ENGINE)
+  const unsupportedIds = plan.unsupported.map((t) => t.site.id)
+
+  if (opts.login) {
+    const engineTargets = engineGroups.flatMap((g) => g.targets)
+    if (engineTargets.length !== 1 || defaultTargets.length) {
+      log('✗ --login 需要正好一个「走引擎」的站点（例如 --site boss）。默认内核的登录请走 node login.mjs --site <id>')
+      return 2
     }
-    const rest = runnable.filter((t) => !t.site.engine)
-    if (!rest.length) {
-      log('')
-      log('没有可执行的任务：本轮所有站点都要求引擎。按上面提示加 --engine。')
-      return 1
-    }
-    runnable = rest
+    return runEngineLogin({ opts, log, target: engineTargets[0] })
   }
 
-  const profileDir = opts.profile ? path.resolve(opts.profile) : PROFILE_DIR
-  log(`浏览器：优先使用系统已装的 Edge / Chrome；档案目录 ${path.relative(CRAWLER_DIR, profileDir) || profileDir}（登录态保存在这里）`)
-  const { context, label: browserLabel } = await launchBrowser({ headless: !opts.headed, profileDir })
-  log(`已启动：${browserLabel}`)
 
   const results = []
-  try {
-    for (const target of runnable) {
-      try {
-        const result = await crawlTarget({ context, target, opts, log })
-        results.push({
-          ...result,
-          siteId: target.site.id,
-          channel: target.site.channel,
-          // kw 进文件名：同一站点多关键词时输出文件名若只含 siteId+时间戳（精确到分钟），
-          // 后一个关键词会把前一个的产出覆盖掉（0.7.6 实际踩中：腾讯后端 10 条被前端 10 条盖没）
-          kw: target.kw,
-          pageUrl: urlForPage(target, opts, 1),
-          pageTitle: target.site.name,
-        })
-      } catch (error) {
-        log(`✗ ${targetLabel(target)} 出错：${msgOf(error)}`)
-        results.push({ label: targetLabel(target), siteId: target.site.id, ok: false, jobs: [], errors: [msgOf(error)] })
+
+  // 默认内核批：装没装 Python 都该跑成，所以它排在引擎批之前，且不引用任何 Python 相关依赖。
+  if (defaultTargets.length) {
+    const profileDir = opts.profile ? path.resolve(opts.profile) : PROFILE_DIR
+    log(`浏览器：优先使用系统已装的 Edge / Chrome；档案目录 ${path.relative(CRAWLER_DIR, profileDir) || profileDir}（登录态保存在这里）`)
+    const { context, label: browserLabel } = await launchBrowser({ headless: !opts.headed, profileDir })
+    log(`已启动：${browserLabel}`)
+    try {
+      for (const target of defaultTargets) {
+        try {
+          const result = await crawlTarget({ context, target, opts, log })
+          results.push({
+            ...result,
+            engine: DEFAULT_ENGINE,
+            siteId: target.site.id,
+            channel: target.site.channel,
+            // kw 进文件名：同一站点多关键词时输出文件名若只含 siteId+时间戳（精确到分钟），
+            // 后一个关键词会把前一个的产出覆盖掉（0.7.6 实际踩中：腾讯后端 10 条被前端 10 条盖没）
+            kw: target.kw,
+            pageUrl: urlForPage(target, opts, 1),
+            pageTitle: target.site.name,
+          })
+        } catch (error) {
+          log(`✗ ${targetLabel(target)} 出错：${msgOf(error)}`)
+          results.push({ label: targetLabel(target), engine: DEFAULT_ENGINE, siteId: target.site.id, ok: false, jobs: [], errors: [msgOf(error)] })
+        }
       }
+    } finally {
+      await context.close()
     }
-  } finally {
-    await context.close()
+  }
+
+  // 引擎批：一组一组跑。某一组环境缺失只判停那一组，不拖垮整轮，也不会静默跳过。
+  for (const group of engineGroups) {
+    const groupOut = await runEngineTargets({ opts, log, targets: group.targets, engineName: group.engine, unsupportedIds })
+    results.push(...groupOut.results)
   }
 
   const written = await writeOutput(results, opts, log)
 
-  log('\n──────── 汇总 ────────')
-  let total = 0
-  for (const result of results) {
-    total += result.jobs?.length ?? 0
-    const status = result.ok ? `${result.jobs?.length ?? 0} 条` : `失败（${result.reason ?? '见日志'}）`
-    log(`${result.ok ? '✓' : '✗'} ${result.label}：${status}`)
-    for (const error of result.errors ?? []) log(`    · ${error}`)
-  }
-  log(`合计 ${total} 条`)
+  // 汇总统一在这里算 —— 只有一处出口，「部分成功」就不会被哪一半自己汇报成成功。
+  log('')
+  log('──────── 汇总 ────────')
+  const summary = summarizeRun({ results, engineLabels: Object.fromEntries(ENGINE_NAMES.map((n) => [n, n])) })
+  for (const line of summary.lines) log(line)
+  log(`合计 ${summary.total} 条 · 成功 ${summary.okCount} 个目标 · 失败 ${summary.failedCount} 个`)
   for (const file of written) log(`已写出：${path.relative(process.cwd(), file.base)}.json（${file.count} 条）`)
 
-  // 「读到了岗位但全部与去重历史重复」是正常结果（例如一天内第二次跑同一站点），
-  // 不是失败——退出码必须是 0，否则对话层/脚本会把正常结果当进程出错（0.7.6 实测踩中）。
-  const allDuplicates = !total && results.some((r) => r.ok && (r.read ?? 0) > 0)
-  if (allDuplicates) {
-    log('\n本次没有新增岗位：读到的岗位都与去重历史重复。想强制重出可以删掉 output/.seen-*.json 或加 --purge。')
-    return 0
-  }
-
-  if (!total) {
-    log('\n一条都没抓到。常见原因：')
+  if (summary.stoppedCount) {
+    log('')
+    log(`整轮退出码非零：有 ${summary.stoppedCount} 个目标判停（上面列了站名和原因），其余目标的结果已照常写出。`)
+  } else if (!summary.total && results.some((r) => r.ok && (r.read ?? 0) > 0)) {
+    // 「读到了岗位但全部与去重历史重复」是正常结果（例如一天内第二次跑同一站点），不是失败。
+    log('')
+    log('本次没有新增岗位：读到的岗位都与去重历史重复。想强制重出可以删掉 output/.seen-*.json 或加 --purge。')
+  } else if (!summary.total) {
+    log('')
+    log('一条都没抓到。常见原因：')
     log('  1) 站点是 SPA，渲染慢 —— 加长等待：--delay 4000，或先 --headed 看一眼页面到底长什么样')
     log('  2) 列表用的不是静态 DOM，而是虚拟列表 —— 试 --pages 1 配合 --headed 手动滚动确认')
-    log('  3) 需要登录 —— node login.mjs --site <id> 登录一次再跑')
-    return 1
+    log('  3) 需要登录 —— 默认内核走 node login.mjs --site <id>；声明了引擎的站点走 node run.mjs --site <id> --login')
+  } else {
+    log('')
+    log('下一步：打开工作台 →「岗位池」→「批量导入」→「选择抓取结果文件」，选上面那个 .json。')
   }
 
-  log('\n下一步：打开工作台 →「岗位池」→「批量导入」→「选择抓取结果文件」，选上面那个 .json。')
-  return 0
+  // 退出码只在这一处决定，且它是被 __tests__/engineRouting.test.mjs 钉住的那个纯函数。
+  // 散在各个分支里的 return 0/1 迟早会和它不一致 —— 而"部分成功读成全成功"就是这么来的。
+  return computeExitCode({ total: summary.total, results })
 }
 
 /**

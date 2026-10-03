@@ -383,6 +383,7 @@ def do_crawl(profile, keyword, pages, city, limit, decode_salary, check_font):
     warnings = set()
     mapping = {}
     collected = []
+    fetch_errors = []
     wall_parts = []
     logged_in = None
     # 闭包里要改的的量，放同一个字典：nonlocal 写在嵌套函数里很容易漏
@@ -412,15 +413,15 @@ def do_crawl(profile, keyword, pages, city, limit, decode_salary, check_font):
 
             try:
                 s.fetch(list_url(keyword, city, index), page_action=grab)
-                logged_in = outcome["logged_in"]
+                logged_in = ctx["outcome"]["logged_in"]
             except Exception as exc:
                 # 不重试：被风控时重试只会加速封号。停止与否由 Node 侧的停止清单判。
-                warnings.add(f"第 {index} 页抓取异常，按「遇到就停」不再重试：{str(exc)[:120]}")
+                fetch_errors.append(f"第 {index} 页抓取异常，按「遇到就停」不再重试：{str(exc)[:160]}")
                 break
 
-            log(f"  卡片 {outcome['cards']} 张，解析 {len(outcome['jobs'])} 条")
-            collected.extend(outcome["jobs"])
-            if not outcome["jobs"]:
+            log(f"  卡片 {ctx['outcome']['cards']} 张，解析 {len(ctx['outcome']['jobs'])} 条")
+            collected.extend(ctx["outcome"]["jobs"])
+            if not ctx["outcome"]["jobs"]:
                 log("  本页 0 条，停止翻页（继续请求只会加重风控）")
                 break
             if index < pages:
@@ -463,6 +464,7 @@ def do_crawl(profile, keyword, pages, city, limit, decode_salary, check_font):
     return {
         "jobs": uniq,
         "engine_error": engine_error["tb"],
+        "fetch_errors": fetch_errors,
         "salary_mode": "decoded" if decode_salary else "obfuscated_dropped",
         # 默认**不做**每轮现场对账：2026-10-02 实测它会把 6/9 个码位误判为不可信，
         # 每轮喊 6 次的防线等于没有防线。要看完整测量请加 --check-salary-font。
