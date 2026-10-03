@@ -5,7 +5,7 @@ import { errText } from '../cloud'
 import { listRows } from '../lib/api'
 import { crawlFailureHint, crawlOutputHint, buildCrawlPlan } from '../lib/crawlTask'
 import { crawlSitesForPicker, type CrawlSite } from '../lib/crawlSites'
-import { AGENT_DOWNLOAD_URL, getTask, jobsToImportText, listSites, probe, startCrawl, type AgentHealth, type CrawlTask } from '../lib/localAgent'
+import { AGENT_DOWNLOAD_URL, AgentTimeoutError, freshOutputs, getTask, jobsToImportText, listOutputs, listSites, lnaHelpFor, lnaPermissionState, probe, startCrawl, type AgentHealth, type CrawlTask } from '../lib/localAgent'
 import { notifyErr, notifyOk } from '../lib/toast'
 import type { PageProps } from './Overview'
 import type { Row } from '../types'
@@ -50,6 +50,12 @@ export default function Crawler({ profile, onChanged }: PageProps) {
   const [agentProblems, setAgentProblems] = useState<AgentHealth['problems']>([])
   /** 助手是否上报自检字段（ready）；老版本助手没有这个字段 → undefined，用来提示「该更新了」 */
   const [agentReady, setAgentReady] = useState<boolean | undefined>(undefined)
+  /** 探测是「超时」（多半是浏览器权限闸门）还是真的连不上 —— 两者下一步指引完全不同 */
+  const [agentTimeout, setAgentTimeout] = useState(false)
+  /** 浏览器「本地网络访问」权限状态；unknown = 查不到，不猜 */
+  const [lnaState, setLnaState] = useState<'granted' | 'denied' | 'prompt' | 'unknown'>('unknown')
+  /** 抓取前 output/ 的文件名快照：跑完筛出「本次产出」（服务端 result.outputs 是目录里最近几个文件） */
+  const outputsBeforeRef = useRef<Set<string> | null>(null)
   const [agentBusy, setAgentBusy] = useState<string | null>(null)
   const [agentSiteCount, setAgentSiteCount] = useState(0)
   const [task, setTask] = useState<CrawlTask | null>(null)
@@ -85,6 +91,7 @@ export default function Crawler({ profile, onChanged }: PageProps) {
       setAgentBusy(health.busy)
       setAgentProblems(health.problems ?? [])
       setAgentReady(health.ready)
+      setAgentTimeout(false)
       setAgentState('on')
       // 站点数只是给用户一个「两端连的是同一份抓取器」的确认，读不到不影响主流程
       try {
@@ -95,6 +102,8 @@ export default function Crawler({ profile, onChanged }: PageProps) {
     } catch (error) {
       setAgentError(errText(error))
       setAgentReady(undefined)
+      setAgentTimeout(error instanceof AgentTimeoutError)
+      if (error instanceof AgentTimeoutError) setLnaState(await lnaPermissionState())
       setAgentState('off')
     }
   }
@@ -105,7 +114,9 @@ export default function Crawler({ profile, onChanged }: PageProps) {
 
   /** 跑完的产出 → 现有导入文本格式 → 打开既有「批量导入」弹窗（入库零新代码） */
   async function deliverResult(t: CrawlTask) {
-    const jobs = (t.result?.outputs ?? []).flatMap((o) => o.jobs ?? [])
+    // 只导本次产出：服务端把 output/ 里最近几个文件都算进来，不过滤的话第二次抓取起会把上一批
+    // 一起塞进导入预览（2026-10-03 用户视角实测：本次 5 条，界面「共 10 条」）
+    const jobs = freshOutputs(t.result?.outputs ?? [], outputsBeforeRef.current).flatMap((o) => o.jobs ?? [])
     if (!jobs.length) {
       notifyErr('抓取结束，但没有读到岗位数据 —— 看看下面的日志里提示了什么')
       return
@@ -161,6 +172,12 @@ export default function Crawler({ profile, onChanged }: PageProps) {
     }
     setStarting(true)
     try {
+      // 抓取前记下 output/ 已有哪些文件：跑完做差集，只把本次产出送进导入预览
+      try {
+        outputsBeforeRef.current = new Set((await listOutputs()).map((o) => o.name))
+      } catch {
+        outputsBeforeRef.current = null // 快照拿不到就退化成旧行为，别把结果吞掉
+      }
       const res = await startCrawl({ sites: selected, keyword: keyword.trim(), pages, limit, mode })
       setCommand(res.command)
       setTask({
@@ -207,7 +224,12 @@ export default function Crawler({ profile, onChanged }: PageProps) {
   ) : null
   /** 装不上 / 装坏了时用的块级版本（带换行） */
   const packageLink = downloadAnchor ? <div className="mt8">{downloadAnchor}</div> : null
-  const totalJobs = task?.result?.outputs.reduce((n, o) => n + (o.count || o.jobs.length), 0) ?? 0
+  /** 超时指引：按当前浏览器给设置路径（设置页不能点链接跳转 → 给复制按钮） */
+  const lnaHelp = lnaHelpFor()
+  const lnaStateLabel = { granted: '已允许', denied: '已被拒绝', prompt: '还没决定', unknown: '查不到' }[lnaState]
+  /** 只算本次抓取的产出（服务端 outputs 是目录里最近几个文件，不是本次产出） */
+  const resultOutputs = freshOutputs(task?.result?.outputs ?? [], outputsBeforeRef.current)
+  const totalJobs = resultOutputs.reduce((n, o) => n + (o.count || o.jobs.length), 0) ?? 0
 
   return (
     <div className="grid" style={{ gap: 14 }}>
@@ -251,16 +273,36 @@ export default function Crawler({ profile, onChanged }: PageProps) {
           {agentState === 'off' ? (
             <div className="hint warn mb8">
               {agentError ?? '本地助手没在跑，「开始抓取」用不了。'}
-              <br />
-              在本机项目根目录另开一个终端执行下面的命令，再点「重新检测」：
-              <pre className="mono" style={{ ...PRE_STYLE, marginTop: 8 }}>npm run agent</pre>
               {packageLink}
-              <div className="row mt8">
-                <button className="btn sm" onClick={() => copyText('npm run agent', '已复制，在项目根目录的终端里粘贴运行')}>
-                  复制命令
-                </button>
-                <span className="small muted">第一次跑要先装抓取器依赖：crawler/ 目录下 npm install。</span>
-              </div>
+              {agentTimeout ? (
+                <div className="mt8">
+                  <strong>多半是浏览器把「本地网络访问」挡住了</strong>（当前状态：{lnaStateLabel}）。
+                  放行方法（{lnaHelp.browser}）：{lnaHelp.path}；放行后点右上角「重新检测」。
+                  {lnaHelp.deepLink ? (
+                    <div className="row mt8">
+                      <button
+                        className="btn sm"
+                        onClick={() =>
+                          copyText(lnaHelp.deepLink, '已复制设置地址 —— 粘到地址栏打开（浏览器设置页不能点链接跳转）')
+                        }
+                      >
+                        复制设置地址
+                      </button>
+                      <span className="small muted mono">{lnaHelp.deepLink}</span>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+              <details className="mt8">
+                <summary className="small muted">进阶：从仓库源码跑（需要 Node 和仓库，普通用户用上面的 zip）</summary>
+                <pre className="mono" style={{ ...PRE_STYLE, marginTop: 8 }}>npm run agent</pre>
+                <div className="row mt8">
+                  <button className="btn sm" onClick={() => copyText('npm run agent', '已复制，在项目根目录的终端里粘贴运行')}>
+                    复制命令
+                  </button>
+                  <span className="small muted">第一次跑要先装抓取器依赖：crawler/ 目录下 npm install。</span>
+                </div>
+              </details>
             </div>
           ) : null}
 
@@ -324,7 +366,7 @@ export default function Crawler({ profile, onChanged }: PageProps) {
               </pre>
               {task.state === 'done' && task.result?.outputs.length ? (
                 <div className="small muted mt8">
-                  共 {totalJobs} 条：{task.result.outputs.map((o) => `${o.file}（${o.count} 条）`).join('、')}
+                  共 {totalJobs} 条：{resultOutputs.map((o) => `${o.file}（${o.count} 条）`).join('、')}
                 </div>
               ) : null}
               {task.state === 'failed' ? <div className="small muted mt8">{crawlFailureHint(task)}</div> : null}

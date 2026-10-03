@@ -130,6 +130,16 @@ export interface CrawlTask {
   result: { outputs: CrawlTaskOutput[] } | null
 }
 
+/**
+ * 探测超时（**不是**「连不上」）。
+ *
+ * 界面靠这个类型给「浏览器本地网络访问权限」的针对性指引 —— 从文案上分不出这两件事，
+ * 而它们的下一步完全不同（一个去浏览器里放行，一个去启动助手）。
+ */
+export class AgentTimeoutError extends Error {
+  readonly kind = 'agent-timeout'
+}
+
 async function call<T>(path: string, init?: RequestInit, timeoutMs = CALL_TIMEOUT_MS): Promise<T> {
   const ac = new AbortController()
   const timer = setTimeout(() => ac.abort(), timeoutMs)
@@ -139,7 +149,7 @@ async function call<T>(path: string, init?: RequestInit, timeoutMs = CALL_TIMEOU
   } catch {
     // 超时（多半是浏览器权限闸门挡住）与「真的连不上」要分开说
     if (ac.signal.aborted) {
-      throw new Error(`本地助手 ${timeoutMs / 1000} 秒没有响应（${AGENT_BASE}）。${TIMEOUT_HINT}`)
+      throw new AgentTimeoutError(`本地助手 ${timeoutMs / 1000} 秒没有响应（${AGENT_BASE}）。${TIMEOUT_HINT}`)
     }
     // 连不上时 fetch 抛的是不带业务信息的 TypeError，必须在这里翻译成人话
     throw new Error(`连不上本地助手（${AGENT_BASE}）。在项目根目录执行 npm run agent 启动后重试。`)
@@ -170,6 +180,86 @@ export function probe(): Promise<AgentHealth> {
 export async function listSites(): Promise<AgentSite[]> {
   const body = await call<{ sites: AgentSite[] }>('/sites')
   return body.sites
+}
+
+/** output/ 里最近产出的文件（服务端 `/outputs` → { files: [{ name, size, mtime }] }） */
+export interface AgentOutputFile {
+  name: string
+  size: number
+  mtime: number
+}
+
+/**
+ * 列出 output/ 里的文件 —— 抓取**前**取一次，跑完做差集，只把本次产出送进导入预览。
+ *
+ * 为什么必须做差集：助手的 `result.outputs` 是「output/ 里最近的几个文件」，**不是本次产出**。
+ * 2026-10-03 用户视角实测：只抓到 5 条，界面却按 2 个文件 / 10 条弹导入预览。
+ * 这条修法只用**已有**接口，所以不用用户更新助手包。
+ */
+export async function listOutputs(): Promise<AgentOutputFile[]> {
+  const body = await call<{ files: AgentOutputFile[] }>('/outputs')
+  return body.files ?? []
+}
+
+/**
+ * 只留本次抓取新写出的产出。
+ *
+ * before 为 null（快照没取到）→ 原样返回，退化成旧行为，绝不把结果吞掉；
+ * 差集为空（同一分钟内重跑、文件名撞了）→ 取最新的一个（服务端按 mtime 倒序）。
+ */
+export function freshOutputs<T extends { file: string }>(all: T[], before: ReadonlySet<string> | null): T[] {
+  if (!before) return all
+  const fresh = all.filter((o) => !before.has(o.file))
+  return fresh.length ? fresh : all.slice(0, 1)
+}
+
+/** 浏览器「本地网络访问」权限状态；查不到就 unknown（不猜） */
+export async function lnaPermissionState(): Promise<'granted' | 'denied' | 'prompt' | 'unknown'> {
+  try {
+    const api = (navigator as unknown as { permissions?: { query?: (d: { name: string }) => Promise<{ state: string }> } }).permissions
+    const st = await api?.query?.({ name: 'local-network-access' })
+    const s = st?.state
+    return s === 'granted' || s === 'denied' || s === 'prompt' ? s : 'unknown'
+  } catch {
+    return 'unknown'
+  }
+}
+
+export interface LnaHelp {
+  browser: string
+  /** 设置页地址（浏览器设置页不能点链接跳转，界面给「复制」按钮） */
+  deepLink: string
+  /** 手动路径：不依赖深链接是否有效 */
+  path: string
+}
+
+/**
+ * 按浏览器给「怎么放行本地网络访问」的指引。
+ *
+ * 为什么需要：2026-10-03 实测 —— Edge 142 起，从线上 https 页面访问 127.0.0.1 要单独授权
+ *（Edge 叫「设备上的应用」/ loopback-network）。**没授权时请求会停在权限提示上，fetch 既不
+ * resolve 也不 reject**，界面只能超时；而很多浏览器根本不弹提示，用户无从下手。
+ */
+export function lnaHelpFor(ua: string = typeof navigator === 'undefined' ? '' : navigator.userAgent): LnaHelp {
+  if (/Edg\//.test(ua)) {
+    return {
+      browser: 'Edge',
+      deepLink: 'edge://settings/privacy/sitePermissions/allPermissions/loopbackNetwork',
+      path: '设置 → Cookie 和网站权限 → 所有权限 → 「设备上的应用」→ 允许',
+    }
+  }
+  if (/Chrome\//.test(ua)) {
+    return {
+      browser: 'Chrome',
+      deepLink: 'chrome://settings/content/localNetworkAccess',
+      path: '设置 → 隐私和安全 → 网站设置 → 更多权限 → 「本地网络访问」→ 允许',
+    }
+  }
+  return {
+    browser: '这个浏览器',
+    deepLink: '',
+    path: '站点权限里找到「本地网络访问 / 设备上的应用 / Local network access」并允许',
+  }
 }
 
 /** 发起抓取。400/409 等按契约把 error 文案原样抛出，由界面提示 */

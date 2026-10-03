@@ -3,9 +3,14 @@ import { guessFromBlock, splitJobBlocks } from '../import'
 import {
   AGENT_BASE,
   AGENT_DOWNLOAD_URL,
+  AgentTimeoutError,
+  freshOutputs,
   getTask,
   jobsToImportText,
+  listOutputs,
   listSites,
+  lnaHelpFor,
+  lnaPermissionState,
   PROBE_TIMEOUT_MS,
   probe,
   startCrawl,
@@ -281,10 +286,79 @@ describe('请求被浏览器权限闸门挂住时，探测不能永远不返回'
       )
       const pending = probe()
       const assertion = expect(pending).rejects.toThrow('没有响应')
+      // 界面的下一步指引靠**类型**分岔（超时 → 去浏览器放行本地网络权限；连不上 → 去启动助手），
+      // 所以类型也要钉住，别只钉文案。
+      const typed = expect(pending).rejects.toBeInstanceOf(AgentTimeoutError)
       await vi.advanceTimersByTimeAsync(PROBE_TIMEOUT_MS + 1)
       await assertion
+      await typed
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+describe('只导本次产出（抓取前后的 output/ 差集）', () => {
+  it('抓取前已存在的产出要被滤掉 —— 否则第二次抓取起会把上一批混进导入预览', () => {
+    const all = [
+      { file: 'hikvision__前端-2026-10-03_2304.json' },
+      { file: 'hikvision-2026-10-03_2029.json' },
+    ]
+    // 实测场景：本次只抓到 5 条，服务端却把 20:29 那次的文件一起回了 → 界面「共 10 条」
+    expect(freshOutputs(all, new Set(['hikvision-2026-10-03_2029.json']))).toEqual([
+      { file: 'hikvision__前端-2026-10-03_2304.json' },
+    ])
+  })
+
+  it('快照没取到（null）→ 原样返回，退化成旧行为，绝不把结果吞掉', () => {
+    const all = [{ file: 'a.json' }, { file: 'b.json' }]
+    expect(freshOutputs(all, null)).toEqual(all)
+  })
+
+  it('差集为空（同一分钟内重跑、文件名撞了）→ 取最新的一个（服务端按 mtime 倒序）', () => {
+    const all = [{ file: 'same.json' }, { file: 'older.json' }]
+    expect(freshOutputs(all, new Set(['same.json', 'older.json']))).toEqual([{ file: 'same.json' }])
+  })
+
+  it('空产出不炸', () => {
+    expect(freshOutputs([], new Set(['x.json']))).toEqual([])
+  })
+})
+
+describe('浏览器本地网络访问（LNA）指引', () => {
+  it('GET /outputs 读的是 files 字段（不是 outputs）', async () => {
+    const mock = stubFetch(async (url) => {
+      expect(url).toBe(`${AGENT_BASE}/outputs`)
+      return jsonRes(200, { files: [{ name: 'hikvision__前端-2026-10-03_2304.json', size: 4096, mtime: 1759503840000 }] })
+    })
+    const files = await listOutputs()
+    expect(mock).toHaveBeenCalledTimes(1)
+    expect(files).toEqual([{ name: 'hikvision__前端-2026-10-03_2304.json', size: 4096, mtime: 1759503840000 }])
+  })
+
+  it('助手不认 /outputs 时抛错（调用方据此退化成旧行为，不吞结果）', async () => {
+    stubFetch(async () => jsonRes(404, { error: '没有这个路由' }))
+    await expect(listOutputs()).rejects.toThrow('没有这个路由')
+  })
+
+  it('Edge / Chrome / 其它各给对应设置路径与地址', () => {
+    const edge = lnaHelpFor('Mozilla/5.0 (Windows NT 10.0) AppleWebKit/537.36 Chrome/142.0.0.0 Safari/537.36 Edg/142.0.0.0')
+    expect(edge.browser).toBe('Edge')
+    expect(edge.deepLink).toContain('loopbackNetwork')
+    expect(edge.path).toContain('设备上的应用')
+
+    const chrome = lnaHelpFor('Mozilla/5.0 (Windows NT 10.0) AppleWebKit/537.36 Chrome/142.0.0.0 Safari/537.36')
+    expect(chrome.browser).toBe('Chrome')
+    expect(chrome.deepLink).toContain('localNetworkAccess')
+
+    const other = lnaHelpFor('Mozilla/5.0 夸克浏览器/6.0')
+    expect(other.browser).toBe('这个浏览器')
+    expect(other.deepLink).toBe('')
+    expect(other.path).toContain('本地网络访问')
+  })
+
+  it('查不到权限状态时回 unknown（不猜）', async () => {
+    vi.stubGlobal('navigator', {})
+    expect(await lnaPermissionState()).toBe('unknown')
   })
 })
