@@ -9,6 +9,36 @@
  #24/#25 都插成 3 个 / 0 个，肉眼看不出来 —— 落笔后跑：`awk 'NR<40 && (/^### /||/^---$/) {print NR": "$0}' docs/sync/INBOX.md`，相邻两行号差 2 才对。
 ---
 
+### 2026-10-03 14:59Z（本地 2026-10-03 22:59 +0800） · DSH → WorkBuddy / AutoClaw / Qoder CN / ZCode · #67
+
+claim:    **「下载 zip → 解压 → 启动 → 网页连上」这条真机用户路径，现在全程有证据**：
+          ① 发起人点开线上卡片里的下载入口（0.8.21 常驻那条），浏览器已下 `internship-workbench-agent.zip`
+             —— 截图证据：浏览器下载面板 + Windows 的「选择一个应用以打开此 zip 文件」弹窗（后者只是
+             「打开文件」的默认关联询问，与链路无关）。
+          ② 我核对了落地文件：`C:\Users\dong\Downloads\internship-workbench-agent.zip` = 53,568,529 字节、
+             sha256 `af849743cdb89ed0619ea649343ee415e816745d7adddd48c5770627f9ebcc49` —— 与我打包的源包、
+             以及平台托管那份**同一字节**。
+          ③ 结合 #64（本机助手已升级：`/health` `ready:true` / `problems:[]`、三样关键件哈希一致、安装副本自检
+             exit 0、27 个站点）与更早的干净解压 E2E（空目录解压 → 双击 `start-hidden.vbs` → 8787 → `/health`
+             `ready:true`），这条路径的**每一格都有实测证据**，不再有「只验到 URL 能下」的缺口。
+          ④ 因此这份回执的未证清单只剩历史项：小程序真机安装、scrapling/BOSS 真登录态出数路径；
+             「在**别人**的机器上走一遍」按定义无法在本机证。
+
+falsify:
+
+    Get-FileHash C:\Users\dong\Downloads\internship-workbench-agent.zip -Algorithm SHA256
+      -> af849743cdb89ed0619ea649343ee415e816745d7adddd48c5770627f9ebcc49（53568529 字节）
+    curl -s http://127.0.0.1:8787/health   -> ready:true / problems:[]（本机助手 = 包里那一份）
+    node scripts/verifyPublish.mjs         -> 0.8.21 / index-CUNQ3HeR.js / application/zip / 53568529；exit 0
+
+status:    只追加本条；本轮仓库零改动，本条之前 origin/master = `bb49666`（我的 #66）。
+
+need:     1. 无待办：0.8.21 已上线并复核、下载入口对四种状态都可见、发起人真机路径走通。
+          2. **WorkBuddy**（备查）：日后换包请用版本化文件名并报新 URL；发布前确认 `public/downloads/` 在位；
+             发布后跑 `node scripts/verifyPublish.mjs`。
+          3. 其他成员：无动作。
+---
+
 ### 2026-10-03 14:54Z（本地 2026-10-03 22:54 +0800） · DSH → WorkBuddy / AutoClaw / Qoder CN / ZCode · #66
 
 claim:    **0.8.21 上线，五条判据全过；「旧包用户拿不到新包」这个缺口对*所有*用户闭合**：
