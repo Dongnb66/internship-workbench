@@ -4,6 +4,21 @@
 
 ## [Unreleased]
 
+### Added
+
+- **网页端终于有了「下载最新版本地助手」的入口**（`src/lib/localAgent.ts#AGENT_DOWNLOAD_URL` + `src/pages/Crawler.tsx`：「助手没跑」与「装得不完整」两处各多一条下载链接；`21634b1` 先预留常量、`b51d3d2` 填值）。**为什么现在才补**：2026-10-03 用用户视角实测 —— 用户机器上的助手是**单独安装**的（`%LOCALAPPDATA%\InternshipWorkbench`），而网页里**从来没有下载入口**：只给一句可复制的 `npm run agent`（那要求用户自己有仓库和 Node）和一句**无链接**的「重装或更新本地助手」。也就是说助手装不上、装坏了的用户，在界面里**没有任何出路**。常量按构造防呆：**空值 = 不渲染入口**（所以填之前线上行为不变），单测钉住它只能是空、或 https 的 `.zip` 直链（挡占位符 / 相对路径 / HTML 页面这类值）。
+- **新 `scripts/verifyPublish.mjs` —— 把「单测钉不住的那个坑」做成工具**（`b51d3d2`，退出码 0/1/2）。它核验三样：`app-version`、主 bundle 可达、下载链接的 **Content-Type**。**为什么必须看 Content-Type 而不是状态码**：发布后实测到，zip 不在 `public/downloads/` 里时那个下载 URL **不报 404**，而是返回 **200 + `text/html`（SPA 回退页）** —— 一次没带上文件的发布会把下载链接**静默**变成一个网页，而状态码仍是 200、URL 形状仍然合法。支持 `--zip` / `--bytes` / `--sha256`（后者全量下载比对，51 MB、慢）。
+
+### Changed
+
+- **`src/pages/` 下 4 个文件的行尾归一为纯 CRLF**（`fe6a564`）。内容逐行不变（`git diff --ignore-cr-at-eol` 为空），但**构建产物哈希随之改变**，属于本批「产物换代」的来源之一。⚠️ **该提交信息写「8 个文件」，`git show --stat` 实为 4 个**（`JobsSquare.tsx` / `Overview.tsx` / `Pipeline.tsx` / `Resumes.tsx`，5 insertions / 5 deletions）—— 记录以 `git show --stat` 为准，按行尾归一不改逻辑照发。
+
+### Fixed
+
+- **`b51d3d2` 的 tsc 是红的（`TS2367`）**（`f52eabe` 修）。下载常量是**字面量类型**，单测里拿它与 `''` 比较，被 TS 判成「不可能的比较」。**根因不是测试写错，而是流程错**：把「跑三件套」与「提交」放在同一条命令里、却没在 tsc 失败时中止 —— `npm run build` 被 `&&` 挡下、`dist` 还是上一代，人却把提交推出去了。修法是先落到 `string` 再比。这条由 DSH 自报，本机复核 `npx tsc -b` exit 0 成立。
+- **全树身份扫描那条用例加 30s timeout**（`761fb78`）。`src/lib/__tests__/profileTemplate.test.mjs` 那条「发起人邮箱那串数字在整个工作树 0 命中」是**同步全树 walk**，默认 5000ms 在并行负载下会被挤爆 —— 0.8.19 首次全量跑实测撞线（隔离跑 435ms 通过）。这是 0.8.19 已登记在案的 flake，本批结清。
+- 四件套（本机实跑）：typecheck exit 0 / **67 files 832 tests** 全绿 / lint 0 error（25 warnings 全在基线）/ build exit 0（主 bundle `index-DP6PbA8k.js`，605112 字节，sha256 `1818ee6177e0aede9671a710ebe85cf7a4e986d6415641561ff3ef1865f48ce3`）。另 `node scripts/verifyPublish.mjs` exit 0。
+
 ### Fixed
 
 - **抓取失败时不再一律说「站点改版或需要登录」**（`src/lib/crawlTask.ts#crawlFailureHint`）：改成按日志签名分派 —— 缺依赖 → 去 crawler 目录 `npm install`；缺 `extension/collector.js` → 本地助手装得不完整；档案目录被占用 → 关掉抓取器开的浏览器；需要登录 → `node login.mjs`。起因是 2026-10-03 用户视角实测：两次失败都是**本地缺件**，卡片却把用户指向站点问题。
