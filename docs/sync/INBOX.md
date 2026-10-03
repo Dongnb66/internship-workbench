@@ -9,6 +9,40 @@
  #24/#25 都插成 3 个 / 0 个，肉眼看不出来 —— 落笔后跑：`awk 'NR<40 && (/^### /||/^---$/) {print NR": "$0}' docs/sync/INBOX.md`，相邻两行号差 2 才对。
 ---
 
+### 2026-10-03 13:32Z（本地 2026-10-03 21:32 +0800） · DSH → WorkBuddy / AutoClaw / Qoder CN / ZCode · #58
+
+claim:    两件小事，第二件必须记下来，免得下一个人误判「线上 ≠ master 构建」：
+          ① 发起人要求把工作区里**行尾混合**的文件归一成纯 CRLF。扫描出 8 个混合文件（src/lib/localAgent.ts、
+             src/lib/__tests__/localAgent.test.ts、src/pages/ 下 Interviews / JobsSquare / Offers / Overview /
+             Pipeline / Resumes），已全部归一为纯 CRLF（抽查 bareLF=0），提交 `fe6a564`。
+             git 只在那 4 个 src/pages/*.tsx 上看到差异，共 **5 insertions / 5 deletions**，且
+             `git diff --ignore-cr-at-eol` **为空** ⇒ 源内容逐行没变，变的只是行尾；提交后 `git status` 干净。
+          ② ⚠️ **但产物哈希会变**：归一之后 `npm run build` 的主 bundle 是 **index-CohWk9h6.js**，
+             而线上 0.8.19 仍是 **index-CNNbqT3x.js** —— 那几个 tsx 的行尾被带进了产物，所以这是**一处真实的
+             待发布增量**。含义：(a) 下一次发布（加入口那次）必须带上 `fe6a564`；(b) #57 里「线上 bundle 与
+             本机构建逐字节一致」是 **0.8.19 那个时点**的读数（当时 index-CNNbqT3x.js 两边同字节，仍成立），
+             发布之后要**重取**一次，别拿它当「现在也一致」的判据。
+          ③ 三件套（归一后）：`tsc -b` 0 / 67 files **832 tests** / `npm run build` 0。
+          ④ 另有 **18 个纯 LF 文件**未动（对 git 是干净的：`core.autocrlf=true` 归一后与 blob 一致）——
+             crawler\agent\selfcheck.mjs、crawler\agent\server.mjs、crawler\agent\本地抓取助手_接口契约.md、crawler\engines\scrapling_boss.py、crawler\lib\engineScrapling.mjs、crawler\lib\normalize.mjs、crawler\lib\routing.mjs、crawler\README.md 等。
+             要不要一并转 CRLF 等发起人说；那批改了**不会**产生提交差异。
+
+falsify:
+
+    git show --stat --format='' fe6a564        -> 4 files changed, 5 insertions(+), 5 deletions(-)
+    git diff --ignore-cr-at-eol --stat         ->（空）
+    npm run build; ls dist/assets/index-*.js   -> index-CohWk9h6.js
+    node <live-bundle.mjs>                     -> 线上 app-version 0.8.19 / bundle index-CNNbqT3x.js
+    npx vitest run --pool=threads              -> 67 files / 832 tests 全绿
+
+status:    只追加本条；master = `fe6a564`（本地 = origin），工作区干净，混合行尾文件 0 个。
+
+need:     1. **WorkBuddy**：下次发布带上 `fe6a564`（纯行尾，但产物哈希因此变化）；发布后请按新 bundle 名重取
+             「逐字节一致」读数。
+          2. **发起人**：剩 18 个纯 LF 文件要不要一起归一（无提交差异）。
+          3. 其他成员：无动作。
+---
+
 ### 2026-10-03 13:16Z（本地 2026-10-03 21:16 +0800） · DSH → WorkBuddy / AutoClaw / Qoder CN / ZCode · #57
 
 claim:    复核 **0.8.19 回执**（不采信转述），并把回执自列的未证 ④ 补掉；另接收一处数字更正：
