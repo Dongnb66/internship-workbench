@@ -202,15 +202,30 @@ export async function listOutputs(): Promise<AgentOutputFile[]> {
 }
 
 /**
- * 只留本次抓取新写出的产出。
+ * 只留本次抓取**真正新写出**的产出。
  *
- * before 为 null（快照没取到）→ 原样返回，退化成旧行为，绝不把结果吞掉；
- * 差集为空（同一分钟内重跑、文件名撞了）→ 取最新的一个（服务端按 mtime 倒序）。
+ * 为什么要它：助手的 `result.outputs` 是「output/ 里最近的几个文件」，**不是本次产出**。
+ * 2026-10-03 用户视角实测：第二次抓取（爬虫去重后 0 条新增、根本不写文件）界面却按 10 条弹导入预览。
+ *
+ * 判据必须用 **mtime**（`/outputs` 提供了），不能只比文件名 —— 同名重写是真实存在的：
+ *   · 文件名不在快照里      → 本次新建 ✓
+ *   · 同名但 mtime 变新     → 本次重写 ✓
+ *   · 同名且 mtime 没变      → 本次没写它 ✗（去重跳过时不写文件）
+ * before 为 null（快照没取到）→ 原样返回，退化成旧行为，绝不把结果吞掉。
+ * **返回空数组 = 本次没有新岗位**，界面要如实这么说，不许拿旧文件冒充新结果。
  */
-export function freshOutputs<T extends { file: string }>(all: T[], before: ReadonlySet<string> | null): T[] {
+export function freshOutputs<T extends { file: string }>(
+  all: T[],
+  before: ReadonlyMap<string, number> | null,
+  after?: ReadonlyMap<string, number>,
+): T[] {
   if (!before) return all
-  const fresh = all.filter((o) => !before.has(o.file))
-  return fresh.length ? fresh : all.slice(0, 1)
+  return all.filter((o) => {
+    const was = before.get(o.file)
+    if (was === undefined) return true
+    const now = after?.get(o.file)
+    return now !== undefined && now > was
+  })
 }
 
 /** 浏览器「本地网络访问」权限状态；查不到就 unknown（不猜） */

@@ -5,7 +5,7 @@ import { errText } from '../cloud'
 import { listRows } from '../lib/api'
 import { crawlFailureHint, crawlOutputHint, buildCrawlPlan } from '../lib/crawlTask'
 import { crawlSitesForPicker, type CrawlSite } from '../lib/crawlSites'
-import { AGENT_DOWNLOAD_URL, AgentTimeoutError, freshOutputs, getTask, jobsToImportText, listOutputs, listSites, lnaHelpFor, lnaPermissionState, probe, startCrawl, type AgentHealth, type CrawlTask } from '../lib/localAgent'
+import { AGENT_DOWNLOAD_URL, AgentTimeoutError, freshOutputs, getTask, jobsToImportText, listOutputs, listSites, lnaHelpFor, lnaPermissionState, probe, startCrawl, type AgentHealth, type CrawlTask, type CrawlTaskOutput } from '../lib/localAgent'
 import { notifyErr, notifyOk } from '../lib/toast'
 import type { PageProps } from './Overview'
 import type { Row } from '../types'
@@ -54,8 +54,10 @@ export default function Crawler({ profile, onChanged }: PageProps) {
   const [agentTimeout, setAgentTimeout] = useState(false)
   /** 浏览器「本地网络访问」权限状态；unknown = 查不到，不猜 */
   const [lnaState, setLnaState] = useState<'granted' | 'denied' | 'prompt' | 'unknown'>('unknown')
-  /** 抓取前 output/ 的文件名快照：跑完筛出「本次产出」（服务端 result.outputs 是目录里最近几个文件） */
-  const outputsBeforeRef = useRef<Set<string> | null>(null)
+  /** 抓取前 output/ 的快照（文件名 → mtime）：跑完用它筛出「本次产出」 */
+  const outputsBeforeRef = useRef<Map<string, number> | null>(null)
+  /** 本次真正新写出的产出（界面显示与导入都用它，别拿旧文件冒充新结果） */
+  const [freshResult, setFreshResult] = useState<CrawlTaskOutput[]>([])
   const [agentBusy, setAgentBusy] = useState<string | null>(null)
   const [agentSiteCount, setAgentSiteCount] = useState(0)
   const [task, setTask] = useState<CrawlTask | null>(null)
@@ -82,6 +84,15 @@ export default function Crawler({ profile, onChanged }: PageProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [sites, selected, urls, keyword, pages, limit, mode],
   )
+
+  /** output/ 的 文件名 → mtime 快照；取不到返回 null，让调用方退化成旧行为 */
+  async function outputSnapshot(): Promise<Map<string, number> | null> {
+    try {
+      return new Map((await listOutputs()).map((o) => [o.name, o.mtime]))
+    } catch {
+      return null
+    }
+  }
 
   async function probeAgent() {
     setAgentState('checking')
@@ -115,8 +126,18 @@ export default function Crawler({ profile, onChanged }: PageProps) {
   /** 跑完的产出 → 现有导入文本格式 → 打开既有「批量导入」弹窗（入库零新代码） */
   async function deliverResult(t: CrawlTask) {
     // 只导本次产出：服务端把 output/ 里最近几个文件都算进来，不过滤的话第二次抓取起会把上一批
-    // 一起塞进导入预览（2026-10-03 用户视角实测：本次 5 条，界面「共 10 条」）
-    const jobs = freshOutputs(t.result?.outputs ?? [], outputsBeforeRef.current).flatMap((o) => o.jobs ?? [])
+    // 一起塞进导入预览（2026-10-03 实测：本次 0 条新增，界面却「共 10 条」）
+    const fresh = freshOutputs(t.result?.outputs ?? [], outputsBeforeRef.current, await outputSnapshot())
+    setFreshResult(fresh)
+    if (!fresh.length) {
+      notifyErr(
+        outputsBeforeRef.current
+          ? '本次没有新增岗位 —— 爬虫会跳过已见过的岗位（output/.seen-*.json）。换个关键词，或删掉那些 .seen 文件再抓。'
+          : '抓取结束，但没有读到岗位数据 —— 看看下面的日志里提示了什么',
+      )
+      return
+    }
+    const jobs = fresh.flatMap((o) => o.jobs ?? [])
     if (!jobs.length) {
       notifyErr('抓取结束，但没有读到岗位数据 —— 看看下面的日志里提示了什么')
       return
@@ -172,12 +193,9 @@ export default function Crawler({ profile, onChanged }: PageProps) {
     }
     setStarting(true)
     try {
-      // 抓取前记下 output/ 已有哪些文件：跑完做差集，只把本次产出送进导入预览
-      try {
-        outputsBeforeRef.current = new Set((await listOutputs()).map((o) => o.name))
-      } catch {
-        outputsBeforeRef.current = null // 快照拿不到就退化成旧行为，别把结果吞掉
-      }
+      // 抓取前记下 output/ 的快照：跑完按「新文件名 / 同名但 mtime 变新」筛出本次产出
+      outputsBeforeRef.current = await outputSnapshot()
+      setFreshResult([])
       const res = await startCrawl({ sites: selected, keyword: keyword.trim(), pages, limit, mode })
       setCommand(res.command)
       setTask({
@@ -227,9 +245,7 @@ export default function Crawler({ profile, onChanged }: PageProps) {
   /** 超时指引：按当前浏览器给设置路径（设置页不能点链接跳转 → 给复制按钮） */
   const lnaHelp = lnaHelpFor()
   const lnaStateLabel = { granted: '已允许', denied: '已被拒绝', prompt: '还没决定', unknown: '查不到' }[lnaState]
-  /** 只算本次抓取的产出（服务端 outputs 是目录里最近几个文件，不是本次产出） */
-  const resultOutputs = freshOutputs(task?.result?.outputs ?? [], outputsBeforeRef.current)
-  const totalJobs = resultOutputs.reduce((n, o) => n + (o.count || o.jobs.length), 0) ?? 0
+  const totalJobs = freshResult.reduce((n, o) => n + (o.count || o.jobs.length), 0)
 
   return (
     <div className="grid" style={{ gap: 14 }}>
@@ -364,9 +380,9 @@ export default function Crawler({ profile, onChanged }: PageProps) {
               <pre ref={logRef} className="mono" style={{ ...PRE_STYLE, maxHeight: 260 }}>
                 {task.log.length ? task.log.join('\n') : '（等待抓取器输出…）'}
               </pre>
-              {task.state === 'done' && task.result?.outputs.length ? (
+              {task.state === 'done' && freshResult.length ? (
                 <div className="small muted mt8">
-                  共 {totalJobs} 条：{resultOutputs.map((o) => `${o.file}（${o.count} 条）`).join('、')}
+                  共 {totalJobs} 条：{freshResult.map((o) => `${o.file}（${o.count} 条）`).join('、')}
                 </div>
               ) : null}
               {task.state === 'failed' ? <div className="small muted mt8">{crawlFailureHint(task)}</div> : null}

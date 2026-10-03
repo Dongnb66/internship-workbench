@@ -298,16 +298,23 @@ describe('请求被浏览器权限闸门挂住时，探测不能永远不返回'
   })
 })
 
-describe('只导本次产出（抓取前后的 output/ 差集）', () => {
-  it('抓取前已存在的产出要被滤掉 —— 否则第二次抓取起会把上一批混进导入预览', () => {
-    const all = [
-      { file: 'hikvision__前端-2026-10-03_2304.json' },
-      { file: 'hikvision-2026-10-03_2029.json' },
-    ]
-    // 实测场景：本次只抓到 5 条，服务端却把 20:29 那次的文件一起回了 → 界面「共 10 条」
-    expect(freshOutputs(all, new Set(['hikvision-2026-10-03_2029.json']))).toEqual([
-      { file: 'hikvision__前端-2026-10-03_2304.json' },
-    ])
+describe('只导本次产出（抓取前后的 output/ 快照）', () => {
+  it('文件名不在快照里 → 本次新建，保留', () => {
+    const all = [{ file: 'new.json' }, { file: 'old.json' }]
+    const before = new Map([['old.json', 100]])
+    expect(freshOutputs(all, before, new Map([['new.json', 200], ['old.json', 100]]))).toEqual([{ file: 'new.json' }])
+  })
+
+  it('同名但 mtime 变新 → 本次重写，保留', () => {
+    const all = [{ file: 'same.json' }]
+    expect(freshOutputs(all, new Map([['same.json', 100]]), new Map([['same.json', 300]]))).toEqual([{ file: 'same.json' }])
+  })
+
+  it('实测场景：本次 0 条新增（爬虫去重跳过、不写文件）→ 必须返回空，不许拿旧文件冒充新结果', () => {
+    // 2026-10-03 真机：第二次抓同一站点+关键词，日志「与历史产出重复 5 条 / 0 条」，output/ 的 mtime 一个都没变
+    const all = [{ file: 'hikvision__前端-2026-10-03_2304.json' }, { file: 'hikvision-2026-10-03_2029.json' }]
+    const before = new Map([['hikvision__前端-2026-10-03_2304.json', 15_04_06], ['hikvision-2026-10-03_2029.json', 12_29_39]])
+    expect(freshOutputs(all, before, before)).toEqual([])
   })
 
   it('快照没取到（null）→ 原样返回，退化成旧行为，绝不把结果吞掉', () => {
@@ -315,13 +322,8 @@ describe('只导本次产出（抓取前后的 output/ 差集）', () => {
     expect(freshOutputs(all, null)).toEqual(all)
   })
 
-  it('差集为空（同一分钟内重跑、文件名撞了）→ 取最新的一个（服务端按 mtime 倒序）', () => {
-    const all = [{ file: 'same.json' }, { file: 'older.json' }]
-    expect(freshOutputs(all, new Set(['same.json', 'older.json']))).toEqual([{ file: 'same.json' }])
-  })
-
   it('空产出不炸', () => {
-    expect(freshOutputs([], new Set(['x.json']))).toEqual([])
+    expect(freshOutputs([], new Map([['x.json', 1]]))).toEqual([])
   })
 })
 
