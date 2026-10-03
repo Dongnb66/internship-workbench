@@ -260,8 +260,9 @@ export const SITES = [
     strategy: 'auto',
     wait: 3500,
     needsLogin: true,
-    notes: '⚠️ 在 Playwright 技术栈下不可用。实跑：BOSS 挂了 browser-check-v2.js 检测，登录页持续重载（扫码无法完成），渲染后的 DOM 也拿不到 —— HTML 只有 8.5KB 空壳、0 张卡片；换真 Edge 内核、抹掉 navigator.webdriver、换 UA 都无效。实测可用路径见 Scrapling 方案（patchright 内核 + headed + 串行 + 页间 12 秒），能正常登录并抓到 15 条。不追求自动化就用 extension/，在本机浏览器里读当前页，更稳',
-    verified: 'offline',
+    engine: 'scrapling',
+    notes: '⚠️ 只在 --engine scrapling 下可用，默认 Playwright 内核不可用。实跑（2026-10-02，同一账号同一页）：默认内核 HTML 只有 8.5KB 空壳、0 张卡片，登录页持续重载（换真 Edge 内核、抹 navigator.webdriver、换 UA 均无效，因为 BOSS 挂了 browser-check-v2.js）；scrapling（patchright 内核 + headed + 串行）实跑抓到 15 条、薪资 15/15 有值、产出可直接批量导入。不带 --engine 跑到这个站点会被抓取器直接挡下并提示加引擎，不会静默给你 0 条。不追求自动化就用 extension/，在本机浏览器里读当前页，更稳',
+    verified: 'live',
   },
   {
     id: 'moka',
