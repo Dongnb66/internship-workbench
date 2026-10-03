@@ -3,6 +3,7 @@ import { guessFromBlock, splitJobBlocks } from '../import'
 import {
   AGENT_BASE,
   AGENT_DOWNLOAD_URL,
+  AGENT_PORTABLE_URL,
   AgentTimeoutError,
   freshOutputs,
   getTask,
@@ -103,11 +104,14 @@ describe('GET /health 探测', () => {
     expect(Array.isArray(health.outputs)).toBe(true)
   })
 
-  it('下载入口常量只能是「空」或 https 的 .zip 直链 —— 不允许占位符上线', () => {
+  it('下载入口常量只能是「空」或 https 的文件直链 —— 不允许占位符上线', () => {
     // 空 = 不显示下载入口。平台托管后填直链；这里挡的是 TODO / 相对路径 / HTML 中间页这类值。
+    // 主入口是**安装包 .exe**（双击即装）；手动那条路仍是 .zip。
     // 先落到 string 再比：常量是字面量类型，直接与 '' 比会被 TS 判成「不可能的比较」（TS2367）。
-    const url: string = AGENT_DOWNLOAD_URL
-    expect(url === '' || /^https:\/\/\S+\.zip$/.test(url)).toBe(true)
+    const setup: string = AGENT_DOWNLOAD_URL
+    expect(setup === '' || /^https:\/\/\S+\.(exe|zip)$/.test(setup)).toBe(true)
+    const portable: string = AGENT_PORTABLE_URL
+    expect(portable === '' || /^https:\/\/\S+\.zip$/.test(portable)).toBe(true)
   })
 
   it('自检字段（ready / problems）按契约透传；老版本助手不回这两个字段也不能炸', async () => {

@@ -5,7 +5,7 @@ import { errText } from '../cloud'
 import { listRows } from '../lib/api'
 import { crawlFailureHint, crawlOutputHint, buildCrawlPlan, CRAWLER_PREFS_KEY, parseCrawlerPrefs, serializeCrawlerPrefs } from '../lib/crawlTask'
 import { crawlSitesForPicker, type CrawlSite } from '../lib/crawlSites'
-import { AGENT_DOWNLOAD_URL, AgentTimeoutError, freshOutputs, getTask, jobsToImportText, listOutputs, listSites, lnaHelpFor, lnaPermissionState, probe, startCrawl, type AgentHealth, type CrawlTask, type CrawlTaskOutput } from '../lib/localAgent'
+import { AGENT_DOWNLOAD_URL, AGENT_PORTABLE_URL, AgentTimeoutError, freshOutputs, getTask, jobsToImportText, listOutputs, listSites, lnaHelpFor, lnaPermissionState, probe, startCrawl, type AgentHealth, type CrawlTask, type CrawlTaskOutput } from '../lib/localAgent'
 import { notifyErr, notifyOk } from '../lib/toast'
 import type { PageProps } from './Overview'
 import type { Row } from '../types'
@@ -272,7 +272,13 @@ export default function Crawler({ profile, onChanged }: PageProps) {
    */
   const downloadAnchor = AGENT_DOWNLOAD_URL ? (
     <a href={AGENT_DOWNLOAD_URL} target="_blank" rel="noreferrer">
-      下载最新版本地助手（zip，含 Node 运行时）
+      下载本地助手安装包（.exe，双击即装）
+    </a>
+  ) : null
+  /** 手动安装那条路（zip + 双击 start-hidden.vbs） */
+  const portableAnchor = AGENT_PORTABLE_URL ? (
+    <a href={AGENT_PORTABLE_URL} target="_blank" rel="noreferrer">
+      手动安装（zip）
     </a>
   ) : null
   /** 装不上 / 装坏了时用的块级版本（带换行） */
@@ -326,15 +332,18 @@ export default function Crawler({ profile, onChanged }: PageProps) {
               {agentError ?? '本地助手没在跑，「开始抓取」用不了。'}
               {downloadAnchor ? (
                 <div className="mt8">
-                  装上它只要四步：
+                  <strong>装上它只要一次双击：</strong>
                   <ol style={{ margin: '6px 0 0 18px', padding: 0 }}>
-                    <li>点上面的「下载最新版本地助手」，把 zip 存到本机</li>
-                    <li>右键那个 zip → 属性 → 勾「解除锁定」→ 确定（Windows 对下载文件的保护；不解除可能双击没反应）</li>
+                    <li>点上面的「下载本地助手安装包（.exe）」</li>
                     <li>
-                      解压到任意目录，双击里面的 <span className="mono">start-hidden.vbs</span>（无窗口，后台常驻）
+                      双击那个 exe。首次可能弹「Windows 已保护你的电脑」→ 点「更多信息」→「仍要运行」（没签名，属正常）
                     </li>
-                    <li>回到本页等它自己变绿，或点右上角「重新检测」</li>
+                    <li>等它提示「安装完成」（它会自己启动助手、并设为开机自启），回到本页即可 —— 这页会自动变绿</li>
                   </ol>
+                  <div className="mt8">
+                    不想跑安装包？{portableAnchor ?? '手动装 zip'}：右键 zip → 属性 → 勾「解除锁定」→ 解压 → 双击
+                    <span className="mono"> start-hidden.vbs</span>。
+                  </div>
                 </div>
               ) : (
                 packageLink
@@ -406,7 +415,8 @@ export default function Crawler({ profile, onChanged }: PageProps) {
           ) : null}
           {downloadAnchor ? (
             <div className="small muted mt8">
-              没装过、或抓取报「装得不完整」？{downloadAnchor} —— 解压后双击 start-hidden.vbs，再点右上角「重新检测」。
+              没装过、或抓取报「装得不完整」？{downloadAnchor}（双击即装）；{portableAnchor ?? null}
+              {portableAnchor ? '（zip：解压后双击 start-hidden.vbs）' : ''}
             </div>
           ) : null}
 
