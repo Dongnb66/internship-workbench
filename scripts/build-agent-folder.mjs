@@ -94,22 +94,7 @@ if (!flag('npm') && existsSync(path.join(localModules, 'playwright-core'))) {
   }
 }
 
-writeFileSync(
-  path.join(OUT, '安装说明.txt'),
-  [
-    '实习工作台 · 本地抓取助手',
-    '',
-    '这个目录必须包含三样，缺一样网页上点「开始抓取」都会失败：',
-    '  crawler/                             抓取器本体',
-    '  extension/collector.js               采集脚本（crawler 会去 ../extension/collector.js 找它）',
-    '  crawler/node_modules/playwright-core 依赖',
-    '',
-    '自检：node crawler/agent/selfcheck.mjs    （退出码 0 = 三样都在）',
-    '启动/停止/卸载脚本由安装器生成 —— 本项目只负责把上面三样打全、并在最后自检。',
-    '',
-  ].join('\n'),
-  'utf8',
-)
+writeLaunchers()
 
 const install = checkInstall({ crawlerDir: CRAWLER_OUT })
 console.log('')
@@ -120,3 +105,47 @@ if (!install.ready) {
   process.exit(1)
 }
 console.log('✅ 自检通过：采集脚本在、依赖在、浏览器在（' + (install.browser ? install.browser.label : '?') + '）')
+
+/** 启动/停止/卸载脚本 + 说明：产物直接双击就能用，不依赖外部安装器 */
+function writeLaunchers() {
+  const nl = String.fromCharCode(13, 10)
+  const bs = String.fromCharCode(92)
+  const sq = String.fromCharCode(39)
+  const vbs = [
+    sq + ' 隐藏窗口启动本地助手（自定位：不写死安装路径）',
+    'Set fso = CreateObject("Scripting.FileSystemObject")',
+    'root = fso.GetParentFolderName(WScript.ScriptFullName)',
+    'Set sh = CreateObject("WScript.Shell")',
+    'sh.CurrentDirectory = root',
+    'sh.Run """" & root & "' + bs + 'node' + bs + 'node.exe"" """ & root & "' + bs + 'crawler' + bs + 'agent' + bs + 'server.mjs""", 0, False',
+    '',
+  ].join(nl)
+  writeFileSync(path.join(OUT, 'start-hidden.vbs'), vbs, 'utf8')
+
+  const psFilter = bs + '"Name=' + sq + 'node.exe' + sq + bs + '"'
+  const stopPs = 'powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter ' + psFilter + ' | Where-Object { $_.CommandLine -like ' + sq + '*agent*server.mjs*' + sq + ' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }"'
+  writeFileSync(path.join(OUT, '停止助手.cmd'), ['@echo off', 'cd /d "%~dp0"', 'echo Stopping the local agent...', stopPs, 'echo Done.', 'pause > nul', ''].join(nl), 'utf8')
+
+  const uninstallReg = 'reg delete "HKCU' + bs + 'Software' + bs + 'Microsoft' + bs + 'Windows' + bs + 'CurrentVersion' + bs + 'Run" /v InternshipWorkbenchAgent /f'
+  writeFileSync(path.join(OUT, '卸载.cmd'), ['@echo off', 'cd /d "%~dp0"', 'echo Removing startup entry...', uninstallReg + ' >nul 2>&1', 'echo Stopping agent...', stopPs, 'echo Done. You can now delete this folder.', 'pause > nul', ''].join(nl), 'utf8')
+
+  writeFileSync(
+    path.join(OUT, '安装说明.txt'),
+    [
+      '实习工作台 · 本地抓取助手',
+      '',
+      '启动：双击 start-hidden.vbs（无窗口）。开机自启：把它的快捷方式放进 shell:startup。',
+      '停止：双击 停止助手.cmd',
+      '卸载：双击 卸载.cmd，然后删掉整个目录。',
+      '',
+      '这个目录必须包含三样，缺一样网页上点「开始抓取」都会失败：',
+      '  crawler/                             抓取器本体',
+      '  extension/collector.js               采集脚本（crawler 会去 ../extension/collector.js 找它）',
+      '  crawler/node_modules/playwright-core 依赖',
+      '',
+      '自检：node crawler/agent/selfcheck.mjs    （退出码 0 = 三样都在）',
+      '',
+    ].join(nl),
+    'utf8',
+  )
+}
