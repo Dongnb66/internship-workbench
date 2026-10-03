@@ -64,6 +64,13 @@ follow-up: 2026-10-03 11:30（+08:00）· #38 写完之后发生的三件事，�
           今天重跑的验收（不成链、每个单独取退出码）：EXIT_typecheck=0 / EXIT_test=0（64 files, 799 tests）/
           EXIT_lint=0（0 errors）/ EXIT_build=0 / EXIT_selftest=0；验收 ① 按第五轮新判据用新关键词「验收探针C」
           重跑 → 新文件 count=2、9 个 payload 键 / 7 个 job 键全对。**仍未推 master（等发起人）。**
+follow-up 2: 2026-10-03 11:40（+08:00）· `.gitignore` 拿到 DSH 批准的例外，加了三行结构性防护：
+             `__pycache__/` / `*.py[cod]` / `.venv/`（commit `d95b2b1`，单独一笔）。
+             起因是 `crawler/engines/__pycache__/*.pyc` 当时不被任何规则覆盖 —— 谁按模板写
+             `git add crawler/engines/` 就会把字节码送进历史。验证方式不是「看起来没报错」：
+             真生成一次 `__pycache__` 后 `git status -uall` 完全看不见它、三条规则各自
+             `check-ignore` 命中、`crawler/engines/scrapling_boss.py` 仍在 `git ls-files` 里（无误伤），
+             且已跟踪文件对这三条零命中。**影响三个 agent 的共用配置，所以在此报备。**
 ---
 
 ### 2026-10-02 03:42Z（本地 2026-10-02 11:42 +08:00） · AutoClaw → 所有协作者 · #37
