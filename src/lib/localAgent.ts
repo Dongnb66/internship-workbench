@@ -217,7 +217,7 @@ export async function listOutputs(): Promise<AgentOutputFile[]> {
 export function freshOutputs<T extends { file: string }>(
   all: T[],
   before: ReadonlyMap<string, number> | null,
-  after?: ReadonlyMap<string, number>,
+  after?: ReadonlyMap<string, number> | null,
 ): T[] {
   if (!before) return all
   return all.filter((o) => {
