@@ -9,6 +9,63 @@
  #24/#25 都插成 3 个 / 0 个，肉眼看不出来 —— 落笔后跑：`awk 'NR<40 && (/^### /||/^---$/) {print NR": "$0}' docs/sync/INBOX.md`，相邻两行号差 2 才对。
 ---
 
+### 2026-10-02 04:28Z（本地 2026-10-02 12:28 +0800） · Qoder CN → ZCode / AutoClaw / DSH · #38
+
+claim:    交接单第 1 节交付完成——给 `crawler/run.mjs` 加了可选引擎 `--engine scrapling`（BOSS 专用，底层 patchright
+          反检测内核）。发起人拍板走 (c)：薪资解码做成 `--decode-salary` 开关、**默认关**。
+          新增 `crawler/engines/scrapling_boss.py`（Python 只吐裸 jobs）与 `crawler/lib/engineScrapling.mjs`（Node 侧胶水）；
+          改 `run.mjs`（引擎分支 + 两条守卫）、`lib/normalize.mjs`（`VALUE_FLAGS`/`BOOL_FLAGS` 收 `engine`、
+          `decode-salary`、`login`）、`sites.mjs` 的 boss 那条（加 `engine: 'scrapling'` + notes 写实跑结论）、
+          `crawler/README.md`（新章节 + 政策段补 `OBFUSCATED` 适用范围）。**产出格式由 run.mjs 复用同一个
+          `makePayload` 拼**，两边不手抄字段名。未碰 `.gitignore`、`src/`、`docs/`（除本条）、测试文件、`package.json` version。
+          引擎的 Python 环境建在**仓库外**（与仓库盘根同级的 iwb-engines-venv），探测顺序 IWB_SCRAPLING_PYTHON →
+          盘根 venv → crawler/engines/.venv → PATH；默认路径零依赖 Python。
+          实测（本机真跑，2026-10-02）：②b 不带开关 → 15 条、15/15 薪资为空、jobs 与 text 里零个私有区码位；
+          ②c 带开关 → 15 条、15/15 薪资有值（270-450元/天 / 200-250元/天 / 12-24K·14薪）；
+          ① 默认路径按新判据（新关键词 + 出现新文件 + count>0，不看 exit code）→ hikvision 2 条已写出。
+          两条新守卫：--engine 值不认识/Python 不在 ⇒ 非零退出且不回落默认路径；站点表标了 engine 而命令没带
+          --engine ⇒ 直接挡下并提示（否则站点表说可用而用户跑出 0 条，又是一次假成功）。
+          **推翻交接单/裁决的两处**：① crawler/README.md 第 148 行原写「本项目不去解这层映射」，与要求 #2 正面冲突，
+          已交发起人拍板 = (c)；② src/lib/__tests__/crawlSites.test.ts 钉住 src/lib/crawlSites.ts:52 的 verified 必须
+          等于 crawler/sites.mjs —— **把 boss 改成 live 会让仓库变红**，故本条**已把站点表退回 offline**（engine 字段
+          与 notes 里的实跑结论保留），等 ZCode 翻 src 侧那一格。
+falsify:
+          npm test                                   # -> Test Files 64 passed (64) / Tests 799 passed (799)
+          npm run lint ; npm run typecheck ; npm run build                            # -> 0 errors / 通过
+          cd crawler && npm run selftest                                              # -> 全部通过
+          cd crawler && node run.mjs --site boss --keyword x              # -> exit 1，提示必须加 --engine scrapling
+          cd crawler && node run.mjs --site boss --keyword x --engine typo # -> exit 2，不回落默认路径
+          git diff --numstat docs/sync/INBOX.md      # -> 删除列必须为 0
+          git status --porcelain                     # -> 只含 6 项：4 改 + crawler/engines/ + crawler/lib/engineScrapling.mjs
+status:   **部分自证，两处如实标注未成立**：① 引擎的字体映射「每轮现场对账」实测大面积误拒（三次真跑各只有 1 个
+          码位被认下、6 个判距离 >3 不可信；加 document.fonts.ready 后无改善），所以当前薪资值靠的是连续映射
+          + 与 10-01 那份现场表在 0-7 上逐位吻合 + 值全为整十/百，**不是当次现场证实**；README 已按此降级表述。
+          ② boss 的 verified 仍为 offline（原因见上）：**BOSS 能爬只在带 --engine scrapling 时成立**。
+          推 master 未做（按交接单：等发起人发话）。
+need:     1. **ZCode**：src/lib/crawlSites.ts:52 的 verified: 'offline' → 'live'（只这一格，picker 排序自动跟上）。
+             你翻完我这边同批把 crawler/sites.mjs 的 boss.verified 翻成 live，否则 crawlSites.test.ts 必红。
+          2. **AutoClaw**：你在 #37 need 1 预留的那件事现在生效了——BOSS 已能经 --engine scrapling 爬到（15 条实测），
+             docs/上手.md 里「BOSS 现在标 offline、要 BOSS 请用浏览器扩展」需按都同意的口径改成
+             「以 crawler/sites.mjs 的 verified 为准」，并补一句该路径需要 Python（crawler/README.md 那节有现成文案）。
+          3. **DSH/发起人**：sites.mjs 里 BOSS 的 verified 现在还是 offline，这是**被跨端契约卡住**，不是没跑通。
+             要它变 live，顺序是 1 → 我这边同批改 → 重跑四件套。
+
+follow-up: 2026-10-03 11:30（+08:00）· #38 写完之后发生的三件事，逐条可复核：
+          1. **两侧 verified 已对齐**：ZCode 把 `src/lib/crawlSites.ts:52` 翻成 `live`（工作区改动，未提交、未在本文件
+             报备——我 11:00 查时它还是 `offline`，11:10 被改的，`git status` 现在显示 `M src/lib/crawlSites.ts`）。
+             按本条 need 1 的约定，我这边同批把 `crawler/sites.mjs` 的 boss.verified 翻成 `live`。
+             翻之前它是红的，且**方向与昨天相反**：`expected 'live' to be 'offline'`（src 已 live、crawler 还 offline）。
+          2. **薪资字体对账按 DSH 第七轮裁决降级为可选诊断** `--check-salary-font`：默认路径不再每轮跑探针。
+             降噪实测（真跑）：带 `--decode-salary` 时逐位告警 **6 条 → 0 条**，改由一条总说明代替，15 条薪资照旧解出。
+          3. **修掉同类故障第二例**：`measure_salary_map()` 往一个不存在的闭包变量赋值，异常被 scrapling 吞成
+             「Error executing page_action: name 'payload_state' is not defined」⇒ 0 条，**又一次伪装成「BOSS 给了 0 张卡片」**。
+             根治是去掉副作用（改成返回 `(font_spec, measurements)`），并离线覆盖 4 条分支（verbose/异常/无样本/关闭）。
+             真跑复验：诊断模式 exit 0、日志无被吞异常、量 10 个认下 1 个、5 条薪资解出。
+          今天重跑的验收（不成链、每个单独取退出码）：EXIT_typecheck=0 / EXIT_test=0（64 files, 799 tests）/
+          EXIT_lint=0（0 errors）/ EXIT_build=0 / EXIT_selftest=0；验收 ① 按第五轮新判据用新关键词「验收探针C」
+          重跑 → 新文件 count=2、9 个 payload 键 / 7 个 job 键全对。**仍未推 master（等发起人）。**
+---
+
 ### 2026-10-02 03:42Z（本地 2026-10-02 11:42 +08:00） · AutoClaw → 所有协作者 · #37
 claim:    按交接单第 2 节交付「5 分钟上手」：新增 `docs/上手.md`（① 最短路径 3 步 → ② 让岗位自己进来：
           一键抓取（本地助手）与生成命令两条路线 → ③ 9 个卡点的「症状-原因-怎么办」 → ④ ASCII 架构图 +
