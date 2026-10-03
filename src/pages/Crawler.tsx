@@ -48,6 +48,8 @@ export default function Crawler({ profile, onChanged }: PageProps) {
   const [agentError, setAgentError] = useState<string | null>(null)
   /** 助手自检：装得不完整时，缺什么 / 怎么补要显示在点按钮之前 */
   const [agentProblems, setAgentProblems] = useState<AgentHealth['problems']>([])
+  /** 助手是否上报自检字段（ready）；老版本助手没有这个字段 → undefined，用来提示「该更新了」 */
+  const [agentReady, setAgentReady] = useState<boolean | undefined>(undefined)
   const [agentBusy, setAgentBusy] = useState<string | null>(null)
   const [agentSiteCount, setAgentSiteCount] = useState(0)
   const [task, setTask] = useState<CrawlTask | null>(null)
@@ -82,6 +84,7 @@ export default function Crawler({ profile, onChanged }: PageProps) {
       const health = await probe()
       setAgentBusy(health.busy)
       setAgentProblems(health.problems ?? [])
+      setAgentReady(health.ready)
       setAgentState('on')
       // 站点数只是给用户一个「两端连的是同一份抓取器」的确认，读不到不影响主流程
       try {
@@ -91,6 +94,7 @@ export default function Crawler({ profile, onChanged }: PageProps) {
       }
     } catch (error) {
       setAgentError(errText(error))
+      setAgentReady(undefined)
       setAgentState('off')
     }
   }
@@ -189,14 +193,20 @@ export default function Crawler({ profile, onChanged }: PageProps) {
   }
 
   const taskRunning = task?.state === 'running'
-  /** 装不上 / 装坏了时的下载入口：平台托管后 AGENT_DOWNLOAD_URL 才有值，空值时不渲染任何东西 */
-  const packageLink = AGENT_DOWNLOAD_URL ? (
-    <div className="mt8">
-      <a href={AGENT_DOWNLOAD_URL} target="_blank" rel="noreferrer">
-        下载最新版本地助手（zip，含 Node 运行时）
-      </a>
-    </div>
+  /**
+   * 下载入口的锚点。AGENT_DOWNLOAD_URL 为空（还没托管）时整条不渲染。
+   *
+   * 2026-10-03 补：它原来只在「助手没在跑」与「装得不完整」两处出现，于是**旧版助手**
+   * （没有自检字段、连通性正常）的用户在界面上没有任何入口能拿到新包 —— 发起人刷新页面就撞上了这个洞。
+   * 现在改成：卡片底部常驻一条 + 旧版本主动提示 + 上面两处照旧。
+   */
+  const downloadAnchor = AGENT_DOWNLOAD_URL ? (
+    <a href={AGENT_DOWNLOAD_URL} target="_blank" rel="noreferrer">
+      下载最新版本地助手（zip，含 Node 运行时）
+    </a>
   ) : null
+  /** 装不上 / 装坏了时用的块级版本（带换行） */
+  const packageLink = downloadAnchor ? <div className="mt8">{downloadAnchor}</div> : null
   const totalJobs = task?.result?.outputs.reduce((n, o) => n + (o.count || o.jobs.length), 0) ?? 0
 
   return (
@@ -228,6 +238,13 @@ export default function Crawler({ profile, onChanged }: PageProps) {
               ))}
               按上面的「修」补齐后，点右上角「重新检测」再试。
               {packageLink}
+            </div>
+          ) : null}
+
+          {agentState === 'on' && !agentProblems?.length && agentReady === undefined ? (
+            <div className="hint mb8">
+              这台本地助手是<strong>旧版本</strong>（它不上报自检信息）：抓取本身还能用，但缺件时不会提前告诉你。
+              建议{downloadAnchor ?? '更新到最新版'}覆盖安装一次。
             </div>
           ) : null}
 
@@ -273,6 +290,11 @@ export default function Crawler({ profile, onChanged }: PageProps) {
           {hasUrlFilled ? (
             <div className="small mt8" style={{ color: '#d97706' }}>
               「指定地址」里有没清空的地址，一键抓取带不了它们 —— 要抓这类请用下方手动命令方式。
+            </div>
+          ) : null}
+          {downloadAnchor ? (
+            <div className="small muted mt8">
+              没装过、或抓取报「装得不完整」？{downloadAnchor} —— 解压后双击 start-hidden.vbs，再点右上角「重新检测」。
             </div>
           ) : null}
 
