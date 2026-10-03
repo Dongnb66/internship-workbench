@@ -3,7 +3,7 @@ import JobImportModal from '../components/JobImportModal'
 import { Field } from '../components/ui'
 import { errText } from '../cloud'
 import { listRows } from '../lib/api'
-import { crawlFailureHint, crawlOutputHint, buildCrawlPlan } from '../lib/crawlTask'
+import { crawlFailureHint, crawlOutputHint, buildCrawlPlan, CRAWLER_PREFS_KEY, parseCrawlerPrefs, serializeCrawlerPrefs } from '../lib/crawlTask'
 import { crawlSitesForPicker, type CrawlSite } from '../lib/crawlSites'
 import { AGENT_DOWNLOAD_URL, AgentTimeoutError, freshOutputs, getTask, jobsToImportText, listOutputs, listSites, lnaHelpFor, lnaPermissionState, probe, startCrawl, type AgentHealth, type CrawlTask, type CrawlTaskOutput } from '../lib/localAgent'
 import { notifyErr, notifyOk } from '../lib/toast'
@@ -11,6 +11,10 @@ import type { PageProps } from './Overview'
 import type { Row } from '../types'
 
 const CHANNEL_GROUPS = ['官网投递', 'BOSS直聘', '实习僧', '牛客']
+
+/** 助手没在跑时自动重试探测：每 5 秒一次、最多 24 次（约 2 分钟）—— 装好即自动变绿 */
+const AUTO_PROBE_MS = 5000
+const AUTO_PROBE_MAX = 24
 
 const VERDICT_BADGE: Record<CrawlSite['verified'], { label: string; cls: string }> = {
   live: { label: '实测可用', cls: 'badge ok' },
@@ -35,12 +39,22 @@ const PRE_STYLE = { background: 'var(--bg-soft, #f5f5f5)', padding: 12, borderRa
  */
 export default function Crawler({ profile, onChanged }: PageProps) {
   const sites = useMemo(() => crawlSitesForPicker(), [])
-  const [selected, setSelected] = useState<string[]>([])
+  /** 上次抓取的站点/关键词/参数（设备级 localStorage；解析失败退化成默认值） */
+  const initialPrefs = useMemo(() => {
+    let raw: string | null = null
+    try {
+      raw = localStorage.getItem(CRAWLER_PREFS_KEY)
+    } catch {
+      raw = null // 隐私模式等禁掉 localStorage：退化成默认值，不影响抓取
+    }
+    return parseCrawlerPrefs(raw, sites.map((s) => s.id))
+  }, [sites])
+  const [selected, setSelected] = useState<string[]>(() => initialPrefs.sites)
   const [urls, setUrls] = useState<Record<string, string>>({})
-  const [keyword, setKeyword] = useState('')
-  const [pages, setPages] = useState(2)
-  const [limit, setLimit] = useState(60)
-  const [mode, setMode] = useState<'all' | 'intern' | 'campus'>('all')
+  const [keyword, setKeyword] = useState(() => initialPrefs.keyword)
+  const [pages, setPages] = useState(() => initialPrefs.pages)
+  const [limit, setLimit] = useState(() => initialPrefs.limit)
+  const [mode, setMode] = useState<'all' | 'intern' | 'campus'>(() => initialPrefs.mode)
 
   // —— 本地助手（一键抓取）——
   const [agentState, setAgentState] = useState<'checking' | 'off' | 'on'>('checking')
@@ -176,6 +190,27 @@ export default function Crawler({ profile, onChanged }: PageProps) {
     }
   }, [task])
 
+  /** 下载/安装助手期间自动重试探测：装好了一起来就自动变绿，不用用户手动点「重新检测」 */
+  const [autoProbeTries, setAutoProbeTries] = useState(0)
+  useEffect(() => {
+    if (agentState !== 'off' || autoProbeTries >= AUTO_PROBE_MAX) return
+    const timer = setTimeout(() => {
+      setAutoProbeTries((n) => n + 1)
+      void probeAgent()
+    }, AUTO_PROBE_MS)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentState, autoProbeTries])
+
+  // 记住上次的站点/关键词/参数：第二次抓取不用重新勾、重新打（2026-10-03 用户视角实测的卡点）
+  useEffect(() => {
+    try {
+      localStorage.setItem(CRAWLER_PREFS_KEY, serializeCrawlerPrefs({ sites: selected, keyword, pages, limit, mode }))
+    } catch {
+      /* localStorage 被禁：不影响抓取，只是记不住 */
+    }
+  }, [selected, keyword, pages, limit, mode])
+
   // 日志追加时自动滚到底，始终看最新的一行
   useEffect(() => {
     const el = logRef.current
@@ -259,7 +294,7 @@ export default function Crawler({ profile, onChanged }: PageProps) {
           ) : agentState === 'checking' ? (
             <span className="badge">正在探测本地助手…</span>
           ) : (
-            <button className="btn sm" onClick={() => void probeAgent()}>
+            <button className="btn sm" onClick={() => { setAutoProbeTries(0); void probeAgent() }}>
               重新检测
             </button>
           )}
@@ -289,7 +324,26 @@ export default function Crawler({ profile, onChanged }: PageProps) {
           {agentState === 'off' ? (
             <div className="hint warn mb8">
               {agentError ?? '本地助手没在跑，「开始抓取」用不了。'}
-              {packageLink}
+              {downloadAnchor ? (
+                <div className="mt8">
+                  装上它只要四步：
+                  <ol style={{ margin: '6px 0 0 18px', padding: 0 }}>
+                    <li>点上面的「下载最新版本地助手」，把 zip 存到本机</li>
+                    <li>右键那个 zip → 属性 → 勾「解除锁定」→ 确定（Windows 对下载文件的保护；不解除可能双击没反应）</li>
+                    <li>
+                      解压到任意目录，双击里面的 <span className="mono">start-hidden.vbs</span>（无窗口，后台常驻）
+                    </li>
+                    <li>回到本页等它自己变绿，或点右上角「重新检测」</li>
+                  </ol>
+                </div>
+              ) : (
+                packageLink
+              )}
+              {autoProbeTries > 0 ? (
+                <div className="small muted mt8">
+                  已自动重试 {autoProbeTries}/{AUTO_PROBE_MAX} 次（每 {AUTO_PROBE_MS / 1000} 秒一次）—— 助手一起来这页会自动变绿。
+                </div>
+              ) : null}
               {agentTimeout ? (
                 <div className="mt8">
                   <strong>多半是浏览器把「本地网络访问」挡住了</strong>（当前状态：{lnaStateLabel}）。
@@ -385,7 +439,16 @@ export default function Crawler({ profile, onChanged }: PageProps) {
                   共 {totalJobs} 条：{freshResult.map((o) => `${o.file}（${o.count} 条）`).join('、')}
                 </div>
               ) : null}
-              {task.state === 'failed' ? <div className="small muted mt8">{crawlFailureHint(task)}</div> : null}
+              {task.state === 'failed' ? (
+                <div className="mt8">
+                  <div className="small muted">{crawlFailureHint(task)}</div>
+                  {agentState === 'on' ? (
+                    <div className="row mt8">
+                      <button className="btn sm" onClick={() => void startAgentCrawl()}>用上次的参数重试</button>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           ) : null}
         </div>

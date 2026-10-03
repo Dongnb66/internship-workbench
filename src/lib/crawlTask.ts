@@ -76,6 +76,67 @@ export function crawlOutputHint(): string {
  * 「常见的是站点改版或需要登录」，把**本地缺件**指成了站点问题，方向完全相反。
  * 日志里其实写得很清楚，这里只把它翻译成一句可执行的话。
  */
+/**
+ * 抓取页的用户偏好（设备级）。
+ *
+ * 为什么：2026-10-03 用户视角实测 —— 每次进页面，站点勾选和关键词都被重置，第二次抓取要重新
+ * 勾一遍、重新打一遍关键词。项目里「黑名单 / 模型选择」的先例是 localStorage（不进云端表），
+ * 这里照同一先例：本文件只放**纯函数**（解析 / 校验 / 序列化），读写留在 UI 层。
+ */
+export interface CrawlerPrefs {
+  sites: string[]
+  keyword: string
+  pages: number
+  limit: number
+  mode: 'all' | 'intern' | 'campus'
+}
+
+export const CRAWLER_PREFS_KEY = 'wb_crawler_prefs'
+
+export const CRAWLER_PREFS_DEFAULT: CrawlerPrefs = { sites: [], keyword: '', pages: 2, limit: 60, mode: 'all' }
+
+const CRAWLER_MODES = ['all', 'intern', 'campus'] as const
+
+/**
+ * 解析存下来的偏好。坏 JSON / 字段缺失 / 类型不对 / 站点 id 已不存在 —— 一律退化成默认值，
+ * 绝不让一段历史 localStorage 把抓取页搞炸。
+ */
+export function parseCrawlerPrefs(raw: string | null | undefined, knownSiteIds: readonly string[]): CrawlerPrefs {
+  const d = CRAWLER_PREFS_DEFAULT
+  if (!raw) return { ...d }
+  let obj: unknown
+  try {
+    obj = JSON.parse(raw)
+  } catch {
+    return { ...d }
+  }
+  if (!obj || typeof obj !== 'object') return { ...d }
+  const o = obj as Record<string, unknown>
+  const known = new Set(knownSiteIds)
+  const clamp = (v: unknown, min: number, max: number, dflt: number) => {
+    const n = typeof v === 'number' && Number.isFinite(v) ? Math.round(v) : dflt
+    return Math.max(min, Math.min(max, n))
+  }
+  const sites = Array.isArray(o.sites) ? o.sites.filter((s): s is string => typeof s === 'string' && known.has(s)) : [...d.sites]
+  const keyword = typeof o.keyword === 'string' ? o.keyword.slice(0, 100) : d.keyword
+  const mode =
+    typeof o.mode === 'string' && (CRAWLER_MODES as readonly string[]).includes(o.mode)
+      ? (o.mode as CrawlerPrefs['mode'])
+      : d.mode
+  return {
+    sites,
+    keyword,
+    pages: clamp(o.pages, 1, 20, d.pages),
+    limit: clamp(o.limit, 1, 300, d.limit),
+    mode,
+  }
+}
+
+/** 只序列化这五个字段（localStorage 里不留别的东西） */
+export function serializeCrawlerPrefs(p: CrawlerPrefs): string {
+  return JSON.stringify({ sites: p.sites, keyword: p.keyword, pages: p.pages, limit: p.limit, mode: p.mode })
+}
+
 export function crawlFailureHint(task: { log?: string[]; error?: string | null }): string {
   const text = [task.error ?? '', ...(task.log ?? [])].join('\n')
   if (/Cannot find package|ERR_MODULE_NOT_FOUND|MODULE_NOT_FOUND/i.test(text)) {
