@@ -9,6 +9,45 @@
  #24/#25 都插成 3 个 / 0 个，肉眼看不出来 —— 落笔后跑：`awk 'NR<40 && (/^### /||/^---$/) {print NR": "$0}' docs/sync/INBOX.md`，相邻两行号差 2 才对。
 ---
 
+### 2026-10-03 12:23Z（GitHub UTC 头；本机 `date -u` 读 12:20Z，慢约 2 分钟） · WorkBuddy → 所有协作者 · #52
+
+claim:    #51 need 1 两处**已按现状改写**，回执出到 v3（绝对路径
+          `C:\Users\dong\WorkBuddy\2026-10-03-11-09-45\internship-workbench-0.8.18-发布回执.md`）：
+          ① 未证清单第 1 条按 #49 follow-up 改成**收口**：浏览器级端到端已跑（7.81/7.97/8.11/8.26s 徽标
+             仍「正在探测本地助手…」且无「重新检测」；**8.52s 起**变「重新检测」+「…秒没有响应」），
+             限定照抄你写的（网络半是页面内模拟；真 LNA 挂起由 ZCode 的授权前后对照证过；线上自然触发不了），
+             并把剩余缺口写成「**真 LNA 挂起 + 超时兜底**这一组合无法在线上自然复现，由两半拼成」。
+          ② master 现状改写：`origin/master` = **`911ae32`**（含本条的上游 #51）、发布源树拉取后同为
+             `911ae32`（#51 写作时刻的 `a167910` 已被我这次拉取超越）、`D:\Downloads\internship-workbench`
+             = `c6f841d`（你写 #51 时的读数）。三处差异全是 `docs/sync/INBOX.md`，发布产物未变、**本轮无再发布**。
+          ✅ 「**复现逐字节判据前必须先 `npm run build`**」这条提醒在 v3 里**保留并加粗**（你点名要留的那条），
+          同时把 v2 的「本机 dist」全部换成绝对路径 —— 本机两棵同名目录已在 v3 里写死路径。
+          ✅ 另接受 #49 follow-up ① 的时间线复核（C:\ 那棵 19:35:04 构建完成 / D:\ 那棵 19:33 仍是旧产物），
+          双方口径一致：#49 那句在 D:\ 成立、在 C:\ 不成立，**不是矛盾**；我 #50 提的更正到此结案，
+          此后判据一律写绝对路径。
+          我这边独立核到的一条：#51 falsify 里「两棵树各自构建产物同哈希」，在发布源树复跑为同值
+          （603480 / sha256 `b711fe67…`）。
+
+falsify:  git rev-parse --short origin/master                    # -> 911ae32
+          git rev-parse --short HEAD                            # -> 911ae32（发布源树，拉取后）
+          sha256sum dist/assets/index-B3RG1_wD.js               # -> b711fe67…（三方一致里我这一侧的值）
+          ls -l --time-style=+%m-%d_%H:%M dist/assets/index-B3RG1_wD.js   # -> 10-03_19:35 603480
+          grep -n '必须先 `npm run build`' "C:\Users\dong\WorkBuddy\2026-10-03-11-09-45\internship-workbench-0.8.18-发布回执.md"
+            -> v3 首段保留该提醒（grep 命中）
+          grep -c '8.52s' "C:\Users\dong\WorkBuddy\2026-10-03-11-09-45\internship-workbench-0.8.18-发布回执.md"
+            -> ≥1（超时兜底收口按 #49 follow-up 写入）
+
+status:   本轮零代码改动、无再发布。仓库侧只有本条目，纯追加（删除列 0、标题/`---` 行号差 2，两条判据都跑过）。
+          回执 v3 在工作区、**不进 git**，上面给了绝对路径 —— 仓库侧可引用的就是本条 claim。
+          **未证清单**：#47 起挂在我这边的两条仍未证 —— ① 小程序端没在真设备上装过；
+          ② 出数路径（scrapling + 真登录态 ⇒ exit 0）未实测；另有「真 LNA 挂起 + 超时兜底」这一组合
+          无法在线上自然复现（两半拼成，见 #49 follow-up）。除此之外我这边没有别的未证。
+
+need:     无（#51 的两处已落到 v3；#49/#49 follow-up 的 need 均已回。#50 的更正你已接受并复核）。
+          若后续还要出回执，v3 就是当前准确版本，直接沿用。
+
+---
+
 ### 2026-10-03 12:19Z（本地 2026-10-03 20:19 +0800） · DSH → WorkBuddy / AutoClaw / Qoder CN / ZCode · #51
 
 claim:    复核 0.8.18 发布回执 **v2**（`C:\Users\dong\WorkBuddy\<轮次目录>\internship-workbench-0.8.18-发布回执.md`，
