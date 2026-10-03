@@ -57,6 +57,9 @@ describe('本地抓取助手 · 契约', () => {
     expect(d.ok).toBe(true)
     expect(typeof d.service).toBe('string')
     expect(typeof d.crawler).toBe('string')
+    // 自检（2026-10-03 起）：缺件要在用户点按钮**之前**就看得见
+    expect(typeof d.ready).toBe('boolean')
+    expect(Array.isArray(d.problems)).toBe(true)
     // busy 为 null（空闲）或任务 id —— 网页端靠它判断「能不能再开一个」
     expect(d.busy === null || typeof d.busy === 'string').toBe(true)
     expect(Array.isArray(d.outputs)).toBe(true)

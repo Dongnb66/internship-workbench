@@ -97,6 +97,25 @@ describe('GET /health 探测', () => {
     expect(Array.isArray(health.outputs)).toBe(true)
   })
 
+  it('自检字段（ready / problems）按契约透传；老版本助手不回这两个字段也不能炸', async () => {
+    stubFetch(async () =>
+      jsonRes(200, {
+        ...HEALTH,
+        ready: false,
+        problems: [{ code: 'missing-deps', message: '缺依赖 playwright-core', fix: '在 …\\crawler 里 npm install' }],
+      }),
+    )
+    const bad = await probe()
+    expect(bad.ready).toBe(false)
+    expect(bad.problems?.[0]?.code).toBe('missing-deps')
+    expect(typeof bad.problems?.[0]?.fix).toBe('string')
+
+    stubFetch(async () => jsonRes(200, HEALTH))
+    const old = await probe()
+    expect(old.ready).toBeUndefined()
+    expect(old.problems).toBeUndefined()
+  })
+
   it('助手没启动（fetch 直接拒绝）：报错文案里带可执行的启动命令', async () => {
     stubFetch(async () => {
       throw new TypeError('Failed to fetch')

@@ -3,9 +3,9 @@ import JobImportModal from '../components/JobImportModal'
 import { Field } from '../components/ui'
 import { errText } from '../cloud'
 import { listRows } from '../lib/api'
-import { crawlOutputHint, buildCrawlPlan } from '../lib/crawlTask'
+import { crawlFailureHint, crawlOutputHint, buildCrawlPlan } from '../lib/crawlTask'
 import { crawlSitesForPicker, type CrawlSite } from '../lib/crawlSites'
-import { getTask, jobsToImportText, listSites, probe, startCrawl, type CrawlTask } from '../lib/localAgent'
+import { getTask, jobsToImportText, listSites, probe, startCrawl, type AgentHealth, type CrawlTask } from '../lib/localAgent'
 import { notifyErr, notifyOk } from '../lib/toast'
 import type { PageProps } from './Overview'
 import type { Row } from '../types'
@@ -46,6 +46,8 @@ export default function Crawler({ profile, onChanged }: PageProps) {
   const [agentState, setAgentState] = useState<'checking' | 'off' | 'on'>('checking')
   /** 探测失败的原因：卡住（浏览器本地网络权限）和「助手没跑」要给不同的话 */
   const [agentError, setAgentError] = useState<string | null>(null)
+  /** 助手自检：装得不完整时，缺什么 / 怎么补要显示在点按钮之前 */
+  const [agentProblems, setAgentProblems] = useState<AgentHealth['problems']>([])
   const [agentBusy, setAgentBusy] = useState<string | null>(null)
   const [agentSiteCount, setAgentSiteCount] = useState(0)
   const [task, setTask] = useState<CrawlTask | null>(null)
@@ -79,6 +81,7 @@ export default function Crawler({ profile, onChanged }: PageProps) {
     try {
       const health = await probe()
       setAgentBusy(health.busy)
+      setAgentProblems(health.problems ?? [])
       setAgentState('on')
       // 站点数只是给用户一个「两端连的是同一份抓取器」的确认，读不到不影响主流程
       try {
@@ -195,7 +198,8 @@ export default function Crawler({ profile, onChanged }: PageProps) {
           <h3>一键抓取（本地助手）</h3>
           <span className="spacer" />
           {agentState === 'on' ? (
-            <span className="badge ok">本地助手已连接{agentSiteCount ? ` · ${agentSiteCount} 个站点` : ''}</span>
+            <span className={agentProblems?.length ? 'badge warn' : 'badge ok'}>
+              本地助手已连接{agentSiteCount ? ` · ${agentSiteCount} 个站点` : ''}</span>
           ) : agentState === 'checking' ? (
             <span className="badge">正在探测本地助手…</span>
           ) : (
@@ -205,6 +209,19 @@ export default function Crawler({ profile, onChanged }: PageProps) {
           )}
         </div>
         <div className="card-body">
+          {agentProblems?.length ? (
+            <div className="hint warn mb8">
+              <strong>本地助手装得不完整，现在抓一定会失败：</strong>
+              {agentProblems.map((p) => (
+                <div key={p.code} style={{ marginTop: 6 }}>
+                  · {p.message}
+                  <pre className="mono" style={{ ...PRE_STYLE, marginTop: 4 }}>{p.fix}</pre>
+                </div>
+              ))}
+              按上面的「修」补齐后，点右上角「重新检测」再试。
+            </div>
+          ) : null}
+
           {agentState === 'off' ? (
             <div className="hint warn mb8">
               {agentError ?? '本地助手没在跑，「开始抓取」用不了。'}
@@ -278,11 +295,7 @@ export default function Crawler({ profile, onChanged }: PageProps) {
                   共 {totalJobs} 条：{task.result.outputs.map((o) => `${o.file}（${o.count} 条）`).join('、')}
                 </div>
               ) : null}
-              {task.state === 'failed' ? (
-                <div className="small muted mt8">
-                  失败原因看日志最后一行，常见的是站点改版或需要登录（🔒 站点先跑 node login.mjs --site &lt;站点id&gt;）。
-                </div>
-              ) : null}
+              {task.state === 'failed' ? <div className="small muted mt8">{crawlFailureHint(task)}</div> : null}
             </div>
           ) : null}
         </div>

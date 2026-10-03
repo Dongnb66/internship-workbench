@@ -26,6 +26,8 @@ import { spawn } from 'node:child_process'
 import { readFile, readdir, stat } from 'node:fs/promises'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
+import { checkInstall, formatProblems } from './selfcheck.mjs'
+
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const CRAWLER_DIR = path.join(HERE, '..')
 const OUT_DIR = path.join(CRAWLER_DIR, 'output')
@@ -181,12 +183,16 @@ const server = http.createServer(async (req, res) => {
 
   try {
     if (url.pathname === '/health') {
+      // 自检跟着 /health 一起回：缺件必须在用户点按钮**之前**就看得见（2026-10-03 的教训）
+      const install = checkInstall({ crawlerDir: CRAWLER_DIR })
       return json(res, 200, {
         ok: true,
         service: '实习工作台 · 本地抓取助手',
         crawler: CRAWLER_DIR,
         busy: running ? running.id : null,
         outputs: (await recentOutput(5)).map((f) => f.name),
+        ready: install.ready,
+        problems: install.problems,
       }, origin)
     }
 
@@ -242,4 +248,12 @@ server.listen(PORT, HOST, () => {
   console.log('')
   console.log('  爬虫跑在你自己的电脑上；本服务只监听 127.0.0.1，不对外暴露。')
   console.log('')
+
+  // 启动即自检：把「网页上一点就失败」提前成「打开就看见缺什么」
+  const install = checkInstall({ crawlerDir: CRAWLER_DIR })
+  if (!install.ready) {
+    console.log('  ⚠️ 自检没过 —— 现在点「开始抓取」一定会失败：')
+    console.log(formatProblems(install.problems).split('\n').map((l) => '  ' + l).join('\n'))
+    console.log('')
+  }
 })

@@ -67,3 +67,28 @@ export function buildCrawlPlan(sites: CrawlSite[], opts: CrawlPlanOptions): Buil
 export function crawlOutputHint(): string {
   return '抓取结果默认落在 crawler/output/ 目录（每站点一个带时间戳的 JSON）。回到工作台「岗位池 → 批量导入」，点「选择文件」直接选这些 JSON 即可预览并入库。'
 }
+
+/**
+ * 抓取失败时该说什么。
+ *
+ * 为什么按日志签名分派而不是一句话：2026-10-03 用用户视角实测踩到过 —— 桌面包缺
+ * extension/collector.js 与 playwright-core，用户点一次必然失败，而卡片当时统一说
+ * 「常见的是站点改版或需要登录」，把**本地缺件**指成了站点问题，方向完全相反。
+ * 日志里其实写得很清楚，这里只把它翻译成一句可执行的话。
+ */
+export function crawlFailureHint(task: { log?: string[]; error?: string | null }): string {
+  const text = [task.error ?? '', ...(task.log ?? [])].join('\n')
+  if (/Cannot find package|ERR_MODULE_NOT_FOUND|MODULE_NOT_FOUND/i.test(text)) {
+    return '抓取器依赖没装（playwright-core）：到本地助手的 crawler 目录里执行 npm install，再重开一次任务。'
+  }
+  if (/ENOENT[^\n]*collector\.js/i.test(text)) {
+    return '抓取器缺件：extension/collector.js 不存在 —— 本地助手装得不完整，需要重装或更新本地助手（用仓库那份跑，则把 extension/ 一起带上）。'
+  }
+  if (/档案目录被占用|lockfile/i.test(text)) {
+    return '浏览器档案目录被上次抓取占用了：关掉抓取器打开的 Edge / Chrome 窗口后重试（或换个 --profile 目录跑）。'
+  }
+  if (/需要登录|login\.mjs|--login/.test(text)) {
+    return '这站要先登录：默认内核跑 node login.mjs --site <站点id>，声明了引擎的站点跑 node run.mjs --site <id> --login，再重试。'
+  }
+  return '失败原因看日志最后一行，常见的是站点改版或需要登录（🔒 站点先跑 node login.mjs --site <站点id>）。'
+}

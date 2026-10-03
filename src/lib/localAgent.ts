@@ -43,6 +43,12 @@ export interface AgentHealth {
   busy: string | null
   /** output/ 里最近的产出文件名 */
   outputs: string[]
+  /**
+   * 助手自检（2026-10-03 起）：ready=false 时 problems 逐条写明「缺什么 + 怎么补」。
+   * 可选字段 —— 老版本助手不回这两个字段，界面按「没报问题」处理。
+   */
+  ready?: boolean
+  problems?: Array<{ code: string; message: string; fix: string }>
 }
 
 /** GET /sites 的站点项。数据直接来自用户本机的 crawler/sites.mjs（同源，禁止另写） */
