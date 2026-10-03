@@ -5,7 +5,7 @@ import { errText } from '../cloud'
 import { listRows } from '../lib/api'
 import { crawlFailureHint, crawlOutputHint, buildCrawlPlan } from '../lib/crawlTask'
 import { crawlSitesForPicker, type CrawlSite } from '../lib/crawlSites'
-import { getTask, jobsToImportText, listSites, probe, startCrawl, type AgentHealth, type CrawlTask } from '../lib/localAgent'
+import { AGENT_DOWNLOAD_URL, getTask, jobsToImportText, listSites, probe, startCrawl, type AgentHealth, type CrawlTask } from '../lib/localAgent'
 import { notifyErr, notifyOk } from '../lib/toast'
 import type { PageProps } from './Overview'
 import type { Row } from '../types'
@@ -189,6 +189,14 @@ export default function Crawler({ profile, onChanged }: PageProps) {
   }
 
   const taskRunning = task?.state === 'running'
+  /** 装不上 / 装坏了时的下载入口：平台托管后 AGENT_DOWNLOAD_URL 才有值，空值时不渲染任何东西 */
+  const packageLink = AGENT_DOWNLOAD_URL ? (
+    <div className="mt8">
+      <a href={AGENT_DOWNLOAD_URL} target="_blank" rel="noreferrer">
+        下载最新版本地助手（zip，含 Node 运行时）
+      </a>
+    </div>
+  ) : null
   const totalJobs = task?.result?.outputs.reduce((n, o) => n + (o.count || o.jobs.length), 0) ?? 0
 
   return (
@@ -219,6 +227,7 @@ export default function Crawler({ profile, onChanged }: PageProps) {
                 </div>
               ))}
               按上面的「修」补齐后，点右上角「重新检测」再试。
+              {packageLink}
             </div>
           ) : null}
 
@@ -228,6 +237,7 @@ export default function Crawler({ profile, onChanged }: PageProps) {
               <br />
               在本机项目根目录另开一个终端执行下面的命令，再点「重新检测」：
               <pre className="mono" style={{ ...PRE_STYLE, marginTop: 8 }}>npm run agent</pre>
+              {packageLink}
               <div className="row mt8">
                 <button className="btn sm" onClick={() => copyText('npm run agent', '已复制，在项目根目录的终端里粘贴运行')}>
                   复制命令

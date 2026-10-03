@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { guessFromBlock, splitJobBlocks } from '../import'
 import {
   AGENT_BASE,
+  AGENT_DOWNLOAD_URL,
   getTask,
   jobsToImportText,
   listSites,
@@ -95,6 +96,11 @@ describe('GET /health 探测', () => {
     expect(typeof health.crawler).toBe('string')
     expect(health.busy).toBeNull()
     expect(Array.isArray(health.outputs)).toBe(true)
+  })
+
+  it('下载入口常量只能是「空」或 https 的 .zip 直链 —— 不允许占位符上线', () => {
+    // 空 = 不显示下载入口（旧行为）。平台托管后填直链；这里挡的是 TODO/相对路径/HTML 页面这类值。
+    expect(AGENT_DOWNLOAD_URL === '' || /^https:\/\/\S+\.zip$/.test(AGENT_DOWNLOAD_URL)).toBe(true)
   })
 
   it('自检字段（ready / problems）按契约透传；老版本助手不回这两个字段也不能炸', async () => {
