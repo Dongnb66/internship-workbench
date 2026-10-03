@@ -24,7 +24,7 @@ import { MORE_TEXTS, NEXT_TEXTS, SITES, STRATEGIES, companyFor, detectSiteByUrl,
 import { COLLECTOR, CRAWLER_DIR, OUT_DIR, PROFILE_DIR, launchBrowser, msgOf, politeDelay } from './lib/browser.mjs'
 import { dailyReportMd, detectStopWall } from './lib/stopRules.mjs'
 import { DEFAULT_ENGINE, computeExitCode, routeTargets, summarizeRun } from './lib/routing.mjs'
-import { ENGINE_NAMES, PYTHON_HINT, SCRAPLING_PROFILE_DIR, resolvePython, runScrapling } from './lib/engineScrapling.mjs'
+import { ENGINE_NAMES, SCRAPLING_PROFILE_DIR, installHint, resolvePython, runScrapling } from './lib/engineScrapling.mjs'
 import {
   adoptDetail,
   dedupeKey,
@@ -585,7 +585,8 @@ async function runEngineTargets({ opts, log, targets, engineName, unsupportedIds
     const resolved = await resolvePython()
     if (!resolved.ok) {
       log(`✗ ${base.label}：${engineName} 引擎环境不可用（${resolved.reason}），判停这一站，其余站点照常跑`)
-      console.error(PYTHON_HINT)
+      log('')
+      console.error(installHint({ missing: resolved.missing ?? 'python' }))
       results.push({ ...base, ok: false, jobs: [], stopped: true, stoppedReason: `环境缺失：${resolved.reason}` })
       continue
     }
@@ -598,7 +599,13 @@ async function runEngineTargets({ opts, log, targets, engineName, unsupportedIds
       log(`  你给了 ${opts.pages} 页。BOSS 风控较紧，建议单轮 ≤3 页；本轮约 ${opts.pages * 17} 秒起（页间 12 秒 + 请求前 5 秒），遇验证码会立刻停本站。`)
     }
 
-    log(`▶ ${base.label}（引擎 ${engineName}，headed + 串行）`)
+    log(`▶ ${base.label}`)
+    // 自动选择对用户是不可见的决策 —— 不写出来，出错时没人知道这条路是怎么被选上的
+    const why = opts.engine
+      ? `你显式 --engine ${opts.engine} 覆盖（站点表声明的是 ${target.site.engine || '默认内核'}）`
+      : `站点表声明 engine=${engineName}，自动选用（没声明的站点一律走默认内核）`
+    log(`    引擎：${engineName} —— ${why}`)
+    log('    该引擎固定 headed + 串行，遇验证码即停不绕过')
 
     let out
     try {
@@ -673,7 +680,8 @@ async function runEngineLogin({ opts, log, target }) {
   const resolved = await resolvePython()
   if (!resolved.ok) {
     log(`✗ ${resolved.reason}`)
-    console.error(PYTHON_HINT)
+    log('')
+    console.error(installHint({ missing: resolved.missing ?? 'python' }))
     return 2
   }
 

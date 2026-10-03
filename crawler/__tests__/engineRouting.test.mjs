@@ -7,6 +7,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { DEFAULT_ENGINE, computeExitCode, routeTargets, summarizeRun } from '../lib/routing.mjs'
+import { installHint } from '../lib/engineScrapling.mjs'
 import { findSite } from '../sites.mjs'
 
 const ENGINES = ['scrapling']
@@ -115,5 +116,27 @@ describe('汇总与退出码：部分成功不能被读成全成功', () => {
   it('一条都没有、也没读到过 ⇒ 1', () => {
     const none = [{ label: 'a', ok: false, jobs: [], read: 0 }]
     expect(computeExitCode({ total: 0, results: none })).toBe(1)
+  })
+})
+describe('判停提示要能照着做（DSH 会签要求 4）', () => {
+  it('两种缺失给的是两支不同文案，不是一句「请安装 Scrapling」', () => {
+    const noPython = installHint({ missing: 'python', env: {} })
+    const noScrapling = installHint({ missing: 'scrapling', env: {} })
+    expect(noPython).not.toBe(noScrapling)
+    expect(noPython).toContain('winget install')
+    expect(noScrapling).toContain('python -m venv')
+  })
+
+  it('提示里的路径是真推导出来的，可以直接粘贴执行', () => {
+    const h = installHint({ missing: 'scrapling', env: {} })
+    expect(h).toContain('iwb-engines-venv')
+    expect(h).toContain('pip install')
+    expect(h).toContain('mirrors.aliyun.com')
+    expect(/<盘根>|<某.*>|\$\{/.test(h), '不该留 <占位符> 或模板变量').toBe(false)
+  })
+
+  it('不想装 Python 的人也有一条路（默认路径与扩展不受影响）', () => {
+    expect(installHint({ missing: 'python', env: {} })).toContain('其余 26 个站点用默认路径')
+    expect(installHint({ missing: 'scrapling', env: {} })).toContain('其余 26 个站点用默认路径')
   })
 })
