@@ -323,8 +323,8 @@ export function expandTemplate(template, vars = {}) {
   return out
 }
 
-const VALUE_FLAGS = new Set(['site', 'url', 'keyword', 'k', 'exclude', 'include', 'pages', 'limit', 'delay', 'detail', 'wait', 'out', 'mode', 'profile', 'company'])
-const BOOL_FLAGS = new Set(['headed', 'dump', 'resume', 'purge', 'quiet', 'list-sites', 'help', 'h'])
+const VALUE_FLAGS = new Set(['site', 'url', 'keyword', 'k', 'exclude', 'include', 'pages', 'limit', 'delay', 'detail', 'wait', 'out', 'mode', 'profile', 'company', 'engine'])
+const BOOL_FLAGS = new Set(['headed', 'dump', 'resume', 'purge', 'quiet', 'list-sites', 'help', 'h', 'login', 'decode-salary', 'check-salary-font'])
 
 /**
  * 参数解析。支持 `--site tencent` 与 `--site=tencent` 两种写法，
@@ -346,6 +346,10 @@ export function parseArgs(argv = []) {
     mode: 'all',
     profile: '',
     company: '',
+    engine: '',
+    login: false,
+    decodeSalary: false,
+    checkSalaryFont: false,
     headed: false,
     dump: false,
     resume: false,
@@ -377,6 +381,9 @@ export function parseArgs(argv = []) {
       const v = inlineValue === undefined ? true : inlineValue !== 'false'
       if (key === 'list-sites') opts.listSites = v
       else if (key === 'help' || key === 'h') opts.help = v
+      // 带连字符的旗标必须显式映射：opts['decode-salary'] 会建出一个没人读的键
+      else if (key === 'decode-salary') opts.decodeSalary = v
+      else if (key === 'check-salary-font') opts.checkSalaryFont = v
       else opts[key] = v
       continue
     }
@@ -403,6 +410,8 @@ export function parseArgs(argv = []) {
     else if (key === 'mode') opts.mode = value
     else if (key === 'profile') opts.profile = value
     else if (key === 'company') opts.company = value
+    // 值合法性**不在这里判**（这个文件要能被任何上下文安全 import），交 run.mjs 硬失败
+    else if (key === 'engine') opts.engine = value.trim().toLowerCase()
   }
 
   return opts
