@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **「一键抓取」卡片永久停在「正在探测本地助手…」，按钮一直灰着，连重试入口都不给**（`src/lib/localAgent.ts` + `src/pages/Crawler.tsx` + `src/lib/__tests__/localAgent.test.ts` 新增 1 条用例；版本升到 `0.8.18`）。根因是两层，缺一层都解释不了这个现象。**代码层**：`call()` 没有任何 deadline，而 `probeAgent()` 只有 on / off 两个出口，`checking` 不是状态机里的一个终点 —— 那个 `fetch` 只要不落地，界面就永远停在探测中；更要命的是「重新检测」按钮**只在 off 状态渲染**，于是"卡住"和"没有重试入口"是同一个 bug 的两面，用户唯一能做的是刷新整页。**浏览器层**：现代 Edge（≥142）把 `127.0.0.1` 归进 **loopback-network**（设置里的名字是「设备上的应用 / Apps on device」，与「本地网络 / local-network」是两个不同的权限），而该 origin 从没拿到过这条授权 —— 请求**既不 resolve 也不 reject，就挂在权限提示上**。这一层先前只有推断（依据是本机 `Preferences` 里 `loopback_network` 桶没有本站 origin），后来拿到实测：手动授权后，同页面刷新即显示「本地助手已连接 · 27 个站点」。修法按"两条都要治"来：探测走 **8 秒 deadline**（其它调用仍是 15 秒，探测是最该快点死掉的那一个）、超时时把**可执行的下一步**（给本站 origin 开本地网络权限）写进错误文案、失败原因显示到卡片上、探测中就直接提示"可能在等浏览器授权"。新增的用例钉的是**最难自然复现的那条路径**：fetch 被权限闸门挂住时，到点必须抛错而不是永远 pending。留下一个必须记住的副产品：**已经挂死的那个请求不会自愈** —— 就算用户开完授权，也得刷新页面才会重新探测；这正是本笔要修的东西，不是授权没生效。
+- 四件套：typecheck exit 0 / **65 files 820 tests** 全绿 / lint 0 error（25 warnings 全在基线）/ build exit 0（主 bundle `index-B3RG1_wD.js` 603.48 kB / gzip 188.50 kB）。另 `node crawler/selftest.mjs` exit 0。
+
 ### Added
 
 - **网页端能一键抓取了 —— 本地抓取助手**（新 `src/lib/localAgent.ts` + `src/pages/Crawler.tsx` 的「一键抓取（本地助手）」卡片 + 新 `src/lib/__tests__/localAgent.test.ts` 12 条契约断言；`package.json` 加 `npm run agent` → 新 `crawler/agent/server.mjs`；接口契约单列 `crawler/agent/本地抓取助手_接口契约.md`）。原先「抓取任务」页只给一条路径：生成命令 → 自己复制到终端 → 等它跑完 → 手动导入，四步都得人手做，而这条路的失败面全在"人有没有照做"上。现在起 `npm run agent` 之后，页面探 `/health` → 勾站点 → 「开始抓取」→ 日志实时轮询回显 → 跑完自动弹导入预览 → 入库。**原来的「生成命令」一条都没删，降级为兜底**：助手没起、或有人就是习惯自己看命令，路径照旧走得通。契约测试钉的是字段名与类型（`id/name/needsLogin/verified/kwSearch`）、`state` 取值、以及三条错误分支：400 原样抛出契约文案、409 并发冲突要提示而不是静默失败、错误响应没有 JSON body 时退回到 HTTP 状态码文案（不能把 `undefined` 印到界面上）。
