@@ -61,3 +61,9 @@ gateway/out/
 .env
 .env.*
 !.env.example
+
+# Python 引擎（crawler/engines/）会生成的字节码与虚拟环境 —— 挡在结构层面，
+# 不靠人记得：一次 git add <目录> 失手就是几百 MB 进历史，而历史里删不掉。
+__pycache__/
+*.py[cod]
+.venv/
