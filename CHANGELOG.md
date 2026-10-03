@@ -6,6 +6,22 @@
 
 ### Fixed
 
+- **「旧批次的产出冒充本次结果」—— 用户会看到一个他这次根本没抓到的导入预览**（`src/lib/localAgent.ts#freshOutputs` + `src/pages/Crawler.tsx`；`aaa00a0` 首次修法、`94c00b3` 改用 mtime 判据、`2ae504e` 修 tsc）。**现象**（DSH 真机实测）：同一站点 + 同一关键词再抓一次，爬虫的默认去重（`.seen-*.json`）会跳过全部历史岗位，日志是「与历史产出重复 5 条 → 合计 0 条」、**根本不写文件**；而助手 `result.outputs` 的语义是「`output/` 里最近几个文件」—— 于是线上 0.8.21 会拿**上一批**冒充本次结果，弹出一个「共 10 条」的导入预览。**修法**：抓取前后各取一次 `GET /outputs` 快照，按 **mtime 判据**筛出本次真正写出的产出（新文件名，或同名但 mtime 变新）。**为什么用 mtime 而不是文件名的集合差**：`output/` 里的文件名不保证会变（同名覆盖），只有 mtime 能区分「这次写的」与「上次留下的」。**空数组的语义被明确下来**：本次没有新增岗位 → 界面**如实这么说**，不再拿旧文件顶上。**快照拿不到时退化成旧行为**（`freshOutputs` 里 `if (!before) return all`）—— 宁可显示旧行为，也不静默吞掉用户的结果。**真机双场景验证**（同机同助手）：同站点+关键词再抓 → 服务端 2 文件 / 10 条，修复后 **0 条**；换关键词「算法」→ 服务端 3 文件 / 15 条，修复后 **1 文件 / 5 条**。
+- **`freshOutputs` 的 `after` 参数允许 `null`**（`2ae504e`）—— `94c00b3` 的 tsc 是红的（`TS2345`）。红法和 0.8.20 那次同源：**把「跑三件套」与「提交」放在同一条命令里、没在 tsc 失败时中止**，`npm run build` 被 `&&` 挡下、`dist` 仍是上一代，提交照样出去了。这是同一流程坑第二次出现（DSH 自报）。
+- 四件套（本机实跑）：typecheck exit 0 / **68 files 848 tests** 全绿 / lint 0 error（25 warnings 全在基线）/ build exit 0（主 bundle `index-BvNiRJ_2.js`，610343 字节，sha256 `8b118ef1cab34d76822dd1db2c17847d93de328c637cfb7eea36f3d889069047`）。
+- **两处数字更正（以实测为准）**：① 交接单写「67 files 841 tests」，本机实测 **68 files 848 tests**（差的正是最后一笔 `75c9443` 新增的 `crawlerPrefs.test.ts`，+7）；② **交接单预判的主 bundle `index-D9MpSCgZ.js` 在本机复现不出来**：本机在发布源 `75c9443` 上构建得到 `index-BvNiRJ_2.js`（610343 字节）。**已做对照实验定位原因**：产物里**不含版本号字符串**（`grep -o '0\.8\.2[0-9]'` 零命中），且把版本号临时改回 0.8.21 重建，产物名与 sha256 **完全不变** ⇒ 版本号不影响 bundle 哈希；再叠加本仓 `core.autocrlf = true`（工作树是 CRLF，而 bundle 哈希对换行敏感）⇒ **「预判的 bundle 名」只在生成它的那台机器上有效**。**结论：判别器改用 `app-version` + 逐字节 sha256 + 文案标记，不要跨机器比 bundle 名。**
+
+### Added
+
+- **卡在「本地网络访问」那一关的用户，现在有可照做的指引了**（`src/lib/localAgent.ts#lnaHelpFor` / `lnaPermissionState`，`aaa00a0`）。**为什么必须有**：Edge ≥142 起，从线上 https 页面访问 `127.0.0.1` 要单独授权（Edge 里的名字是「设备上的应用」/ `loopback-network`），**没授权时 `fetch` 既不 resolve 也不 reject**，界面只能超时；而**很多浏览器根本不弹提示**，用户无从下手 —— 这就是发起人当天卡住的那一关。现在按 UA 分岔：Edge → `edge://settings/privacy/sitePermissions/allPermissions/loopbackNetwork`（手动路径「设置 → Cookie 和网站权限 → 所有权限 → 「设备上的应用」→ 允许」）、Chrome → `chrome://settings/content/localNetworkAccess`、其它浏览器给通用说法。**浏览器设置页不能点链接跳转，所以界面给的是「复制」按钮而不是 `<a>`**；权限状态查不到就返回 `unknown` —— **不猜**。
+- **第 1 层便利：第二次抓取不用重新勾站点、重新打关键词**（新 `src/lib/__tests__/crawlerPrefs.test.ts` + `src/lib/crawlTask.ts` + `src/pages/Crawler.tsx`，`75c9443`）。四项：① 记住上次的站点/关键词/参数（设备级 `localStorage`；**解析失败退化成默认值**，不让坏数据把页面卡死）；② 装助手期间**每 5 秒自动重试探测、最多 24 次（约 2 分钟）** —— 装好一起来就自动变绿，不用用户回来手点「重新检测」；③ 四步安装引导；④ 失败时一键「用上次的参数重试」。都是用户视角实测出来的卡点。
+
+### Changed
+
+- **开发者用的 `npm run agent` 收进「进阶」折叠**（`aaa00a0`）：主路径只留「下载 → 解压 → 双击 `start-hidden.vbs`」。**那条命令一条都没删** —— 只是不再跟主路径抢注意力（它要求用户自己有仓库和 Node，本就属于开发者路径）。
+
+### Fixed
+
 - **下载入口改成常驻 —— 旧包用户在界面上拿不到新包**（`src/pages/Crawler.tsx`，`78809b0`；发起人刷新线上页面时撞出来的缺口）。**现象**：发起人刷新线上 `#crawler`，卡片显示「本地助手已连接 · 27 个站点」，但**看不到任何下载入口**。**根因不是实现 bug，是状态机漏了一格**：上一版把下载链接**只**放在「助手没在跑」与「装得不完整」两处，而他的助手是**旧版本**（不上报 `ready` / `problems`）却**连通正常** ⇒ 两个状态都不成立 ⇒ 这类用户在界面上**没有任何入口**能拿到新包 —— 而他们恰恰是最需要新包的人。**修法三条**：① 下载入口**常驻**在卡片底部一行（「没装过、或抓取报『装得不完整』？下载最新版本地助手（zip，含 Node 运行时）」）；② 助手连通但 `ready === undefined`（自检字段缺失 = 旧版本）时主动提示「这台本地助手是**旧版本**……建议覆盖安装一次」；③ 原来那两处照旧。**为什么用 `ready === undefined` 而不用版本号比大小**：旧包根本不上报版本，唯一可靠信号就是这个字段在不在。
 - 四件套（本机实跑）：typecheck exit 0 / **67 files 832 tests** 全绿 / lint 0 error（25 warnings 全在基线）/ build exit 0（主 bundle `index-CUNQ3HeR.js`，605686 字节，sha256 `73a82a5515584bd918bb81491e1ab373a075b017a33cedf1dc856662b4f7f00f`）。另 `node scripts/verifyPublish.mjs` exit 0。
 - ⚠️ **本批测试出现一次负载敏感型 flake —— 已定位机制，本轮不改（留证如下）**：
