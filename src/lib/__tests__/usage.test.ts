@@ -5,6 +5,7 @@ import {
   __setUsageSink,
   buildEventPayload,
   buildUserRow,
+  isNoStat,
   isUsageEvent,
   makeAnonId,
   sanitizeDetail,
@@ -106,6 +107,17 @@ describe('上报的系统字段：手机必须先判（否则记成 mac/linux）
     expect(detectOs('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)')).toBe('mac')
     expect(detectOs('Mozilla/5.0 (X11; Linux x86_64)')).toBe('linux')
     expect(detectOs('')).toBe('unknown')
+  })
+})
+
+describe('?nostat=1：验证时不落库（别再污染要写进简历的人数）', () => {
+  it('认得出开关，且不会被 nostat=10 之类误命中', () => {
+    expect(isNoStat('?nostat=1')).toBe(true)
+    expect(isNoStat('?a=1&nostat=1')).toBe(true)
+    expect(isNoStat('?nostat=1&b=2')).toBe(true)
+    expect(isNoStat('?nostat=10')).toBe(false)
+    expect(isNoStat('?nonostat=1')).toBe(false)
+    expect(isNoStat('')).toBe(false)
   })
 })
 

@@ -100,7 +100,19 @@ export function setUsageOptOut(off: boolean): void {
 }
 
 /** 当前整体是否允许上报（GPC 优先） */
+/**
+ * 显式「这次不上报」开关：URL 带 ?nostat=1（真机 / 自动化验证时用）。
+ *
+ * 起因（2026-10-04）：我的浏览器验证每次都是新的存储上下文 ⇒ 每次生成一个新 anon_id，
+ * 把「有多少人在用」这个要写进简历的数字污染了 5 台（total 17 里 5 台不是真人）。
+ * 他也指出清 localStorage 没用（Agent Window 本来就是新上下文）⇒ 只能靠显式开关。
+ * 以后我验证一律在 URL 后加 ?nostat=1。
+ */
+export function isNoStat(search: string): boolean {
+  return /[?&]nostat=1(&|$)/.test(search)
+}
 export function usageEnabled(): boolean {
+  if (typeof location !== 'undefined' && isNoStat(location.search)) return false // ?nostat=1：验证时不落库
   const nav = typeof navigator === 'undefined' ? undefined : (navigator as unknown as { globalPrivacyControl?: boolean })
   return telemetryAllowed({ gpc: nav?.globalPrivacyControl === true, optOut: usageOptOut() })
 }
