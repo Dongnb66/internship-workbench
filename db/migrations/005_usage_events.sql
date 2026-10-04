@@ -40,8 +40,13 @@ CREATE TABLE IF NOT EXISTS public.usage_events (
   detail JSONB
 );
 
+-- ⚠️ 索引表达式里**不能**写 `(received_at AT TIME ZONE 'UTC')::date`：
+--    实测在本项目的执行通道上报 `42601 syntax error at or near "::"`（2026-10-04 首次执行时踩到）。
+--    同样的 cast 放在 SELECT 里是合法的（`SELECT (now() AT TIME ZONE 'UTC')::date` 能跑），
+--    只有放进 CREATE INDEX 的表达式上下文会挂 —— 所以这不是 cast 本身非法。
+--    等价的函数形式 date(…) 语义相同、能正常建索引，**重放本文件请用下面这一行**。
 CREATE UNIQUE INDEX IF NOT EXISTS uq_usage_events_daily
-  ON public.usage_events (anon_id, event, (received_at AT TIME ZONE 'UTC')::date);
+  ON public.usage_events (anon_id, event, date(received_at AT TIME ZONE 'UTC'));
 
 CREATE INDEX IF NOT EXISTS idx_usage_events_time ON public.usage_events (received_at);
 
