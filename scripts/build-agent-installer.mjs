@@ -20,7 +20,6 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
-const REPO = path.join(HERE, '..')
 const CS = path.join(HERE, 'installer', 'Installer.cs')
 
 const arg = (k, d) => {
