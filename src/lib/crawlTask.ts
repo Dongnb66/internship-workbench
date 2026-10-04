@@ -155,27 +155,39 @@ export function crawlFailureHint(task: { log?: string[]; error?: string | null }
 }
 
 /** 用户当前系统（只看 UA，粒度到 win/mac/linux）：界面据此换引导 —— 本地助手只有 Windows 版 */
-export function hostOs(ua?: string): 'win' | 'mac' | 'linux' | 'other' {
+export function hostOs(ua?: string): 'win' | 'mac' | 'linux' | 'mobile' | 'other' {
   const s = ua ?? (typeof navigator === 'undefined' ? '' : navigator.userAgent)
   if (!s) return 'other'
+  // ⚠️ 手机/平板必须先判：iPhone / iPad 的 UA 里含 'Mac OS X'（'CPU iPhone OS ... like Mac OS X'），
+  //    放在 Mac 后面会被误报成 macOS —— 抖音点进来的人大多在手机上，那句话会直接说错。
+  if (/iPhone|iPad|iPod|Android|Mobile/i.test(s)) return 'mobile'
   if (/Win/i.test(s)) return 'win'
   if (/Mac/i.test(s)) return 'mac'
-  if (/Linux|Android/i.test(s)) return 'linux'
+  if (/Linux/i.test(s)) return 'linux'
   return 'other'
 }
 
 export interface NonWindowsGuide {
   osLabel: string
+  /** 为什么这台机器装不了 —— 手机与 mac/linux 的说法不一样，别混用一句话 */
+  why: string
   /** 非 Windows 用户在当前系统上仍然能做的事 —— 别让人对着装不了的安装包干等 */
   lanes: { name: string; detail: string }[]
 }
 
 /** 非 Windows 的替代路径；Windows 返回 null（不做多余提示） */
-export function nonWindowsGuide(os: 'win' | 'mac' | 'linux' | 'other'): NonWindowsGuide | null {
+export function nonWindowsGuide(
+  os: 'win' | 'mac' | 'linux' | 'mobile' | 'other',
+): NonWindowsGuide | null {
   if (os === 'win') return null
-  const osLabel = os === 'mac' ? 'macOS' : os === 'linux' ? 'Linux' : '你的系统'
+  const osLabel = os === 'mac' ? 'macOS' : os === 'linux' ? 'Linux' : os === 'mobile' ? '手机/平板' : '你的系统'
+  const why =
+    os === 'mobile'
+      ? '本地助手是电脑上的程序，手机上装不了'
+      : '本地助手目前只有 Windows 版，这台机器上装不了'
   return {
     osLabel,
+    why,
     lanes: [
       { name: '岗位广场', detail: '直接浏览公共岗位库，把想要的岗位加进自己的岗位池' },
       { name: 'AI 评估', detail: '给岗位池里的岗位算匹配分、分析 JD（不依赖本地助手）' },

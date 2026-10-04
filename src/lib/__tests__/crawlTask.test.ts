@@ -53,6 +53,15 @@ describe('本地助手只有 Windows 版：非 Windows 的引导', () => {
     expect(hostOs('')).toBe('other')
   })
 
+  it('手机/平板必须先认出来 —— iPhone 的 UA 里含 Mac OS X，顺序错了会误报 macOS', () => {
+    const iphone = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Safari/604.1'
+    expect(hostOs(iphone)).toBe('mobile')
+    expect(hostOs('Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36')).toBe('mobile')
+    expect(nonWindowsGuide('mobile')!.osLabel).toBe('手机/平板')
+    expect(nonWindowsGuide('mobile')!.why).toContain('电脑上的程序')
+    expect(nonWindowsGuide('mac')!.why).toContain('只有 Windows 版')
+  })
+
   it('Windows 不给多余提示', () => {
     expect(nonWindowsGuide('win')).toBe(null)
   })

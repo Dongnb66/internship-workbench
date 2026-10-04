@@ -401,7 +401,7 @@ export default function Crawler({ profile, onChanged }: PageProps) {
 
           {nonWin ? (
             <div className="hint mb8">
-              <strong>你现在的系统是 {nonWin.osLabel}</strong> —— 本地助手目前只有 Windows 版，这台机器上装不了。
+              <strong>你现在的系统是 {nonWin.osLabel}</strong> —— {nonWin.why}。
               但下面这些在任何系统上都能用：
               <ul style={{ margin: '6px 0 0 18px', padding: 0 }}>
                 {nonWin.lanes.map((l) => (
@@ -418,8 +418,9 @@ export default function Crawler({ profile, onChanged }: PageProps) {
               {agentError ?? '本地助手没在跑，「开始抓取」用不了。'}
               {os !== 'win' ? (
                 <div className="small muted mt8">
-                  本地助手目前只提供 <strong>Windows</strong> 安装包。你在 {nonWin?.osLabel} 上想用自动抓取，
-                  可以走下面的「进阶：从仓库源码跑」（需要 Node）；不想装环境就用上面的替代路径。
+                  {nonWin?.why}。{nonWin?.osLabel === '手机/平板'
+                    ? ' 建议换电脑再试；手机上先看岗位、做评估就行。'
+                    : ' 想用自动抓取可以走下面的「进阶：从仓库源码跑」（需要 Node）；不想装环境就用上面的替代路径。'}
                 </div>
               ) : downloadAnchor ? (
                 <div className="mt8">
