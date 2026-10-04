@@ -4,6 +4,26 @@
 
 ## [Unreleased]
 
+### Added
+
+- **助手定时抓取 —— 第 2 层 3/3 收口**（新 `crawler/agent/scheduler.mjs` + `crawler/agent/server.mjs` 的 `GET/POST /schedule` + 每分钟 tick；网页侧 `src/lib/localAgent.ts` 的 `getSchedule`/`setSchedule` + `src/pages/Crawler.tsx` 的开关/时间/保存/上次结果；新 `crawler/__tests__/scheduler.test.mjs`；`b0124d7`，由 DSH 完成）。**为什么做**：前两层解决的是「装得上」和「连得上」，这一层解决「**不用一直盯着**」—— 到点自动跑，用户只看结果。
+  - **到点判定五个条件全要满足**：开着 + 勾了站点 + 已过点 + **今天没跑过** + **距到点 ≤ 6 小时**。最后一条两头都防：既防「开机晚了就整天不跑」，也防「隔天补跑一次把昨天的岗位混进来」。
+  - **抓取复用既有 `/crawl`（并发互斥）且无头跑** —— 不另造一条抓取路径，也就**不会有第二套去重 / 解析逻辑**；无头跑 ⇒ 不弹窗口。
+  - 配置持久化在 `crawler/.schedule.json`，**已进 `.gitignore`（每台机器一份）**；**默认关闭**。
+  - 网页侧：开关 + 时间 + 「保存自动抓取」+ 「上次自动抓取：日期 时间 · 新增 N 条」+「**导入这 N 条**」。导入走既有 `JobImportModal` ⇒ **入库零新代码**。
+  - **老包没有 `/schedule` ⇒ 拿不到就不显示这个块（不是错误）**：界面按 `sched` 为空自然隐藏，不给老用户添乱。
+  - **真机 E2E**：配「2 分钟前到点」→ 自动触发 → `lastRun = { ok:true, newJobs:5 }`，产出文件名带时间戳。
+
+### Fixed
+
+- **`POST /schedule` 把非法时刻静默改成 09:00**（`crawler/agent/server.mjs`；`17f75ad`）—— 传 `"99:99"` 原来**静默「猜」成 09:00 并回 200**：用户以为自己设了 99:99，系统替他挑了个 9 点他毫不知情。**静默地猜比报错危险** —— 现在 strict 校验，非法直接 **400**。
+- 四件套（本机实跑）：typecheck exit 0 / **70 files 872 tests** 全绿 / lint 0 error（**25 warnings**，**197 files**）/ build exit 0（主 bundle **`index-Dd1JU9dX.js`**，616373 字节，sha256 `35a35540824d84699616d499f933aed1e5bec943fd0d921be8fa53069025222f`）。**判别器与交接单预判逐字符一致。** ⚠️ **lint 扫描文件数 195 → 197**（本批新增的 `scheduler.mjs` / `scheduler.test.mjs` 进了扫描）⇒ 仍是 **25 warnings**，但**口径是「197 files 下的 25」**。
+- ⚠️ **一处事实更正（以 git 为准）**：交接单把定时抓取写作 `c92082a + 17f75ad`，但 **`c92082a` 在本仓库查不到**（`git cat-file -t c92082a` → `fatal: Not a valid object name`）—— 实际提交是 **`b0124d7`**（feat）+ **`17f75ad`**（fix strict）。**发布源按你明确指定的 `17f75ad` 走，它在 master 上，不受影响。**
+
+### Changed
+
+- **助手包换代（r6）**：zip **53,579,333** 字节 / sha256 `dbbc229c3b1c100673d09c1ee099f0ae9cd74d5519d46af4aaf3d523a016bce9`；安装器 **53,592,576** 字节 / sha256 `4b8ebd53fab3f0fe49e925e19cec82d0b1980e0ad8aa99f9afcea1bae7bf3458`。**线上文件名不变**（仍叫 `internship-workbench-agent.zip`）。**r4 / r5 的哈希已作废。** ⚠️ **定时抓取必须换包才生效** —— `/schedule` 与每分钟 tick 都在助手侧，网页上的开关只是它的遥控器。
+
 ### Fixed
 
 - **⚠️ 结清挂了好几批的测试 flake 口径**（`vitest.config.ts`；`4d47e09`）。**现象**：默认 `testTimeout` 5 秒对本仓库偏紧 —— 有 **7 处断言会走整棵源树做源码推导**（`profileTemplate` / `byoHygiene` / `rlsGuards` / `aiPromptCoverage` / `aiQuotaCoverage` / `agentTools` / `channelCapability`），并行负载下会越过 5 秒，表现为「**看着像真失败的假红**」：失败形态是**超时**而不是断言不成立。2026-10-03 受控三路并发可稳定复现（3/3 全红，4 / 5 / 12 条，耗时 5.0–12.4 s）。**修法按构造消掉这一类**：全局提到 **20 s**（4 倍余量），不再逐条给用例加 timeout。**真正卡死的用例仍会失败，只是晚一点。**
