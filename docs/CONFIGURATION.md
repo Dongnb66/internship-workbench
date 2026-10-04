@@ -248,31 +248,37 @@ npm run selftest                              # 离线自检（真浏览器 + �
 
 ## 有多少人在用（匿名计数 · 2026-10-04 起）
 
-数据在两张表里（定义见 `db/migrations/005_usage_events.sql`；**匿名端没有 SELECT 策略**，只有管理端读得到）：
+数据全在 usage_users / usage_events 两张表（定义见 db/migrations/005_usage_events.sql；
+**匿名端只能 INSERT，没有任何 SELECT 策略**，只有管理端读得到）。
 
-- `usage_users`：一台浏览器一行（`anon_id` = 本机随机串，不绑账号）；`first_seen` / `last_seen` ⇒ **人数、活跃、留存**；
-- `usage_events`：5 个事件 `app_open` / `agent_download` / `agent_connected` / `crawl_ok` / `import_ok`，按天去重 ⇒ **漏斗**。
-
-聚合 SQL（只读，只看数字，不碰岗位/简历/投递内容）：
+⚠️ **活跃一律从事件表推导，不要用 usage_users.last_seen**：2026-10-04 用 pg_stat_user_tables 判出
+那条匿名 UPDATE 从来没成功过（n_tup_ins=31 / n_live_tup=10 ⇒ 21 次撞主键，而 n_tup_upd=1 且是管理员手工改的），
+前端统计又刻意静默 ⇒ 症状是「界面正常、活跃永远停在首访那天」。现已删掉 UPDATE 通道（迁移 006），
+所以 last_seen 只等于 first_seen，别拿它当活跃。
 
 ```sql
--- 1) 人数：总量 / 近 24 小时活跃 / 近 7 天活跃
-select count(*) as 总人数,
-       count(*) filter (where last_seen > now() - interval '1 day')  as 近24小时活跃,
-       count(*) filter (where last_seen > now() - interval '7 days') as 近7天活跃
-from public.usage_users;
+-- 1) 人数：首次访问过的浏览器（一台浏览器一行）
+select count(*) as 总人数 from public.usage_users;
 
--- 2) 漏斗：每一步有多少「人」（distinct，不是次数）
-select event, count(distinct anon_id) as 人数
-from public.usage_events
-group by event
-order by 人数 desc;
+-- 2) 活跃：按事件算（去重到「台」）
+select count(distinct anon_id) filter (where received_at > now() - interval '1 day')  as 近24小时活跃,
+       count(distinct anon_id) filter (where received_at > now() - interval '7 days') as 近7天活跃
+from public.usage_events;
 
--- 3) 最近 30 天每日打开数（看抖音/帖子带来的波峰）
+-- 3) 漏斗五格（人数与次数都给）
+select event, count(distinct anon_id) as 人数, count(*) as 次数
+from public.usage_events group by event order by 人数 desc;
+
+-- 4) 已连过助手的台数（约等于「装过并跑起来」）
+select count(distinct anon_id) as 已连过助手 from public.usage_events where event = 'agent_connected';
+
+-- 5) 按系统分布
+select os, count(*) as 台数 from public.usage_users group by os order by 台数 desc;
+
+-- 6) 最近 30 天每日打开（看抖音/帖子带来的波峰）
 select received_at::date as 日期, count(distinct anon_id) as 人数
-from public.usage_events where event = 'app_open'
-group by 1 order by 1 desc limit 30;
+from public.usage_events where event = 'app_open' group by 1 order by 1 desc limit 30;
 ```
 
-**隐私边界**（与 `src/lib/usage.ts` 一致）：只存事件名 + 时间 + 版本 + 匿名 id；不存岗位/简历/投递内容；
-匿名端只能 INSERT/UPDATE；`navigator.globalPrivacyControl` 为真、或用户在「设置」里关掉 ⇒ 一个事件都不发。
+**口径提醒（写简历前必读）**：是「N 台浏览器」不是「N 个用户」（匿名 id 本机随机，清缓存/换设备会重算）；
+**隐私边界**：只存事件名 + 时间 + 版本 + 匿名 id，不存岗位/简历/投递内容；GPC 或用户关掉开关 ⇒ 一个事件都不发。
