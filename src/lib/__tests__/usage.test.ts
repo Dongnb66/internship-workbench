@@ -17,9 +17,10 @@ import {
 
 /** 计数只该做两件事：该记的记准、不该记的一个都别记（隐私边界比数字重要）。 */
 describe('匿名计数：事件白名单', () => {
-  it('只认 5 个事件名，别的（含空串/undefined）一律丢', () => {
-    expect(USAGE_EVENTS).toEqual(['app_open', 'agent_download', 'agent_connected', 'crawl_ok', 'import_ok'])
+  it('只认 6 个事件名（含 diag 诊断），别的（含空串/undefined）一律丢', () => {
+    expect(USAGE_EVENTS).toEqual(['app_open', 'agent_download', 'agent_connected', 'crawl_ok', 'import_ok', 'diag'])
     expect(isUsageEvent('crawl_ok')).toBe(true)
+    expect(isUsageEvent('diag')).toBe(true)
     expect(isUsageEvent('import_failed')).toBe(false)
     expect(isUsageEvent('')).toBe(false)
     expect(isUsageEvent(undefined)).toBe(false)

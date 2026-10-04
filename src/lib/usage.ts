@@ -20,7 +20,7 @@
 import { USAGE_APP_VERSION, USAGE_OS } from './usageEnv'
 
 /** 只允许这 5 个事件：改这里要同时改迁移里的注释与统计 SQL */
-export const USAGE_EVENTS = ['app_open', 'agent_download', 'agent_connected', 'crawl_ok', 'import_ok'] as const
+export const USAGE_EVENTS = ['app_open', 'agent_download', 'agent_connected', 'crawl_ok', 'import_ok', 'diag'] as const
 
 export type UsageEvent = (typeof USAGE_EVENTS)[number]
 
