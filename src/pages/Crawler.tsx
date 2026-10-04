@@ -359,6 +359,16 @@ export default function Crawler({ profile, onChanged }: PageProps) {
   /** 本地助手只有 Windows 版：非 Windows 用户上来就先说清，并给出替代路径（2026-10-04 抖音首波：4 人里 3 个 mac/linux，全卡死在这） */
   const os = hostOs()
   const nonWin = nonWindowsGuide(os)
+  /** 手机访客只给一句话 + 可展开的替代路径：别让他们在挤压的表格里翻「你能做什么」 */
+  const laneList = nonWin ? (
+    <ul style={{ margin: '6px 0 0 18px', padding: 0 }}>
+      {nonWin.lanes.map((l) => (
+        <li key={l.name}>
+          <strong>{l.name}</strong>：{l.detail}
+        </li>
+      ))}
+    </ul>
+  ) : null
 
   return (
     <div className="grid" style={{ gap: 14 }}>
@@ -401,19 +411,24 @@ export default function Crawler({ profile, onChanged }: PageProps) {
 
           {nonWin ? (
             <div className="hint mb8">
-              <strong>你现在的系统是 {nonWin.osLabel}</strong> —— {nonWin.why}。
-              但下面这些在任何系统上都能用：
-              <ul style={{ margin: '6px 0 0 18px', padding: 0 }}>
-                {nonWin.lanes.map((l) => (
-                  <li key={l.name}>
-                    <strong>{l.name}</strong>：{l.detail}
-                  </li>
-                ))}
-              </ul>
+              {os === 'mobile' ? (
+                <>
+                  <strong>手机上看不了本地助手</strong> —— 它是电脑上的程序。
+                  <details style={{ marginTop: 6 }}>
+                    <summary className="small">点这里看你能做什么</summary>
+                    {laneList}
+                  </details>
+                </>
+              ) : (
+                <>
+                  <strong>你现在的系统是 {nonWin.osLabel}</strong> —— {nonWin.why}。但下面这些在任何系统上都能用：
+                  {laneList}
+                </>
+              )}
             </div>
           ) : null}
 
-          {agentState === 'off' ? (
+          {agentState === 'off' && os !== 'mobile' ? (
             <div className="hint warn mb8">
               {agentError ?? '本地助手没在跑，「开始抓取」用不了。'}
               {os !== 'win' ? (
@@ -522,6 +537,7 @@ export default function Crawler({ profile, onChanged }: PageProps) {
             </div>
           ) : null}
 
+          {os !== 'mobile' ? (
           <div className="row">
             <button
               className="btn primary"
@@ -534,6 +550,7 @@ export default function Crawler({ profile, onChanged }: PageProps) {
               <span className="small" style={{ color: '#d97706' }}>本地助手正忙（任务 {agentBusy}），等它结束再开新的。</span>
             ) : null}
           </div>
+          ) : null}
           {agentState === 'on' && sched ? (
             <div className="small mt8" style={{ borderTop: '1px solid var(--border, #e5e5e5)', paddingTop: 8 }}>
               <label className="row" style={{ gap: 6, alignItems: 'center' }}>
