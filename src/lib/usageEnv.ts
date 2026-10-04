@@ -16,13 +16,21 @@ declare const __APP_VERSION__: string | undefined
 export const USAGE_APP_VERSION =
   typeof __APP_VERSION__ === 'string' && __APP_VERSION__ ? __APP_VERSION__ : 'dev'
 
-export const USAGE_OS =
-  typeof navigator === 'undefined'
-    ? 'unknown'
-    : /Win/i.test(navigator.userAgent)
-      ? 'win'
-      : /Mac/i.test(navigator.userAgent)
-        ? 'mac'
-        : /Linux|Android/i.test(navigator.userAgent)
-          ? 'linux'
-          : 'other'
+/**
+ * 上报用的系统字段（只到 win/mac/linux/mobile/other，不采集指纹）。
+ *
+ * ⚠️ 手机必须最先判：iPhone/iPad 的 UA 里含 'Mac OS X'、Android 的 UA 里含 'Linux' ⇒
+ * 放在后面会把手机记成 mac/linux。2026-10-04 真机踩到：发起人用手机打开线上站，
+ * 库里那台会被记成 mac/linux，按系统分布从此失真（显示路径的 hostOs 先前已修，上报路径这里补齐）。
+ */
+export function detectOs(ua?: string): 'win' | 'mac' | 'linux' | 'mobile' | 'other' | 'unknown' {
+  const s = ua ?? (typeof navigator === 'undefined' ? '' : navigator.userAgent)
+  if (!s) return 'unknown'
+  if (/iPhone|iPad|iPod|Android|Mobile/i.test(s)) return 'mobile'
+  if (/Win/i.test(s)) return 'win'
+  if (/Mac/i.test(s)) return 'mac'
+  if (/Linux/i.test(s)) return 'linux'
+  return 'other'
+}
+
+export const USAGE_OS = detectOs()
