@@ -1174,3 +1174,69 @@ table.tb tr:last-child td {
     max-width: 100%;
   }
 }
+
+/* ---------- 手机（<=600px）真·单列结构（第三轮：换思路） ----------
+ * 前两轮结论：@media 生效（侧栏已折成 62px 图标条）、子项也收住了，但发起人 18:10 真机截图显示
+ * 「整页仍能左右滑」✗ —— 手机布局不该需要横着滑。按 WorkBuddy 的建议改结构，不再加补丁：
+ *   1) 导航改顶部横向条（不再用 62px 左侧栏占掉 17% 屏宽）；
+ *   2) 页面本身禁止横向滚动，只有宽表格在自己盒子里横滑；
+ *   3) 关掉移动端「文字自动放大」（text-size-adjust）——它会把文字顶大、进而把内容顶宽。
+ * 桌面端不受影响（全部在媒体查询内）。 */
+@media (max-width: 600px) {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  body {
+    max-width: 100%;
+    overflow-x: hidden; /* 整页不许横向滚；宽内容由自己的盒子接管 */
+  }
+  .app {
+    display: block; /* 不再用 flex 横排「侧栏 + 正文」，避免子项把页面顶宽 */
+  }
+  .side {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    width: 100%;
+    height: auto;
+    max-height: 54px;
+    flex-direction: row;
+    align-items: center;
+    gap: 2px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 6px 8px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .side .side-brand {
+    display: none; /* 顶部条里不再放 logo/标题，省高度 */
+  }
+  .side .nav-item {
+    flex: 0 0 auto;
+    padding: 6px 10px;
+  }
+  .main,
+  .content {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+  .content {
+    padding: 12px 10px 32px;
+    overflow-x: hidden;
+  }
+  .card,
+  .content > div,
+  .content > section {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  .content table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto; /* 只有表格自己横滑 */
+  }
+}
