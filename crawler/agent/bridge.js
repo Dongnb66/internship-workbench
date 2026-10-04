@@ -23,17 +23,16 @@ export function isAllowedBridgePath(p) {
 
 /**
  * 桥接协议实现（把依赖都传进来，方便 Node 里单测）。
- * deps: { openerOrigin, nonce, postToOpener(msg), fetchImpl(path, init), log?(msg) }
+ * deps: { openerOrigin, nonce, postToOpener(msg), fetchImpl(path, init) }
  */
 export function createBridge(deps) {
   const openerOrigin = deps.openerOrigin || ''
   const nonce = deps.nonce || ''
   const postToOpener = deps.postToOpener
   const fetchImpl = deps.fetchImpl
-  const log = deps.log || function () {}
 
   function post(msg) {
-    try { postToOpener(msg) } catch (e) { /* 窗口没了就算了 */ }
+    try { postToOpener(msg) } catch { /* 窗口没了就算了 */ }
   }
 
   post({ type: BRIDGE_READY, nonce: nonce })
