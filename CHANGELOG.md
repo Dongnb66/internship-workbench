@@ -4,6 +4,25 @@
 
 ## [Unreleased]
 
+### Added
+
+- **匿名使用计数 —— 从此能回答「有多少人在用 / 卡在哪一步」**（新 `src/lib/usage.ts` + `src/lib/usageEnv.ts` + `db/migrations/005_usage_events.sql` + `src/lib/__tests__/usage.test.ts`；`a70980b`）。**为什么要有**：项目要发出去拉真实用户，而此前代码里**没有任何计数** ⇒ 发出去也拿不到人数，简历/作品集上只能写「自用」。**这不是自己拍脑袋想的**，按老规矩先读了三份开源实现再定：
+  - **garrytan/gstack**（`supabase/migrations/001_telemetry.sql`）→ 除事件表外**必须还有一张「用户表」**（`first_seen` / `last_seen`）：人数与活跃直接查它，**不用扫事件表**；事件带 `schema_version` 做前向兼容。
+  - **var-raphael/Gnat** → 稳定匿名 id（`distinct_id`）+ `track(事件名, 属性)` + 漏斗视角。
+  - **OpenLabs-so/openanalytics** → 隐私模型：**无 cookie、无指纹、不跨站**，尊重 Global Privacy Control。
+  - **落地**：`usage_users`（一台浏览器一行）+ `usage_events`（5 个事件 `app_open` / `agent_download` / `agent_connected` / `crawl_ok` / `import_ok`，**按天唯一索引防刷**）。前端：匿名 id 是**本机随机串**（清 localStorage 即换身份、不绑账号）；`app_open` / `agent_connected` **会话内只记一次**；`detail` **只允许数字**（岗位内容塞进来会被丢掉）；**上报失败一律静默**（功能不受影响）；GPC 为真或用户在「设置」里关掉 ⇒ **一个事件都不发**。隐私说明常驻抓取卡底部 + 「设置」页开关。聚合 SQL（人数/活跃/漏斗/每日波峰）见 `docs/CONFIGURATION.md`「有多少人在用」。
+  - **⚠️ RLS 是刻意与 gstack 不同的一处**：它整库都是匿名遥测所以放开了 SELECT；**我们这两张表旁边是别人的简历与投递记录**，所以**故意不建任何 SELECT 策略** —— 匿名端只能 INSERT/UPDATE，**统计一律走管理端**。匿名键不能变成读库通道。
+- 四件套（本机实跑）：typecheck exit 0 / **71 files 882 tests** 全绿 / lint 0 error（**25 warnings**，**200 files**）/ build exit 0（主 bundle **`index-BbuHdbME.js`**，621487 字节，sha256 `7c7c296ea825581d774ccbc24df99f6fa3ee2d15db40b2841d8fcf3915ae6e14`）。**判别器与交接单预判逐字符一致。** ⚠️ **本批不换助手包**，线上继续 r7（`5e9840ba…` / `0f42913a…`，已用 `verifyPublish --sha256` 全量复核未变）。
+
+### Fixed
+
+- **`005_usage_events.sql` 里那条唯一索引**在执行通道上报 `42601 syntax error at or near "::"`（2026-10-04 首次执行时踩到，WorkBuddy 报）。**现象**：`(received_at AT TIME ZONE 'UTC')::date` 放进 `CREATE INDEX` 的表达式上下文就挂；**同样的 cast 放在 `SELECT` 里是合法的**（实测 `SELECT (now() AT TIME ZONE 'UTC')::date` 能跑）⇒ **不是 cast 本身非法，是索引表达式上下文不接受**。**修法**：改用等价的函数形式 `date(received_at AT TIME ZONE 'UTC')`，语义相同、能正常建索引；文件里已加注释说明「重放本文件请用下面这一行」，**免得下一个执行的人再撞一次**。
+- **⚠️ 一处待你决定的权限收紧建议（本轮我没擅自做）**：`role_table_grants` 显示 `anon` / `authenticated` 对两张表**有 SELECT 授权**（来自平台默认，005 本身只授了 INSERT/UPDATE）。**当前匿名端读不到** —— 靠的是「RLS 已开 + 无 SELECT 策略」这**单层**兜住。**风险**：若将来有人 `ALTER TABLE … DISABLE ROW LEVEL SECURITY`，那些授权会立刻生效。建议补一条把边界做成双保险：
+  ```sql
+  REVOKE SELECT ON public.usage_users, public.usage_events FROM anon, authenticated;
+  ```
+  **不影响管理端统计**（走 `exec_sql` 的管理员角色，既绕过 RLS 也不是这两个角色），**也不影响前端**（已核 `src/lib/usage.ts`：只有 `insert` / `update`，**无任何 `select`**）。可随时 GRANT 回来。**这属于你的数据边界决策，我等你点头再动。**
+
 ### Changed
 
 - **给「别人用」：权限放行改首选，桥接窗口降为备选并写明代价**（`src/pages/Crawler.tsx`；`535a523`）。**为什么要改**：0.8.24 把桥接做成「不用翻浏览器设置」的好事，但界面**先摆桥接按钮** ⇒ 等于把**更麻烦的那条路当默认**（每次刷新都要重新点一次）。发给别人用时，默认路径该是**一次性成本最低**的那条。现在卡片上：
