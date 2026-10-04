@@ -1110,3 +1110,28 @@ table.tb tr:last-child td {
     padding: 16px 14px 40px;
   }
 }
+
+/* ---------- 窄屏（手机）：正文别被撑破 ----------
+ * 背景（2026-10-04 真机）：@media ≤820px 已把侧栏折成 62px 图标条、栅格单列，但
+ * 手机上看正文右侧仍被裁 —— 原因是 flex 子项默认 min-width:auto（压不扁）+ 宽表格撑破页面。
+ * 这里只针对 ≤600px 补最小规则，桌面端一行不动。 */
+@media (max-width: 600px) {
+  .main {
+    min-width: 0; /* flex 子项能压扁，否则内容按自身宽度撑出去、右侧被裁 */
+  }
+  .content {
+    padding: 12px 10px 32px;
+    overflow-x: auto; /* 宁可这里横滚，也不要整页被撑破 */
+    -webkit-overflow-scrolling: touch;
+  }
+  .topbar .who span {
+    display: none; /* 顶栏的邮箱在手机上没意义，还挤掉标题 */
+  }
+  /* 宽表格在窄屏里自己横滚（列多时不再把整页撑破） */
+  .content table {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+}
