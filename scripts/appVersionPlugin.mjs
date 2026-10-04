@@ -18,6 +18,11 @@ export function appVersionPlugin(version) {
   }
   return {
     name: 'iwb-app-version',
+    // 除了写进 index.html，还要把版本号 define 给源码用（2026-10-04 的事故：埋点那份版本号
+    // 当时是手写的，新版本上线后照样报旧版 —— 页面上两套版本号，其中一套是假的）。
+    config() {
+      return { define: { __APP_VERSION__: JSON.stringify(v) } }
+    },
     // 只在构建期跑：dev 服务器不需要这行 meta，注入它只会让本地和产物的 HTML 长得不一样
     apply: 'build',
     transformIndexHtml(html) {
