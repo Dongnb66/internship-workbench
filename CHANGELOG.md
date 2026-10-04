@@ -4,6 +4,17 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **⚠️ 桥接的「写」全被 403 —— 读能通、写不通**（`crawler/agent/server.mjs`；`5625afb`）。**现象**（发起人截图暴露）：在网页上保存定时抓取，右上角弹红条「**来源不被允许**」。**根因**：助手的 Origin 白名单只有**工作台域**与 5173 开发端口，**没有助手自己的源**；而**桥接页的源就是 `http://127.0.0.1:<PORT>`**（它与助手同源），它替工作台转发时浏览器会给 **POST** 带上这个 Origin ⇒ 撞闸门 403。**为什么之前没暴露**：**GET 不带 Origin** ⇒ 之前验通的桥接（探测 / 站点 / 任务状态）**全是读操作**，而**写操作（保存计划、发起抓取）一条都没试过** —— 一个「只验过读」的接口等于没验。**修法**：白名单补 `SELF_ORIGINS = ['http://127.0.0.1:<PORT>', 'http://localhost:<PORT>']`（用 `PORT` 变量，换端口自动跟随），并把闸门与桥接判定统一成 `isAllowedOrigin()`。**实测**：桥接页 Origin 的 POST → **200**（原来 403）；工作台域 → 200；`https://evil.example` → **仍 403**（闸门没有被放宽）。
+  - **两处刻意保持不变**（别误读成漏改）：`/bridge?origin=…` 那个校验仍**只认工作台域** —— 那里校验的是**工作台**的 origin，不是助手的；CORS 响应头也仍只对工作台域发 —— 桥接页与助手**同源**，本来就不需要 CORS 头。
+- **保存失败却「看起来像成功」**（`src/lib/localAgent.ts#scheduleDirty` + `src/pages/Crawler.tsx`；`5625afb`）。**现象**：定时抓取的状态文字原来按**编辑中**的状态渲染 ⇒ 保存失败（403 或任何错误）时界面照显示新值，**用户以为已经存好了**。**修法**：新增 `scheduleDirty(schedSaved, 编辑中的值)`（比较 `enabled` / `at` / `sites` / `keyword`，7 条断言），不一致就在摘要后显示「**（有改动未保存）**」。**教训：「看起来像成功」比报错更危险** —— 报错用户会去找，假成功用户不会。
+- 四件套（本机实跑）：typecheck exit 0 / **70 files 873 tests** 全绿 / lint 0 error（**25 warnings**，**197 files**）/ build exit 0（主 bundle **`index-lQLZi6tD.js`**，616687 字节，sha256 `c270c83ab09fa696b28e1595fdaaaafc41426d9141a403924727fbcc041e70ef`）。**判别器与交接单预判逐字符一致。**
+
+### Changed
+
+- **助手包换代（r7）**：zip **53,579,505** 字节 / sha256 `0f42913ae74b86e19f9f928a52262241d764a1854197a535c2ae1dc02cccf882`；安装器 **53,592,576** 字节 / sha256 `5e9840ba6ea907f72ab8fa40e78400333735759de48f4edfc04e087f1e0ff1b4`。**线上文件名不变**（仍叫 `internship-workbench-agent.zip`）。**r6 的哈希已作废。** ⚠️ **Origin 白名单在助手侧** —— 不换包，桥接的写操作照样 403。
+
 ### Added
 
 - **助手定时抓取 —— 第 2 层 3/3 收口**（新 `crawler/agent/scheduler.mjs` + `crawler/agent/server.mjs` 的 `GET/POST /schedule` + 每分钟 tick；网页侧 `src/lib/localAgent.ts` 的 `getSchedule`/`setSchedule` + `src/pages/Crawler.tsx` 的开关/时间/保存/上次结果；新 `crawler/__tests__/scheduler.test.mjs`；`b0124d7`，由 DSH 完成）。**为什么做**：前两层解决的是「装得上」和「连得上」，这一层解决「**不用一直盯着**」—— 到点自动跑，用户只看结果。
