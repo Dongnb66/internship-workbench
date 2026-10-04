@@ -2,29 +2,51 @@ import { track } from './usage'
 import { detectOs } from './usageEnv'
 
 /**
- * 手机版式诊断（?diag=1）：把「页面比屏幕宽多少、是谁撑宽的」直接上报到库。
+ * 上报体的两道门（都在 src/lib/usage.ts 的 sanitizeDetail）：
+ *   ① 字符串只保留 <= 40 字符；② **只保留前 6 个键**（Object.entries(...).slice(0, 6)）。
  *
- * 为什么这样做（2026-10-04 第三轮）：本机 dist 无登录态、Agent Window 也拿不到登录态，
- * 浏览器工具的快照又没有几何信息 ⇒ 我无法在真机上量 scrollWidth。改让页面自报一次，
- * 管理端（WorkBuddy）直接读 usage_events 就能看到元凶，不用 devtools。
- *
- * 隐私：只上报「元素名（标签+class）+ 整数宽度」，不含任何文本内容；仍受 ?nostat=1 / GPC / 关掉开关 约束。
+ * ⚠️ 2026-10-04 我在这里连着错两次（WorkBuddy 跑真实调用链查出来的）：
+ *   第一次：把结果压成一整行 240 字符的 summary ⇒ 被 ① 整条丢，而「无超宽」那种短文本反而能过，
+ *           **页面没超宽时报得全、真超宽时什么都报不出来**；
+ *   第二次：拆成短字段后放了 8 个键 ⇒ 被 ② 砍掉 e1/e2，**元凶元素名正好进不了库**。
+ * 现在只放 6 个键，并优先保证「元凶元素名」在里面。
  */
+export const DIAG_STR_MAX = 40
+export const DIAG_MAX_KEYS = 6
+
 export function diagEnabled(search: string): boolean {
   return /[?&]diag=1(&|$)/.test(search)
 }
 
-/** 把测量结果压成一行短文本（纯函数，便于测试；上限 240 字符） */
-export function formatOverflow(input: {
+export interface DiagDetail {
+  [k: string]: number | string
+}
+
+/**
+ * 组装上报体（最多 6 个键，全部过得了 sanitizeDetail）：
+ *   d    横向溢出多少 px（>0 就是「能横滑」的量级）
+ *   vw   视口宽（能看出是否被浏览器放大）
+ *   os   detectOs(UA) 的当场判定（顺带验手机识别）
+ *   page 当前页（#jobs / #pipeline …）
+ *   e1/e2 最宽的两个元素「标签.class(整数宽)」
+ */
+export function buildDiagDetail(input: {
   viewport: number
   scroll: number
   os: string
+  page: string
   worst: { name: string; width: number }[]
-}): string {
-  const head = 'vw=' + input.viewport + ' sw=' + input.scroll + ' os=' + input.os
-  const items = input.worst.slice(0, 5).map((w) => w.name + '(' + w.width + ')')
-  const text = head + (items.length ? ' 超宽: ' + items.join(' ') : ' 无超宽元素')
-  return text.slice(0, 240)
+}): DiagDetail {
+  const items = input.worst.slice(0, 2).map((w) => (w.name + '(' + w.width + ')').slice(0, DIAG_STR_MAX))
+  const out: DiagDetail = {
+    d: input.scroll - input.viewport,
+    vw: input.viewport,
+    os: input.os.slice(0, DIAG_STR_MAX),
+    page: input.page.slice(0, DIAG_STR_MAX),
+  }
+  if (items[0]) out.e1 = items[0]
+  if (items[1]) out.e2 = items[1]
+  return out
 }
 
 /** 找出比视口宽的元素（只看元素盒子，不读文本） */
@@ -51,8 +73,8 @@ export function reportDiag(): void {
     const viewport = Math.max(document.documentElement.clientWidth, 1)
     const scroll = document.documentElement.scrollWidth
     const worst = collectOverflow(document, viewport)
-    const summary = formatOverflow({ viewport, scroll, os: detectOs(), worst })
-    track('diag', { summary, over: worst.length, extra: String(scroll - viewport) })
+    const page = (window.location.hash || '#top').replace(/^#/, '').split(/[?&]/)[0] || 'top'
+    track('diag', buildDiagDetail({ viewport, scroll, os: detectOs(), page, worst }))
   } catch {
     /* 诊断失败绝不影响功能 */
   }
