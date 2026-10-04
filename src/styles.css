@@ -1135,3 +1135,42 @@ table.tb tr:last-child td {
     white-space: nowrap;
   }
 }
+
+/* ---------- 窄屏硬化（2026-10-04 真机第二轮回） ----------
+ * 现象：viewport 正确、@media 生效（侧栏已是 62px 图标条），但卡片/正文仍比屏幕宽 ⇒ 右侧被裁。
+ * 原因是「某个子元素自身有最小宽度」把容器顶宽：网格/弹性子项默认 min-width:auto、代码块不折行、
+ * 长串不换行（例如命令、URL）。这里统一把它们按窄屏收住；桌面端不受影响。 */
+@media (max-width: 600px) {
+  /* 1) 网格/弹性子项默认 min-width:auto ⇒ 允许它们被压到比内容更窄 */
+  .content * {
+    min-width: 0;
+  }
+  /* 2) 长串与代码块必须能折行（命令、URL、JSON 是最常见的撑宽元凶） */
+  .content pre,
+  .content code,
+  .content textarea,
+  .content input {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    max-width: 100%;
+  }
+  /* 3) 图片/视频/画布不许超宽 */
+  .content img,
+  .content svg,
+  .content canvas,
+  .content video {
+    max-width: 100%;
+    height: auto;
+  }
+  /* 4) 卡片本身也允许收缩，并强制 border-box（内边距不再算进宽度） */
+  .content .card,
+  .content > div {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  /* 5) 表格仍在自己那一层横滑，别把整页顶宽 */
+  .content table {
+    max-width: 100%;
+  }
+}
