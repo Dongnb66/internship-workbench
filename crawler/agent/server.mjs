@@ -190,7 +190,13 @@ const server = http.createServer(async (req, res) => {
         return json(res, 403, { error: 'origin 不在白名单，不提供桥接' }, origin)
       }
       const file = url.pathname === '/bridge' ? 'bridge.html' : 'bridge.js'
-      const body = await readFile(path.join(HERE, file), 'utf8')
+      let body = await readFile(path.join(HERE, file), 'utf8')
+      if (file === 'bridge.html') {
+        // 把桥接逻辑**原地注入**成经典脚本（不用 ESM/import）：模块加载一旦失败，页面会静默停在初始
+        // 文案，与「连不上」长得一模一样 —— 2026-10-04 在 Edge 上就踩到了。
+        const logic = await readFile(path.join(HERE, 'bridge.js'), 'utf8')
+        body = body.replace('/*__BRIDGE_JS__*/', logic.replace(/\bexport /g, ''))
+      }
       res.writeHead(200, {
         'Content-Type': file.endsWith('.html') ? 'text/html; charset=utf-8' : 'text/javascript; charset=utf-8',
         'Cache-Control': 'no-store',
