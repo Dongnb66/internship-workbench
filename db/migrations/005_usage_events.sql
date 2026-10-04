@@ -81,3 +81,17 @@ CREATE POLICY usage_events_insert ON public.usage_events
 
 -- 故意不建 SELECT 策略：匿名端读不到（否则匿名键就成了读库通道）。
 -- 聚合 SQL 见 docs/CONFIGURATION.md「有多少人在用」一节，用管理端跑。
+
+-- ============ 权限收紧（2026-10-04，WorkBuddy 审出平台默认给了 SELECT；发起人已同意） ============
+-- 背景：information_schema 显示 anon / authenticated 对这两张表有平台默认的 SELECT 授权。
+-- 当前读不到任何行靠的是「RLS 已开 + 没有 SELECT 策略」这单层；万一将来有人 DISABLE RLS 或
+-- 平台迁移重建表时默认带策略，那层授权会立刻生效 —— 而这两张表旁边是别人的简历与投递记录。
+-- 所以把 SELECT 收回，只留 INSERT / UPDATE。
+--
+-- ⚠️ 但**不能只做全表 REVOKE**：PostgreSQL 的 `UPDATE ... WHERE anon_id = $1` 需要**被读列的 SELECT 权限**，
+--    全表收回会把 usage_users 的 last_seen 更新打死；而前端统计是刻意静默的（不抛错）⇒ 症状是
+--    「看着没坏、活跃数据永远是首见那天」。故把 anon_id 这一列授回来（列级），真实可读性仍由
+--    「RLS 已开 + 无 SELECT 策略」兜住：有列权限也读不到任何一行。
+REVOKE SELECT ON public.usage_users, public.usage_events FROM anon, authenticated;
+
+GRANT SELECT (anon_id) ON public.usage_users TO anon, authenticated;
