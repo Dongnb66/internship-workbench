@@ -12,6 +12,7 @@ import {
   getTask,
   jobsToImportText,
   saveSchedule,
+  scheduleDirty,
   listOutputs,
   listSites,
   lnaHelpFor,
@@ -371,6 +372,17 @@ describe('定时抓取（/schedule）', () => {
     await saveSchedule({ enabled: true, at: '09:00', sites: ['hikvision'], keyword: '前端', pages: 1, limit: 20, mode: 'all' })
     expect(mock).toHaveBeenCalledTimes(1)
     expect(sent).toEqual({ enabled: true, at: '09:00', sites: ['hikvision'], keyword: '前端', pages: 1, limit: 20, mode: 'all' })
+  })
+
+  it('有改动未保存：编辑中的值和已保存的不一样就该提示（保存失败也不再假装成功）', () => {
+    const saved = { enabled: true, at: '09:00', sites: ['hikvision'], keyword: '前端' }
+    expect(scheduleDirty(saved, saved)).toBe(false)
+    expect(scheduleDirty(saved, { ...saved, enabled: false })).toBe(true)
+    expect(scheduleDirty(saved, { ...saved, at: '10:00' })).toBe(true)
+    expect(scheduleDirty(saved, { ...saved, keyword: '后端' })).toBe(true)
+    expect(scheduleDirty(saved, { ...saved, sites: ['hikvision', 'tencent'] })).toBe(true)
+    expect(scheduleDirty(saved, { ...saved, sites: ['tencent'] })).toBe(true)
+    expect(scheduleDirty(null, saved)).toBe(true)
   })
 
   it('助手不认 /schedule（老包）时抛错 —— 界面据此不给这个功能', async () => {

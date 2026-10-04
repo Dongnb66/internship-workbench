@@ -5,7 +5,7 @@ import { errText } from '../cloud'
 import { listRows } from '../lib/api'
 import { crawlFailureHint, crawlOutputHint, buildCrawlPlan, CRAWLER_PREFS_KEY, parseCrawlerPrefs, serializeCrawlerPrefs } from '../lib/crawlTask'
 import { crawlSitesForPicker, type CrawlSite } from '../lib/crawlSites'
-import { AGENT_DOWNLOAD_URL, AGENT_PORTABLE_URL, AgentTimeoutError, freshOutputs, getTask, jobsToImportText, listOutputs, listSites, lnaHelpFor, lnaPermissionState, getSchedule, openBridge, probe, saveSchedule, startCrawl, type AgentHealth, type CrawlTask, type AgentSchedule, type CrawlTaskOutput } from '../lib/localAgent'
+import { AGENT_DOWNLOAD_URL, AGENT_PORTABLE_URL, AgentTimeoutError, freshOutputs, getTask, jobsToImportText, listOutputs, listSites, lnaHelpFor, lnaPermissionState, getSchedule, openBridge, probe, saveSchedule, scheduleDirty, startCrawl, type AgentHealth, type CrawlTask, type AgentSchedule, type CrawlTaskOutput } from '../lib/localAgent'
 import { notifyErr, notifyOk } from '../lib/toast'
 import type { PageProps } from './Overview'
 import type { Row } from '../types'
@@ -74,6 +74,9 @@ export default function Crawler({ profile, onChanged }: PageProps) {
   const [bridgeUi, setBridgeUi] = useState<'closed' | 'connecting' | 'open'>('closed')
   /** 定时抓取配置（助手侧持久化；老包没有 /schedule 就没有这个块） */
   const [sched, setSched] = useState<AgentSchedule | null>(null)
+  /** 服务端确认过的那一份 + 它的摘要（用来判断「有改动未保存」并如实显示） */
+  const [schedSaved, setSchedSaved] = useState<AgentSchedule | null>(null)
+  const [schedSummary, setSchedSummary] = useState('')
   const [schedSaving, setSchedSaving] = useState(false)
   /** 本次真正新写出的产出（界面显示与导入都用它，别拿旧文件冒充新结果） */
   const [freshResult, setFreshResult] = useState<CrawlTaskOutput[]>([])
@@ -131,9 +134,13 @@ export default function Crawler({ profile, onChanged }: PageProps) {
       }
       // 定时抓取：老包没有 /schedule，拿不到就不显示这个块（不是错误）
       try {
-        setSched((await getSchedule()).schedule)
+        const r = await getSchedule()
+        setSched(r.schedule)
+        setSchedSaved(r.schedule)
+        setSchedSummary(r.summary.text)
       } catch {
         setSched(null)
+        setSchedSaved(null)
       }
     } catch (error) {
       setAgentError(errText(error))
@@ -237,6 +244,8 @@ export default function Crawler({ profile, onChanged }: PageProps) {
     try {
       const r = await saveSchedule({ enabled: sched.enabled, at: sched.at, sites: selected, keyword: keyword.trim(), pages, limit, mode })
       setSched(r.schedule)
+      setSchedSaved(r.schedule)
+      setSchedSummary(r.summary.text)
       notifyOk('自动抓取已保存：' + r.summary.text)
     } catch (error) {
       notifyErr(errText(error))
@@ -499,7 +508,9 @@ export default function Crawler({ profile, onChanged }: PageProps) {
                 <button className="btn sm" disabled={schedSaving} onClick={() => void saveSched()}>
                   {schedSaving ? '保存中…' : '保存自动抓取'}</button>
                 <span className="small muted">
-                  {sched.enabled ? `每天 ${sched.at} 抓 ${selected.length} 个站点` : '未开启（勾上并保存即生效）'}
+                  {scheduleDirty(schedSaved, { enabled: sched.enabled, at: sched.at, sites: selected, keyword: keyword.trim() })
+                    ? '（有改动未保存）'
+                    : schedSummary || '未开启'}
                 </span>
               </div>
               {sched.lastRun ? (

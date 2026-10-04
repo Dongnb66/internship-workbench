@@ -47,6 +47,11 @@ const ALLOWED_ORIGINS = [
   'http://127.0.0.1:5173',
 ]
 
+// 桥接页与助手**同源**（http://127.0.0.1:<PORT>）：它替工作台转发时，浏览器会给 POST 带上这个 Origin。
+// 不把它放进白名单就会出现「读能通、写全 403」—— 2026-10-04 实测踩到：网页上保存计划报「来源不被允许」。
+const SELF_ORIGINS = [`http://127.0.0.1:${PORT}`, `http://localhost:${PORT}`]
+const isAllowedOrigin = (o) => ALLOWED_ORIGINS.includes(o) || SELF_ORIGINS.includes(o)
+
 /** 任务表：一次只跑一个抓取（爬虫要开真浏览器，并行会互相踩） */
 const tasks = new Map()
 let running = null
@@ -206,7 +211,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') {
     return json(res, 204, {}, origin)
   }
-  if (origin && !ALLOWED_ORIGINS.includes(origin)) {
+  if (origin && !isAllowedOrigin(origin)) {
     return json(res, 403, { error: '来源不被允许' }, origin)
   }
 

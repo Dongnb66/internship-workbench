@@ -375,6 +375,26 @@ export interface AgentSchedule {
   lastRun?: AgentScheduleLastRun | null
 }
 
+/**
+ * 界面上的「有改动未保存」判定。
+ *
+ * 为什么需要：原来那块文字是按**编辑中的状态**渲染的，保存失败（比如 403）时照样显示
+ * 「每天 12:28 抓 2 个站点」—— 看起来像保存成功，实际没有。保存失败必须看得见。
+ */
+export function scheduleDirty(
+  saved: { enabled: boolean; at: string; sites: string[]; keyword: string } | null,
+  editing: { enabled: boolean; at: string; sites: string[]; keyword: string } | null,
+): boolean {
+  if (!saved || !editing) return true
+  return (
+    saved.enabled !== editing.enabled ||
+    saved.at !== editing.at ||
+    saved.keyword !== editing.keyword ||
+    saved.sites.length !== editing.sites.length ||
+    saved.sites.some((s, i) => s !== editing.sites[i])
+  )
+}
+
 export interface ScheduleReply {
   schedule: AgentSchedule
   summary: { enabled: boolean; text: string }
