@@ -390,8 +390,8 @@ export function scheduleDirty(
     saved.enabled !== editing.enabled ||
     saved.at !== editing.at ||
     saved.keyword !== editing.keyword ||
-    saved.sites.length !== editing.sites.length ||
-    saved.sites.some((s, i) => s !== editing.sites[i])
+    // 站点是**集合**不是序列：同样的两个站点换个顺序不算改动（2026-10-04 真机验证时发现的假提示）
+    [...saved.sites].sort().join('|') !== [...editing.sites].sort().join('|')
   )
 }
 

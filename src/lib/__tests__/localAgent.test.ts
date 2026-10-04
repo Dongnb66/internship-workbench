@@ -382,6 +382,9 @@ describe('定时抓取（/schedule）', () => {
     expect(scheduleDirty(saved, { ...saved, keyword: '后端' })).toBe(true)
     expect(scheduleDirty(saved, { ...saved, sites: ['hikvision', 'tencent'] })).toBe(true)
     expect(scheduleDirty(saved, { ...saved, sites: ['tencent'] })).toBe(true)
+
+    // 站点是集合：换个顺序不算改动（真机验证时发现的假「未保存」提示）
+    expect(scheduleDirty(saved, { ...saved, sites: ['tencent', 'hikvision'] })).toBe(false)
     expect(scheduleDirty(null, saved)).toBe(true)
   })
 
