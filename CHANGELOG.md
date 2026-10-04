@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+### Added
+
+- **⚠️ `?diag=1` 手机版式自报诊断 —— 让页面自己说「谁把页面撑宽了 + 你的手机被判定成什么系统」**（`src/lib/diag.ts` + `src/main.tsx` 挂载 + `usage.ts` 白名单加 `diag`；`2df2a81`，DSH 做的）。**背景**：手机端横向溢出已改过两轮 CSS（`777787f` 加 600px 断点、`f43581d` 硬化子元素顶宽）都没根治，而**本机 dist 无登录态、Agent Window 也拿不到登录态、浏览器工具的快照又没有几何信息** ⇒ 谁都量不到真机 DOM，只能继续猜。**做法**：与其让页面弹日志，不如**把测量结果直接写进库**，管理端读 `usage_events` 就能看元凶。开启时页面算出「视口宽 / `documentElement.scrollWidth` / `detectOs()` 判出的 `os` / 最宽的 5 个元素」，以 `event = 'diag'` 写一行，`detail` 形如 `vw=390 sw=430 os=mobile 超宽: table.tbl(420) div.card(401)`。**一次动作同时定两格**：谁撑宽了 + `5f06666` 的手机识别是否生效。
+  **隐私边界（重要）**：元素名只取「标签 + 最多两个 class + 整数宽度」，**不读任何文本内容**；整串上限 240 字符；**仍受 `?nostat=1` / GPC / 用户关掉开关约束**（即 `usageEnabled()` 那道门照旧）。纯函数 `diagEnabled()` / `formatOverflow()` / `collectOverflow()` + 3 条断言；`USAGE_EVENTS` 白名单加 `diag` 并同步了原断言。
+  **挂载方式**：`main.tsx` 里 `setTimeout(reportDiag, 2500)`（`StrictMode` 渲染之后、延迟 2.5 s 等布局稳定）。**本批已核**：产物含 `` `diag` `` 事件名、`/[?&]diag=1(&|$)/` 完整保留、`documentElement.scrollWidth` / `clientWidth` / `querySelectorAll('*')` / `getBoundingClientRect` 全部在；`?nostat=1` 与 `globalPrivacyControl` 两道约束仍在。
+  ⚠️ **一个使用限制要记住**：`diag` 事件也受 `uq_usage_events_daily` 按天去重约束 ⇒ **同一台设备当天多次开 `?diag=1` 只留一行**。想多测几个页面需要换身份或隔天。
+
+### Fixed
+
+- **⚠️ 更正一个我自己下错的推断：`app_open` 的 `detail` 为 null 不构成「非真人」的证据**（本轮 DSH 指出，我核实后成立）。**原推断错在哪**：`src/App.tsx:60` 是裸 `track('app_open')`、**不传 `detail`**，而 `sanitizeDetail(undefined)` 直接返回 `undefined` ⇒ **`app_open` 的 `detail` 必然为 null，与访问者是不是真人无关**。所以「`a_5a1986f` 只有 `app_open` + `detail` 全 null ⇒ 像无头浏览器」这条推理**不成立** —— 真人「打开一下就走」的行也是这个形态。**真正的判据是「除 `app_open` 外有没有交互事件」**（`agent_download` / `agent_connected` / `crawl_ok` / `import_ok`），零交互才是可疑信号。**这条已写进长期纪律，别再犯。**
+- **⚠️ `?diag=1` 诊断的产物判别器写法（记一下，踩了两次）**：① **函数名会被压缩**（`diagEnabled` → `ae`、`formatOverflow` → `oe`）⇒ **不能用函数名当判据**，要用**它内部的独特常量**（如 `/[?&]diag=1(&|$)/`、`documentElement.scrollWidth`）。② **事件白名单是模板串形态**（`` `app_open`,`agent_download`,…,`diag` ``）⇒ 判「白名单含 diag」要同时认**反引号**，只认单双引号会判 False（我判了一次 False，回源码看才发现）。③ **判正则是否完整保留，别自己拼 `[&]\?` 这种转义** —— 直接把产物里那段原文 `slice` 出来打一遍最快（我因此连着判了两次 False，最后用原文确认两个正则逐字符完整）。
+
 ### Changed
 
 - **⚠️ 手机端换结构：导航改顶部横条 + 整页禁横向滚 + 关掉文字自动放大**（`src/styles.css` 的 `@media (max-width:600px)`；`a93fc39`，DSH 做的，**第三轮、方向从「加补丁」改成「换结构」**）。**背景**：前两轮（`777787f` 加 600px 断点、`f43581d` 硬化子元素顶宽）**其实都生效了** —— 发起人 18:10 真机截图显示「**能横滑**、说不清哪一块被裁」⇒ 判读是**整页在横向滚动**，而不是某一块坏了。**手机布局不该需要横着滑**，所以按「不再加 CSS 补丁」的建议改结构：① `.app { display:block }` + `.side` 改**顶部 sticky 横向导航条**（`.side-brand` 隐藏，省高度；原来 62px 左侧栏在窄屏占掉约 17% 屏宽）；② `body { overflow-x:hidden }` + `.content` 不再自己横滑 ⇒ **整页不许横滑，宽表格由自己的盒子接管**；③ `html { text-size-adjust: 100% }` + `-webkit-text-size-adjust` ⇒ **关掉移动端「文字自动放大」**（它会把文字顶大、进而把内容顶宽 —— 这是前两轮没考虑到的元凶）；④ `.main/.content` 与顶层块 `width:100%` + `box-sizing:border-box`。**桌面端一字未动**（全部在媒体查询内，820px 断点与侧栏 62px 折叠规则原样保留）。**本批已核**：产物 CSS 含 `text-size-adjust` / `-webkit-text-size-adjust` / `overflow-x:hidden` / `display:block` / `position:sticky` / `max-height:54px` 全部；820px+600px 双断点（两种语法都认）与前两轮规则仍在。
