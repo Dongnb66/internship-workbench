@@ -67,6 +67,8 @@ const TIMEOUT_HINT =
 const BRIDGE_READY = 'iw-bridge-ready'
 const BRIDGE_REQUEST = 'iw-bridge-request'
 const BRIDGE_RESPONSE = 'iw-bridge-response'
+/** 桥接页自己报的错（脚本没注进去、初始化抛异常…）—— 没有它，这类失败只能表现为「12 秒没回话」，查不出来 */
+const BRIDGE_ERROR = 'iw-bridge-error'
 /** 助手 origin（桥接页回包的 origin 必须正好是它） */
 const AGENT_ORIGIN = AGENT_BASE
 
@@ -77,6 +79,8 @@ let bridgeNonce = ''
 let bridgeState: BridgeState = 'closed'
 let bridgeOnReady: (() => void) | null = null
 let bridgeListening = false
+/** 桥接页最后一次自报的错误（界面可以直接显示，比「超时」有用得多） */
+let bridgeLastError: string | null = null
 const bridgePending = new Map<string, { resolve: (v: { status: number; text: string }) => void; reject: (e: Error) => void }>()
 
 /** 桥接页地址（纯函数，便于单测）：把工作台 origin 与 nonce 带过去 */
@@ -90,6 +94,7 @@ export function isBridgeMessage(data: unknown, nonce: string): boolean {
   const d = data as Record<string, unknown>
   if (d.nonce !== nonce) return false
   if (d.type === BRIDGE_READY) return true
+  if (d.type === BRIDGE_ERROR) return typeof d.message === 'string'
   return d.type === BRIDGE_RESPONSE && typeof d.id === 'string'
 }
 
@@ -117,6 +122,16 @@ function attachBridgeListener() {
       if (bridgeOnReady) { bridgeOnReady(); bridgeOnReady = null }
       return
     }
+    if (d.type === BRIDGE_ERROR) {
+      // 桥接页自己说它坏了（脚本没跑起来 / 初始化抛异常）：如实把它的话交给用户，别只报「超时」
+      const why = new Error(`桥接页报错（${String(d.where ?? '?')}）：${String(d.message)}`)
+      bridgeState = 'closed'
+      if (bridgeOnReady) { bridgeOnReady = null; }
+      for (const [, p] of bridgePending) p.reject(why)
+      bridgePending.clear()
+      bridgeLastError = why.message
+      return
+    }
     const p = bridgePending.get(d.id as string)
     if (!p) return
     bridgePending.delete(d.id as string)
@@ -129,7 +144,10 @@ function attachBridgeListener() {
  * 开桥接窗口。**必须在用户点击里调用**（否则被弹窗拦截）。
  * 返回的 promise 在桥接页 ready 时兑现；被拦下 / 超时则 reject（界面据此给话）。
  */
+export function bridgeError(): string | null { return bridgeLastError }
+
 export function openBridge(timeoutMs = 12000): Promise<void> {
+  bridgeLastError = null
   const origin = typeof location === 'undefined' ? '' : location.origin
   bridgeNonce = Math.random().toString(36).slice(2) + Date.now().toString(36)
   attachBridgeListener()
@@ -141,7 +159,10 @@ export function openBridge(timeoutMs = 12000): Promise<void> {
   }
   return new Promise<void>((resolve, reject) => {
     const timer = setTimeout(() => {
-      if (bridgeState !== 'open') { bridgeState = 'closed'; reject(new Error('桥接窗口 12 秒没有回话（助手没在跑？）')) }
+      if (bridgeState !== 'open') {
+        bridgeState = 'closed'
+        reject(new Error(bridgeLastError ?? '桥接窗口 12 秒没有回话（助手没在跑？）'))
+      }
     }, timeoutMs)
     bridgeOnReady = () => { clearTimeout(timer); resolve() }
   })

@@ -346,6 +346,9 @@ describe('桥接窗口（绕过 LNA 权限）', () => {
     expect(isBridgeMessage({ type: 'iw-bridge-response', nonce: 'abc', id: '1' }, 'abc')).toBe(true)
     expect(isBridgeMessage({ type: 'iw-bridge-ready', nonce: 'other' }, 'abc')).toBe(false)
     expect(isBridgeMessage({ type: 'iw-bridge-response', nonce: 'abc' }, 'abc')).toBe(false) // 缺 id
+    // 桥接页自报错误也要认（否则「脚本没跑起来」只能表现为超时）
+    expect(isBridgeMessage({ type: 'iw-bridge-error', nonce: 'abc', message: 'boom' }, 'abc')).toBe(true)
+    expect(isBridgeMessage({ type: 'iw-bridge-error', nonce: 'abc' }, 'abc')).toBe(false)
     expect(isBridgeMessage(null, 'abc')).toBe(false)
     expect(isBridgeMessage('ready', 'abc')).toBe(false)
   })
