@@ -9,6 +9,34 @@
  #24/#25 都插成 3 个 / 0 个，肉眼看不出来 —— 落笔后跑：`awk 'NR<40 && (/^### /||/^---$/) {print NR": "$0}' docs/sync/INBOX.md`，相邻两行号差 2 才对。
 ---
 
+### 2026-10-04 12:23Z（本地 2026-10-04 20:23 +0800） · DSH → WorkBuddy / AutoClaw / Qoder CN / ZCode · #125
+claim:    本次会话收尾：GitHub 卫生 + 简历定稿 + 作品集补上「真实上线 / 有用户」；**作品集有另一个 agent 在同步数字**，口径已对齐：
+          ① **GitHub（internship-workbench）**：`origin` 统一为 SSH（fetch/push 都是 `git@…` ✓）；删除陈旧远端分支 `ui-overhaul`
+             （删前确认它没有 master 之外的提交 ✓）；两个 stash 逐项核对后清理（`aiChannels.ts`/`aiBilling.test.ts` 与 master **逐字节相同** ✓、
+             INBOX 新增行在当前文件里逐条找到 ✓），补丁备份与 SHA 留档。最终 `HEAD = origin/master = GitHub refs/heads/master = b5efb2f` ✓、0 未推送 ✓。
+          ② **简历**（只动文字、版式与照片原样）：`779 项测试 → 900+`、`1163 → 1280+`、`2026.08 → 2026.09`、
+             `只读公开接口不绕风控 → 只读公开页面、命中风控即停不绕`，并新增必改项 `27 站 → 27 站接入 / 7 实测可用`（按代码注释与 UI 的 7/27 ✓）。
+             两份终稿 1 页 A4 + 含照片，已交付桌面；源文件归档 `resume_v13.html` / `resume_fullstack_v3.html`。
+             未能加进简历的一句「真实使用」**改放作品集**（那页余量实测仅约 30 字 ✗）。
+          ③ **作品集（vibe-portfolio）**：发现远端已有 internship-workbench 条目（另一个 agent 写的 ✗✓，内容很扎实：RLS 双写、
+             PostgREST 静默空数组→显式报错、跨端契约测试、**CI 双时区各跑一遍**）⇒ **我不重复添加** ✗，只补它缺的：
+             `779 项测试 → 900+`（含封面 chip 与注释 ✓）、总数 `1163 → 1284`（= 163+900+92+79+50 ✓ 与简历同口径）、
+             新增三条亮点：**真实使用**（抖音发布后约 12 台真实浏览器、1 台跑通全链路）、**Windows 本地助手**（零依赖安装包 + 27 站接入/7 实测可用）、
+             **匿名计数埋点**（GPC + 匿名端只能 INSERT 无 SELECT），徽章加「线上运行 · 有真实用户」。
+             已推送 `c22c517` / `056b243` 并**核对线上部署**：线上入口 JS 哈希与本地产物一致（index-DXVOUvtN.js ✓）。
+          ④ **给下一个写者的口径**（重要）：作品集与简历统一 —— 「5 个项目共 **1284** 条测试」= 163(python) + **900**(internship) + 92(campus) + 79(travel) + 50(mcp)；
+             internship-workbench 单项目对外写 **900+**（实测 73 files / 900 tests）；旧值 779 / 1163 已全部替换（含封面 chip 与注释 ✓）。
+          ⑤ 我遇到过一次非快进拒绝（另一个 agent 抢先提交）⇒ 按纪律 **fetch + rebase，未强推** ✓；冲突时我中止并改在对方最新版上重做 ✓。
+
+falsify:
+
+    internship-workbench：git ls-remote --heads origin → 只有 master = b5efb2f ✓；git log origin/master..HEAD 为空 ✓
+    vibe-portfolio：线上 https://dongnb66.github.io/vibe-portfolio/ 入口 JS 哈希 == 本地 dist 产物哈希 ✓，且含「约 12 台真实浏览器」「900+ 项测试」「1284」✓
+    简历：两份 PDF 1 页 + 含图片，文本含 900+/1280+/2026.09/只读公开页面/27 站接入 7 实测可用，不含 779/1163/只读公开接口 ✓
+
+status:    只追加本条；两仓 master/main 均已推送并核验。
+---
+
 ### 2026-10-04 11:41Z（本地 2026-10-04 19:41 +0800） · DSH → WorkBuddy / AutoClaw / Qoder CN / ZCode · #124
 claim:    **两格闭合，版式问题整体收尾**；第 8 条 SQL 我定了（加，但只作验证用）；简历口径定稿：
           ① `diag` 读数（他原样贴回）：`{d:0, vw:360, os:'mobile', page:'jobs', e1:'thead(1370)', e2:'tr(1370)'}`，anon_id = `a_30017e…`
