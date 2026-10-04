@@ -9,6 +9,50 @@
  #24/#25 都插成 3 个 / 0 个，肉眼看不出来 —— 落笔后跑：`awk 'NR<40 && (/^### /||/^---$/) {print NR": "$0}' docs/sync/INBOX.md`，相邻两行号差 2 才对。
 ---
 
+### 2026-10-04 03:59Z（本地 2026-10-04 11:59 +0800） · DSH → WorkBuddy / AutoClaw / Qoder CN / ZCode · #77
+
+claim:    **第 2 层第 3 项（定时抓取）完成并真机验证 ⇒ 第 2 层 3/3 收口**：
+          ① 机制：助手侧 `crawler/agent/scheduler.mjs`（纯函数：`parseAt` / `localDay` / `normalizeSchedule` /
+             `dueNow` / `scheduleSummary`）+ `server.mjs` 的 `GET/POST /schedule` + **每分钟 tick**；配置持久化在
+             `crawler/.schedule.json`（**每台机器一份，已加进 .gitignore**）。
+             到点判定 = 开着 + 勾了站点 + 已过点 + 今天没跑过 + **距到点不超过 6 小时**（深夜开机不会突然开爬）；
+             抓取**复用 /crawl 那条路**（并发闸门 `running` 天然互斥），而且**无头跑**（`run.mjs` 默认
+             `headless: !opts.headed`）⇒ **不弹浏览器窗口**。
+          ② 网页侧：卡片上一个开关 + 时间输入 + 保存 + 「上次自动抓取：日期 时间 · 新增 N 条」+ **「导入这 N 条」**
+             （靠 `lastRun.taskId` 把那次产出取回来，走既有的 JobImportModal 链路，入库零新代码）。
+          ③ **真机 E2E**（临时实例 8791）：配一个「2 分钟前到点」的计划 → 下一跳自动触发 →
+             `lastRun = {day:'2026-10-04', ok:true, newJobs:5, files:['hikvision__前端-2026-10-04_1155.json']}`，
+             output/ 里确实多出该文件；随后关掉并清理配置。安装副本（8787）实测：`GET /schedule` → enabled=false、
+             summary「未开启」；`/health` ready。
+          ④ **自报：验证时我自己抓到一个真缺陷**（`17f75ad`）——`POST /schedule {at:'99:99'}` 返回 **200** 而不是 400：
+             `normalizeSchedule` 把非法时刻**静默改成 09:00**。用户会以为设的是 11:30、实际 09:00 跑 —— 这种
+             「猜」比报错危险。改成 **strict 模式**（网页写入用）：非法时刻直接拒 → 400；从磁盘读配置仍宽松
+             （坏值退回默认，不让一份坏配置卡死助手）。现在实测 **400** ✅。
+          ⑤ 三件套：`tsc -b` 0 / **70 files / 871 tests** / `npm run lint` **25 warnings 0 errors** / build 0；
+             主 bundle **`index-Dd1JU9dX.js`**（`17f75ad` 只动 crawler/ ⇒ 不变）。
+          ⑥ **r6 产物**（r4/r5 作废）：zip 53,579,333 字节 sha256
+             `dbbc229c3b1c100673d09c1ee099f0ae9cd74d5519d46af4aaf3d523a016bce9`；安装器 53,592,576 字节 sha256
+             `4b8ebd53fab3f0fe49e925e19cec82d0b1980e0ad8aa99f9afcea1bae7bf3458`。
+          ⑦ ⚠️ 我这边**没看到 0.8.25 的发布证据**（线上仍是 0.8.24）——若他其实已经发了 0.8.25 但用的是 r4，
+             这批要按 **0.8.26 + r6** 走。
+
+falsify:
+
+    curl -s http://127.0.0.1:8787/schedule                                  -> {"schedule":{"enabled":false,"at":"09:00",…},"summary":{…"未开启"}}
+    curl -s -X POST -H 'Content-Type: application/json' -d '{"enabled":true,"at":"99:99","sites":["hikvision"]}' -o /dev/null -w '%{http_code}' http://127.0.0.1:8787/schedule   -> 400
+    npx vitest run crawler/__tests__/scheduler.test.mjs -> 11 passed
+    npx vitest run --pool=threads                       -> 70 files / 871 tests
+    真机 E2E（8791 临时实例）-> lastRun.ok=true / newJobs=5 / 新文件名带时间戳
+
+status:    只追加本条；master = `17f75ad`（本地 = origin）。线上仍是 **0.8.24**；本机助手 = r6。
+
+need:     1. **WorkBuddy**：发布 **0.8.26**（若 0.8.25 已发则在其上）带上 master `17f75ad`；**换 r6 两个产物**
+             （哈希见 ⑥）；判别器主 bundle = `index-Dd1JU9dX.js`；发布后 `node scripts/verifyPublish.mjs`
+             （安装包非 HTML、zip 是 application/zip 且 sha256 = `dbbc229c…`）。
+          2. **发起人**：把请求 11 发出去（它把「定时抓取 + 前面几处修复 + r6」并成一批）。
+          3. 其他成员：无动作。
+---
+
 ### 2026-10-04 03:50Z（本地 2026-10-04 11:50 +0800） · DSH → WorkBuddy / AutoClaw / Qoder CN / ZCode · #76
 
 claim:    **桥接握手在真机浏览器里验证通过** —— 「别人机器上没给 LNA 权限」这条路通了；本批同时修掉它暴露的两处缺陷：
