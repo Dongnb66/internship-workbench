@@ -4,6 +4,20 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **下载入口从「zip 手动包」换成「安装包 exe（双击即装）」**（`src/lib/localAgent.ts`、`src/pages/Crawler.tsx`；`1ad6c48`）。**为什么要换**：0.8.20/0.8.21 的入口给的是一条 51 MB 的 zip —— 用户拿到手要自己解压、认准哪个是 `start-hidden.vbs`、再双击（装了 0.8.22 的「解除锁定」提示也只是把这道坎说清楚，没有消掉它）；真机走一遍就发现这步对普通用户是门槛。现在主入口是**单文件 `.exe`**：双击即装（脚本内嵌整包；装完写开机自启），**装完自动变绿**（配合 0.8.22 起的每 5 秒自动重试探测）。**旧的 zip 一条都没删** —— 常量改名为 `AGENT_PORTABLE_URL`（`AGENT_DOWNLOAD_URL` 让给 exe），给不想/不能跑 exe 的人留着，也用于排查。**单测同步收紧**：`AGENT_DOWNLOAD_URL` 只允许空或 https 的 `.exe`/`.zip` 直链，另新增一条钉住 `AGENT_PORTABLE_URL` 必须是 https 的 `.zip` —— 挡的是占位符 / 相对路径 / HTML 中间页这类值。
+- **`scripts/verifyPublish.mjs` 改成核验两个下载物**（`1ad6c48`）。原先只看 zip 的 Content-Type；现在同时核验**安装包不能返回 `text/html`**（返回 HTML = 这次发布没把 `public/downloads/` 里的 exe 带上，链接被静默换成 SPA 回退页）+ **zip 必须是 `application/zip`**。两个包都放在发布源树的 `public/downloads/` 里、**都不在 git 里**（`.git/info/exclude` 排除整个目录）⇒ 漏带一次就会静默变成一个网页，而状态码仍是 200；这条工具就是钉这个坑的。
+
+### Added
+
+- **安装器：`scripts/installer/Installer.cs`（C# 5）+ `scripts/build-agent-installer.mjs`**（`1ad6c48`，由 DSH 完成）。**为什么用系统自带的 `csc.exe` 编译**：零依赖 —— 用户机器上只要有 .NET Framework（Windows 10/11 自带）就能编出产物，不需要装任何 SDK；**C# 只能是 C# 5 语法**（不能用字符串插值 / `?.` / `nameof`）。**设计**：单个 exe，把整包 zip 作为资源**内嵌**；运行时释放到 `%LOCALAPPDATA%\InternshipWorkbench`、跑自检、写开机自启、启动助手；**不覆盖用户的产出与登录态**。**真机验过**：释放 2592 条目，`output/` 11 个产出文件 + `.profile` + 4 个 `.seen` 缓存**全保住**；四个关键件哈希全对；pid 换新（16196 → 19012）、`/health` `ready:true`。**产物**：`InternshipWorkbench-Agent-Setup.exe`，53,581,824 字节，sha256 `2c2ee010c701c2a5c6ab7d8689f9c1b8ba20f0aae036843f880a80c2949e5004`。⚠️ **未签名** ⇒ 用户首次运行可能撞「Windows 已保护你的电脑」→「更多信息」→「仍要运行」，**卡片文案里已经写了这句**；以后有代码签名证书再签，就彻底没这一步。
+
+### Fixed
+
+- 四件套（本机实跑）：typecheck exit 0 / **68 files 848 tests** 全绿 / lint 0 error / build exit 0（主 bundle **`index-DX1RJj5e.js`**，610707 字节，sha256 `7c4eb358b468e25d8f00917c23ba4d5f9dcb0d0fc3b6fbfd7bba7df7ef382d1d`）。**判别器与交接单预判逐字符一致**（这批交接单把判别器绑到了 `1ad6c48`，一次对上 —— 对上批「判别器对不上」的直接验证：问题出在没绑提交，不在判别器本身）。
+- ⚠️ **lint warnings 基线位移：25 → 26**（`0 errors`、exit 仍为 **0**）。新增的那条是 `scripts/build-agent-installer.mjs:23` 的 `REPO` 声明后未使用（`no-unused-vars`）。⇒ **从本批起，「25 warnings 全在基线」这句话要改成 26**。**如实记下，没有顺手压掉**（要改就是给脚本动一刀，属独立一笔）。
+
 ### Fixed
 
 - **「旧批次的产出冒充本次结果」—— 用户会看到一个他这次根本没抓到的导入预览**（`src/lib/localAgent.ts#freshOutputs` + `src/pages/Crawler.tsx`；`aaa00a0` 首次修法、`94c00b3` 改用 mtime 判据、`2ae504e` 修 tsc）。**现象**（DSH 真机实测）：同一站点 + 同一关键词再抓一次，爬虫的默认去重（`.seen-*.json`）会跳过全部历史岗位，日志是「与历史产出重复 5 条 → 合计 0 条」、**根本不写文件**；而助手 `result.outputs` 的语义是「`output/` 里最近几个文件」—— 于是线上 0.8.21 会拿**上一批**冒充本次结果，弹出一个「共 10 条」的导入预览。**修法**：抓取前后各取一次 `GET /outputs` 快照，按 **mtime 判据**筛出本次真正写出的产出（新文件名，或同名但 mtime 变新）。**为什么用 mtime 而不是文件名的集合差**：`output/` 里的文件名不保证会变（同名覆盖），只有 mtime 能区分「这次写的」与「上次留下的」。**空数组的语义被明确下来**：本次没有新增岗位 → 界面**如实这么说**，不再拿旧文件顶上。**快照拿不到时退化成旧行为**（`freshOutputs` 里 `if (!before) return all`）—— 宁可显示旧行为，也不静默吞掉用户的结果。**真机双场景验证**（同机同助手）：同站点+关键词再抓 → 服务端 2 文件 / 10 条，修复后 **0 条**；换关键词「算法」→ 服务端 3 文件 / 15 条，修复后 **1 文件 / 5 条**。
