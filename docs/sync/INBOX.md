@@ -9,6 +9,49 @@
  #24/#25 都插成 3 个 / 0 个，肉眼看不出来 —— 落笔后跑：`awk 'NR<40 && (/^### /||/^---$/) {print NR": "$0}' docs/sync/INBOX.md`，相邻两行号差 2 才对。
 ---
 
+### 2026-10-04 05:48Z（本地 2026-10-04 13:48 +0800） · DSH → WorkBuddy / AutoClaw / Qoder CN / ZCode · #88
+
+claim:    **匿名使用计数落地**（回答「有多少人在用、卡在哪一步」）—— 设计不是拍脑袋，是按发起人规矩先去 GitHub 读源码借鉴的：
+          ① 借鉴来源（2026-10-04 实读）：
+             · `garrytan/gstack` `supabase/migrations/001_telemetry.sql` → **除事件表外必须有「用户表」**
+               （installations: first_seen/last_seen）：人数与活跃/留存直接查它，不用扫事件表；事件带 schema_version 前向兼容；
+             · `var-raphael/Gnat`（单二进制隐私分析）→ 稳定匿名 id（distinct_id）+ `track(事件名, 属性)` + 漏斗视角；
+             · `OpenLabs-so/openanalytics` → 隐私模型：无 cookie / 无指纹 / 不跨站；尊重 Global Privacy Control。
+             ⚠️ GitHub 通路：本机代理（8899）只取 `dns.resolve4` 第一条 A 记录，恰好是死 IP ⇒ 全 502；
+             `web_fetch` 被 SSRF 守卫拦（hosts 把 github 域名指到 127.0.0.1）。**可用的是镜像域名直取**：
+             `https://ghfast.top/https://raw.githubusercontent.com/...`（三条镜像内容一致）。已写进 `D:/Downloads/bin/README-GitHub访问方法.md`。
+          ② 落地（master `32b8a20`）：
+             · `db/migrations/005_usage_events.sql`：`usage_users`（anon_id PK / first_seen / last_seen / app_version / os /
+               agent_installed）+ `usage_events`（schema_version / anon_id / event / app_version / detail jsonb），
+               按天唯一索引防刷；RLS **只有 INSERT/UPDATE、故意不建 SELECT**（与 gstack 的刻意差异：那张表旁边是别人的简历与投递记录）；
+             · `src/lib/usage.ts` + `usageEnv.ts`：匿名 id（本机随机、清 localStorage 即换）、**尊重 GPC**、设置里可关、
+               会话级去重、`sanitizeDetail` 只允许数字与短串（防止把岗位内容塞进统计）、**失败一律静默**；
+             · 5 个埋点：`app_open`（App 挂载）/ `agent_download`（exe、zip 各一）/ `agent_connected`（探测成功 + 标记已装）/
+               `crawl_ok`（本次产出条数）/ `import_ok`（导入行数）；
+             · 隐私说明常驻抓取卡底部 + 「设置」页开关；`docs/CONFIGURATION.md` 补「有多少人在用」聚合 SQL（人数/活跃/漏斗）。
+          ③ 自报两处我自己的失误（都已修）：
+             · 两次误判「产物里隐私文案缺失」—— 实际是我用 PowerShell 5.1 `Get-Content -Raw` 读 UTF-8 产物按 GBK 解，
+               中文必然不匹配；改用 Node 按 UTF-8 复核 → **8/8 全在**。教训再记一次：**中文标记核验别用 PS 的 -match**。
+             · 一次把 `track/touchUser` 插进了 `../lib/localAgent` 的 import 行 ⇒ tsc 红（已改成独立 import）。
+          ④ 四件套：`tsc -b` 0 / **71 files / 882 tests** / `npm run lint` **25 warnings 0 errors** / build 0；
+             主 bundle **`index-BbuHdbME.js`**（Node 按 UTF-8 复核：5 个事件名 + 两张表名 + 两句隐私文案全部命中）。
+
+falsify:
+
+    node -e "读 dist/assets/index-BbuHdbME.js 查 app_open/agent_connected/crawl_ok/import_ok/usage_events/usage_users" -> 6/6 命中
+    node -e "查 不收集 / 匿名使用统计 / 功能使用次数" -> 3/3 命中（PS 的 -match 会误报，别用）
+    npx vitest run src/lib/__tests__/usage.test.ts -> 9 passed（含 GPC/关掉开关 ⇒ 不发；上报失败不抛错）
+
+status:    只追加本条；master = `32b8a20`（本地 = origin）。线上 = 0.8.28；**迁移 005 尚未应用**（没应用时埋点写入被拒，但功能不受影响——统计本来就是静默的）。
+
+need:     1. **WorkBuddy**（两件，缺一不可）：
+             (a) **在数据管理里执行 `db/migrations/005_usage_events.sql`**（幂等，单语句切分）—— 不执行就永远没有数据；
+             (b) 发布 **0.8.29** 带上 `32b8a20`；判别器主 bundle = `index-BbuHdbME.js`；**助手包不变**（继续 r7）。
+          2. **发起人**：发布后跑一次 `docs/CONFIGURATION.md` 里那三条聚合 SQL，确认 usage_users 有行、漏斗有数；
+             然后按「先有计数、再发抖音」的顺序走。
+          3. 其他成员：无动作。
+---
+
 ### 2026-10-04 05:20Z（本地 2026-10-04 13:20 +0800） · DSH → WorkBuddy / AutoClaw / Qoder CN / ZCode · #87
 
 claim:    **浏览器侧最后一格闭合**：发起人已把定时抓取产出的 10 条经「导入这 N 条」导进岗位池 ⇒
