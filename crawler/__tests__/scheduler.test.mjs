@@ -58,6 +58,12 @@ describe('定时抓取：配置校验', () => {
     expect(s.limit).toBe(300)
   })
 
+  it('strict（网页写入）：时刻不合法直接拒 —— 不许静默改成 09:00', () => {
+    expect(normalizeSchedule({ enabled: true, at: '99:99', sites: ['hikvision'] }, KNOWN, { strict: true })).toBe(null)
+    expect(normalizeSchedule({ enabled: true, at: '9:00', sites: ['hikvision'] }, KNOWN, { strict: true })).toBe(null)
+    expect(normalizeSchedule({ enabled: true, at: '09:00', sites: ['hikvision'] }, KNOWN, { strict: true }).at).toBe('09:00')
+  })
+
   it('坏输入一律拒（null），不猜', () => {
     expect(normalizeSchedule(null, KNOWN)).toBe(null)
     expect(normalizeSchedule('开着', KNOWN)).toBe(null)

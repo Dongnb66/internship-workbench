@@ -42,13 +42,23 @@ export function localDay(d) {
 }
 
 /** 把网页传来的配置校验/归一化；坏数据一律拒（返回 null），不猜 */
-export function normalizeSchedule(input, knownSiteIds) {
+/**
+ * 校验并归一化配置。
+ *
+ * `opts.strict`（网页写入时用）：**时刻不合法就直接拒**（返回 null → 服务端 400）。
+ * 敞开写会让用户以为设的是 11:30、实际被静默改成 09:00 —— 这种「猜」比报错危险。
+ * 非 strict（从磁盘读配置时用）：坏值退回默认，别让一份坏配置把助手卡死。
+ */
+export function normalizeSchedule(input, knownSiteIds, opts) {
   if (!input || typeof input !== 'object') return null
+  const strict = !!(opts && opts.strict)
   const known = new Set(knownSiteIds ?? [])
   const sites = Array.isArray(input.sites)
     ? input.sites.filter((s) => typeof s === 'string' && known.has(s))
     : []
-  const at = parseAt(input.at) === null ? DEFAULT_SCHEDULE.at : String(input.at).trim()
+  const atBad = parseAt(input.at) === null
+  if (atBad && strict) return null
+  const at = atBad ? DEFAULT_SCHEDULE.at : String(input.at).trim()
   const clamp = (v, min, max, dflt) => {
     const n = typeof v === 'number' && Number.isFinite(v) ? Math.round(v) : dflt
     return Math.max(min, Math.min(max, n))

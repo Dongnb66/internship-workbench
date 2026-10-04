@@ -214,7 +214,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/schedule') {
       if (req.method === 'GET') return json(res, 200, { schedule, summary: scheduleSummary(schedule) }, origin)
       if (req.method === 'POST') {
-        const next = normalizeSchedule(await readBody(req), await siteIds())
+        const next = normalizeSchedule(await readBody(req), await siteIds(), { strict: true })
         if (!next) return json(res, 400, { error: '配置不合法：at 要 HH:MM，sites 要站点 id 数组' }, origin)
         schedule = { ...next, lastRun: schedule.lastRun ?? null }
         await saveSchedule()
