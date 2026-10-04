@@ -3,6 +3,7 @@ import { cloud, errText } from '../cloud'
 import { Field, Modal } from '../components/ui'
 import { getModelChoice, getQuotaSnapshot, getTokenStats, listUsableModels, modelCostLabel, pickModel, setModelChoice, type TokenStats, type UsableModel } from '../lib/ai'
 import { listRows, saveProfile } from '../lib/api'
+import { setUsageOptOut, usageOptOut } from '../lib/usage'
 import { BYO_PRESETS } from '../lib/aiChannels'
 import {
   getByoModel,
@@ -63,6 +64,8 @@ export default function Settings({ profile, onChanged }: PageProps) {
   const [pwOpen, setPwOpen] = useState(false)
   const [pw, setPw] = useState({ oldPassword: '', newPassword: '' })
   const [exporting, setExporting] = useState(false)
+  // 匿名统计开关（默认开：只记功能次数；GPC 在 lib/usage.ts 里优先级更高）
+  const [usageOn, setUsageOn] = useState(() => !usageOptOut())
   const [resumeCount, setResumeCount] = useState(0)
   const [models, setModels] = useState<UsableModel[]>([])
   const [modelsErr, setModelsErr] = useState('')
@@ -692,6 +695,19 @@ export default function Settings({ profile, onChanged }: PageProps) {
             <h3>数据</h3>
           </div>
           <div className="card-body">
+        <label className="row" style={{ gap: 6, alignItems: 'center', marginBottom: 10 }}>
+          <input
+            type="checkbox"
+            checked={usageOn}
+            onChange={(e) => {
+              setUsageOn(e.target.checked)
+              setUsageOptOut(!e.target.checked)
+            }}
+          />
+          <span className="small">
+            匿名使用统计（只记<b>功能使用次数</b>，如是否抓取成功；<b>不收集</b>岗位/简历/投递内容，随时可关）
+          </span>
+        </label>
             <button className="btn" onClick={exportAll} disabled={exporting}>
               {exporting ? '导出中…' : '导出全部数据（JSON 备份）'}
             </button>

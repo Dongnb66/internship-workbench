@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { cloud } from './cloud'
 import { getProfile, listRows } from './lib/api'
 import { useSession } from './lib/hooks'
+import { track } from './lib/usage'
 import { NAV_MAIN, REDIRECTS, TITLES } from './lib/nav'
 import type { Profile } from './types'
 import { Icon, type IconName } from './components/Icon'
@@ -52,6 +53,11 @@ export default function App() {
     } catch {
       // 未登录 / 网络异常：各页面自行提示，这里静默
     }
+  }, [])
+
+  // 匿名计数：一次会话记一次「打开」。GPC 或用户在设置里关掉 ⇒ 一个都不发（见 lib/usage.ts）
+  useEffect(() => {
+    track('app_open')
   }, [])
 
   useEffect(() => {

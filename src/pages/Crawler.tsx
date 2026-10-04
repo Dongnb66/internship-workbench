@@ -5,6 +5,7 @@ import { errText } from '../cloud'
 import { listRows } from '../lib/api'
 import { crawlFailureHint, crawlOutputHint, buildCrawlPlan, CRAWLER_PREFS_KEY, parseCrawlerPrefs, serializeCrawlerPrefs } from '../lib/crawlTask'
 import { crawlSitesForPicker, type CrawlSite } from '../lib/crawlSites'
+import { track, touchUser } from '../lib/usage'
 import { AGENT_DOWNLOAD_URL, AGENT_PORTABLE_URL, AgentTimeoutError, freshOutputs, getTask, jobsToImportText, listOutputs, listSites, lnaHelpFor, lnaPermissionState, getSchedule, openBridge, probe, saveSchedule, scheduleDirty, startCrawl, type AgentHealth, type CrawlTask, type AgentSchedule, type CrawlTaskOutput } from '../lib/localAgent'
 import { notifyErr, notifyOk } from '../lib/toast'
 import type { PageProps } from './Overview'
@@ -128,6 +129,9 @@ export default function Crawler({ profile, onChanged }: PageProps) {
       setAgentReady(health.ready)
       setAgentTimeout(false)
       setAgentState('on')
+      // 匿名计数：连上=用户真的把助手跑起来了（漏斗第三格）。失败静默，不影响功能
+      track('agent_connected')
+      touchUser(true)
       // 站点数只是给用户一个「两端连的是同一份抓取器」的确认，读不到不影响主流程
       try {
         setAgentSiteCount((await listSites()).length)
@@ -174,6 +178,7 @@ export default function Crawler({ profile, onChanged }: PageProps) {
       return
     }
     const jobs = fresh.flatMap((o) => o.jobs ?? [])
+    if (jobs.length) track('crawl_ok', { jobs: jobs.length })
     if (!jobs.length) {
       notifyErr('抓取结束，但没有读到岗位数据 —— 看看下面的日志里提示了什么')
       return
@@ -335,13 +340,13 @@ export default function Crawler({ profile, onChanged }: PageProps) {
    * 现在改成：卡片底部常驻一条 + 旧版本主动提示 + 上面两处照旧。
    */
   const downloadAnchor = AGENT_DOWNLOAD_URL ? (
-    <a href={AGENT_DOWNLOAD_URL} target="_blank" rel="noreferrer">
+    <a href={AGENT_DOWNLOAD_URL} target="_blank" rel="noreferrer" onClick={() => track('agent_download', { kind: 'exe' })}>
       下载本地助手安装包（.exe，双击即装）
     </a>
   ) : null
   /** 手动安装那条路（zip + 双击 start-hidden.vbs） */
   const portableAnchor = AGENT_PORTABLE_URL ? (
-    <a href={AGENT_PORTABLE_URL} target="_blank" rel="noreferrer">
+    <a href={AGENT_PORTABLE_URL} target="_blank" rel="noreferrer" onClick={() => track('agent_download', { kind: 'zip' })}>
       手动安装（zip）
     </a>
   ) : null
@@ -572,6 +577,10 @@ export default function Crawler({ profile, onChanged }: PageProps) {
               {portableAnchor ? <>或{portableAnchor} —— 解压后双击 start-hidden.vbs。</> : null}
             </div>
           ) : null}
+          <div className="small muted mt8">
+            本站只统计<b>功能使用次数</b>（例如是否抓取成功、导入了多少条）用来改进体验，
+            <b>不收集</b>你的岗位、简历、投递内容；不想被统计可在「设置」里关掉。
+          </div>
 
           {task ? (
             <div className="mt16" style={{ borderTop: '1px solid var(--border, #e5e5e5)', paddingTop: 12 }}>
@@ -786,6 +795,7 @@ export default function Crawler({ profile, onChanged }: PageProps) {
           initialText={importText}
           onClose={() => setImportOpen(false)}
           onDone={async () => {
+            track('import_ok', { rows: importText.split('\n').filter((l) => l.trim()).length })
             await onChanged()
           }}
         />
