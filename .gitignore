@@ -35,6 +35,8 @@ crawler/node_modules
 crawler/.profile*
 # 抓取产出与去重历史（含岗位数据）
 crawler/output
+# 定时抓取的计划（每台机器自己一份，不进仓库）
+crawler/.schedule.json
 # ⚠️ 上面三行原来把说明写在行尾（`crawler/.profile*   # 浏览器档案…`）。
 # git 不支持行尾注释 —— 整行会被当成一个字面路径 pattern，等于没忽略，
 # `git add .` 会把 324MB 的浏览器档案（含 cookie）一起提交。注释必须独立成行。

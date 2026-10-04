@@ -353,6 +353,47 @@ export interface AgentOutputFile {
  * 2026-10-03 用户视角实测：只抓到 5 条，界面却按 2 个文件 / 10 条弹导入预览。
  * 这条修法只用**已有**接口，所以不用用户更新助手包。
  */
+/** 定时抓取：上次自动跑的结果（网页用它显示「今天新增 N 条」并一键导入） */
+export interface AgentScheduleLastRun {
+  day: string
+  at: string
+  ok: boolean
+  newJobs: number
+  files?: string[]
+  taskId?: string
+}
+
+/** 定时抓取配置（助手侧持久化在 crawler/.schedule.json；默认关闭） */
+export interface AgentSchedule {
+  enabled: boolean
+  at: string
+  sites: string[]
+  keyword: string
+  pages: number
+  limit: number
+  mode: string
+  lastRun?: AgentScheduleLastRun | null
+}
+
+export interface ScheduleReply {
+  schedule: AgentSchedule
+  summary: { enabled: boolean; text: string }
+}
+
+/** 读定时抓取配置 */
+export function getSchedule(): Promise<ScheduleReply> {
+  return call('/schedule')
+}
+
+/** 写定时抓取配置（服务端校验：at 必须 HH:MM、sites 必须是站点 id） */
+export function saveSchedule(input: Omit<AgentSchedule, 'lastRun'>): Promise<ScheduleReply> {
+  return call('/schedule', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+}
+
 export async function listOutputs(): Promise<AgentOutputFile[]> {
   const body = await call<{ files: AgentOutputFile[] }>('/outputs')
   return body.files ?? []

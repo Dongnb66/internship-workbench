@@ -8,8 +8,10 @@ import {
   isBridgeMessage,
   AgentTimeoutError,
   freshOutputs,
+  getSchedule,
   getTask,
   jobsToImportText,
+  saveSchedule,
   listOutputs,
   listSites,
   lnaHelpFor,
@@ -330,6 +332,50 @@ describe('只导本次产出（抓取前后的 output/ 快照）', () => {
 
   it('空产出不炸', () => {
     expect(freshOutputs([], new Map([['x.json', 1]]))).toEqual([])
+  })
+})
+
+describe('定时抓取（/schedule）', () => {
+  const SCHEDULE = {
+    enabled: true,
+    at: '09:00',
+    sites: ['hikvision'],
+    keyword: '前端',
+    pages: 1,
+    limit: 20,
+    mode: 'all',
+    lastRun: { day: '2026-10-04', at: '2026-10-04T01:00:00.000Z', ok: true, newJobs: 5, files: ['a.json'], taskId: 'abc123' },
+  }
+
+  it('GET /schedule 按契约解析（含 summary 与 lastRun.taskId）', async () => {
+    const mock = stubFetch(async (url) => {
+      expect(url).toBe(`${AGENT_BASE}/schedule`)
+      return jsonRes(200, { schedule: SCHEDULE, summary: { enabled: true, text: '每天 09:00 抓 1 个站点' } })
+    })
+    const r = await getSchedule()
+    expect(mock).toHaveBeenCalledTimes(1)
+    expect(r.schedule.at).toBe('09:00')
+    expect(r.schedule.lastRun?.newJobs).toBe(5)
+    expect(r.schedule.lastRun?.taskId).toBe('abc123')
+    expect(r.summary.text).toContain('09:00')
+  })
+
+  it('POST /schedule 原样把配置交给助手（校验在服务端，前端不重复一套）', async () => {
+    let sent: any = null
+    const mock = stubFetch(async (url, init) => {
+      expect(url).toBe(`${AGENT_BASE}/schedule`)
+      expect(init?.method).toBe('POST')
+      sent = JSON.parse(String(init?.body))
+      return jsonRes(200, { schedule: SCHEDULE, summary: { enabled: true, text: 'ok' } })
+    })
+    await saveSchedule({ enabled: true, at: '09:00', sites: ['hikvision'], keyword: '前端', pages: 1, limit: 20, mode: 'all' })
+    expect(mock).toHaveBeenCalledTimes(1)
+    expect(sent).toEqual({ enabled: true, at: '09:00', sites: ['hikvision'], keyword: '前端', pages: 1, limit: 20, mode: 'all' })
+  })
+
+  it('助手不认 /schedule（老包）时抛错 —— 界面据此不给这个功能', async () => {
+    stubFetch(async () => jsonRes(404, { error: 'not found' }))
+    await expect(getSchedule()).rejects.toThrow('not found')
   })
 })
 

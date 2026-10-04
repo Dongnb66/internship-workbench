@@ -23,10 +23,11 @@
 import http from 'node:http'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
-import { readFile, readdir, stat } from 'node:fs/promises'
+import { readFile, readdir, stat, writeFile } from 'node:fs/promises'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { checkInstall, formatProblems } from './selfcheck.mjs'
+import { DEFAULT_SCHEDULE, dueNow, localDay, normalizeSchedule, scheduleSummary } from './scheduler.mjs'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const CRAWLER_DIR = path.join(HERE, '..')
@@ -49,6 +50,34 @@ const ALLOWED_ORIGINS = [
 /** 任务表：一次只跑一个抓取（爬虫要开真浏览器，并行会互相踩） */
 const tasks = new Map()
 let running = null
+
+// —— 定时抓取（每天自动跑一次，结果落 output/）——
+const SCHEDULE_FILE = path.join(CRAWLER_DIR, '.schedule.json')
+/** 默认关闭：要不要每天跑得用户自己决定 */
+let schedule = { ...DEFAULT_SCHEDULE, lastRun: null }
+
+async function siteIds() {
+  const { SITES } = await import(pathToFileURL(path.join(CRAWLER_DIR, 'sites.mjs')).href)
+  return SITES.map((s) => s.id)
+}
+
+async function loadSchedule() {
+  try {
+    const raw = JSON.parse(await readFile(SCHEDULE_FILE, 'utf8'))
+    const next = normalizeSchedule(raw, await siteIds())
+    if (next) schedule = { ...next, lastRun: raw.lastRun ?? null }
+  } catch {
+    /* 没有配置文件 / 读坏了：保持默认（关闭），不猜 */
+  }
+}
+
+async function saveSchedule() {
+  try {
+    await writeFile(SCHEDULE_FILE, JSON.stringify(schedule, null, 1), 'utf8')
+  } catch (e) {
+    console.log('[schedule] 配置写不进去：' + (e && e.message))
+  }
+}
 
 const uid = () => Math.random().toString(36).slice(2, 10)
 
@@ -182,6 +211,19 @@ const server = http.createServer(async (req, res) => {
   }
 
   try {
+    if (url.pathname === '/schedule') {
+      if (req.method === 'GET') return json(res, 200, { schedule, summary: scheduleSummary(schedule) }, origin)
+      if (req.method === 'POST') {
+        const next = normalizeSchedule(await readBody(req), await siteIds())
+        if (!next) return json(res, 400, { error: '配置不合法：at 要 HH:MM，sites 要站点 id 数组' }, origin)
+        schedule = { ...next, lastRun: schedule.lastRun ?? null }
+        await saveSchedule()
+        console.log('[schedule] 配置已保存：' + scheduleSummary(schedule).text)
+        return json(res, 200, { schedule, summary: scheduleSummary(schedule) }, origin)
+      }
+      return json(res, 405, { error: '只支持 GET / POST' }, origin)
+    }
+
     // 桥接页：工作台开个小窗到这里，由它（与助手同源）替工作台调接口，再用 postMessage 送回。
     // 顶层导航到 127.0.0.1 不受浏览器「本地网络访问」权限限制 —— 这条路让用户完全不用翻设置。
     if (url.pathname === '/bridge' || url.pathname === '/bridge.js') {
@@ -258,6 +300,49 @@ const server = http.createServer(async (req, res) => {
 })
 
 server.listen(PORT, HOST, () => {
+
+// —— 定时抓取：每分钟看一次「该不该跑」——
+const SCHEDULE_TICK_MS = 60_000
+async function scheduleTick() {
+  try {
+    if (running) return // 有抓取在跑：这轮跳过（并发闸门在 startCrawl 那边），下轮再看
+    if (!dueNow(schedule)) return
+    const before = new Set((await recentOutput(20)).map((f) => f.name))
+    const task = startCrawl({
+      sites: schedule.sites,
+      keyword: schedule.keyword,
+      pages: schedule.pages,
+      limit: schedule.limit,
+      mode: schedule.mode,
+      detail: 0,
+    })
+    console.log('[schedule] 自动抓取开始：' + scheduleSummary(schedule).text)
+    await new Promise((resolve) => {
+      const iv = setInterval(() => {
+        if (task.state !== 'running') { clearInterval(iv); resolve() }
+      }, 1000)
+    })
+    const fresh = (await readJobsOutput()).filter((o) => !before.has(o.file))
+    const newJobs = fresh.reduce((n, o) => n + (o.count || (o.jobs ? o.jobs.length : 0)), 0)
+    schedule = {
+      ...schedule,
+      lastRun: {
+        day: localDay(new Date()),
+        at: new Date().toISOString(),
+        ok: task.state === 'done',
+        newJobs,
+        files: fresh.map((o) => o.file),
+        taskId: task.id, // 网页靠它把这次自动抓到的岗位取回来导入
+      },
+    }
+    await saveSchedule()
+    console.log('[schedule] 自动抓取结束：state=' + task.state + ' 新增 ' + newJobs + ' 条')
+  } catch (e) {
+    console.log('[schedule] 出错：' + (e && e.message))
+  }
+}
+setInterval(scheduleTick, SCHEDULE_TICK_MS)
+loadSchedule().then(() => setTimeout(scheduleTick, 4000))
   console.log('')
   console.log('  实习工作台 · 本地抓取助手')
   console.log(`  监听 http://${HOST}:${PORT}`)

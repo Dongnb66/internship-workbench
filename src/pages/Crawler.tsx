@@ -5,7 +5,7 @@ import { errText } from '../cloud'
 import { listRows } from '../lib/api'
 import { crawlFailureHint, crawlOutputHint, buildCrawlPlan, CRAWLER_PREFS_KEY, parseCrawlerPrefs, serializeCrawlerPrefs } from '../lib/crawlTask'
 import { crawlSitesForPicker, type CrawlSite } from '../lib/crawlSites'
-import { AGENT_DOWNLOAD_URL, AGENT_PORTABLE_URL, AgentTimeoutError, freshOutputs, getTask, jobsToImportText, listOutputs, listSites, lnaHelpFor, lnaPermissionState, openBridge, probe, startCrawl, type AgentHealth, type CrawlTask, type CrawlTaskOutput } from '../lib/localAgent'
+import { AGENT_DOWNLOAD_URL, AGENT_PORTABLE_URL, AgentTimeoutError, freshOutputs, getTask, jobsToImportText, listOutputs, listSites, lnaHelpFor, lnaPermissionState, getSchedule, openBridge, probe, saveSchedule, startCrawl, type AgentHealth, type CrawlTask, type AgentSchedule, type CrawlTaskOutput } from '../lib/localAgent'
 import { notifyErr, notifyOk } from '../lib/toast'
 import type { PageProps } from './Overview'
 import type { Row } from '../types'
@@ -72,6 +72,9 @@ export default function Crawler({ profile, onChanged }: PageProps) {
   const outputsBeforeRef = useRef<Map<string, number> | null>(null)
   /** 桥接窗口（绕过浏览器「本地网络访问」权限）：closed / connecting / open */
   const [bridgeUi, setBridgeUi] = useState<'closed' | 'connecting' | 'open'>('closed')
+  /** 定时抓取配置（助手侧持久化；老包没有 /schedule 就没有这个块） */
+  const [sched, setSched] = useState<AgentSchedule | null>(null)
+  const [schedSaving, setSchedSaving] = useState(false)
   /** 本次真正新写出的产出（界面显示与导入都用它，别拿旧文件冒充新结果） */
   const [freshResult, setFreshResult] = useState<CrawlTaskOutput[]>([])
   const [agentBusy, setAgentBusy] = useState<string | null>(null)
@@ -125,6 +128,12 @@ export default function Crawler({ profile, onChanged }: PageProps) {
         setAgentSiteCount((await listSites()).length)
       } catch {
         setAgentSiteCount(0)
+      }
+      // 定时抓取：老包没有 /schedule，拿不到就不显示这个块（不是错误）
+      try {
+        setSched((await getSchedule()).schedule)
+      } catch {
+        setSched(null)
       }
     } catch (error) {
       setAgentError(errText(error))
@@ -220,6 +229,46 @@ export default function Crawler({ profile, onChanged }: PageProps) {
     const el = logRef.current
     if (el) el.scrollTop = el.scrollHeight
   }, [task?.log.length])
+
+  /** 保存定时抓取：抓的就是当前勾的站点/关键词，不另造一套参数 */
+  async function saveSched() {
+    if (!sched) return
+    setSchedSaving(true)
+    try {
+      const r = await saveSchedule({ enabled: sched.enabled, at: sched.at, sites: selected, keyword: keyword.trim(), pages, limit, mode })
+      setSched(r.schedule)
+      notifyOk('自动抓取已保存：' + r.summary.text)
+    } catch (error) {
+      notifyErr(errText(error))
+    } finally {
+      setSchedSaving(false)
+    }
+  }
+
+  /** 把「上次自动抓到的岗位」送进既有的批量导入预览（复用同一条入库链路） */
+  async function importScheduled() {
+    const lr = sched?.lastRun
+    if (!lr?.taskId) return
+    try {
+      const t = await getTask(lr.taskId)
+      const files = new Set(lr.files ?? [])
+      const outs = (t.result?.outputs ?? []).filter((o) => files.has(o.file))
+      const jobs = (outs.length ? outs : (t.result?.outputs ?? [])).flatMap((o) => o.jobs ?? [])
+      if (!jobs.length) {
+        notifyErr('这次自动抓取没有新岗位（之前抓过的会被跳过）')
+        return
+      }
+      try {
+        setExisting(await listRows('jobs', { limit: 500 }))
+      } catch {
+        setExisting([])
+      }
+      setImportText(jobsToImportText(jobs))
+      setImportOpen(true)
+    } catch (error) {
+      notifyErr(errText(error))
+    }
+  }
 
   async function startAgentCrawl() {
     if (!selected.length) {
@@ -439,6 +488,31 @@ export default function Crawler({ profile, onChanged }: PageProps) {
               <span className="small" style={{ color: '#d97706' }}>本地助手正忙（任务 {agentBusy}），等它结束再开新的。</span>
             ) : null}
           </div>
+          {agentState === 'on' && sched ? (
+            <div className="small mt8" style={{ borderTop: '1px solid var(--border, #e5e5e5)', paddingTop: 8 }}>
+              <label className="row" style={{ gap: 6, alignItems: 'center' }}>
+                <input type="checkbox" checked={sched.enabled} onChange={(e) => setSched({ ...sched, enabled: e.target.checked })} />
+                每天自动抓「上面勾选的站点 + 关键词」（无头跑，不弹窗口）
+              </label>
+              <div className="row mt8">
+                <input className="input" type="time" value={sched.at} onChange={(e) => setSched({ ...sched, at: e.target.value })} style={{ width: 120 }} />
+                <button className="btn sm" disabled={schedSaving} onClick={() => void saveSched()}>
+                  {schedSaving ? '保存中…' : '保存自动抓取'}</button>
+                <span className="small muted">
+                  {sched.enabled ? `每天 ${sched.at} 抓 ${selected.length} 个站点` : '未开启（勾上并保存即生效）'}
+                </span>
+              </div>
+              {sched.lastRun ? (
+                <div className="small muted mt8">
+                  上次自动抓取：{sched.lastRun.day} {String(sched.lastRun.at).slice(11, 16)} · 新增 {sched.lastRun.newJobs} 条
+                  {sched.lastRun.newJobs > 0 && sched.lastRun.taskId ? (
+                    <button className="btn sm" style={{ marginLeft: 8 }} onClick={() => void importScheduled()}>
+                      导入这 {sched.lastRun.newJobs} 条</button>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           {bridgeUi === 'open' ? (
             <div className="small mt8" style={{ color: '#0a7f3f' }}>
               正通过<b>桥接窗口</b>连接（那个小窗留着别关；关掉就要重新点一次「用桥接窗口连上」）。
