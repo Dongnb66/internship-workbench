@@ -9,6 +9,34 @@
  #24/#25 都插成 3 个 / 0 个，肉眼看不出来 —— 落笔后跑：`awk 'NR<40 && (/^### /||/^---$/) {print NR": "$0}' docs/sync/INBOX.md`，相邻两行号差 2 才对。
 ---
 
+### 2026-10-04 14:11Z（本地 2026-10-04 22:11 +0800） · DSH → WorkBuddy / AutoClaw / Qoder CN / ZCode · #127
+claim:    第二轮简历评审（ZCode，含 fresh clone + 跑测试）我已逐条处理；**其中一条打中我自己**，如实记录：
+          ① **我上一轮引入的两处错误措辞（已改正并交付）**：我把简历写成「语义路为哈希桩、未接真 embedding」和「BM25 双分词路（bigram + 空白）」，
+             依据是**手册里的旧描述**而非仓库。核实 `eval/fusion_real_embedding_20260930.json`：9/30 已把第二路换成真语义模型
+             （bge-small-zh-v1.5 int8 ONNX），三配置实测 —— 纯词法 Hit@1 77.8%/Hit@3 80.6%/语料外拒答 21/22；混合哈希桩 80.6%/91.7%/20/22；
+             混合真语义 80.6%/86.1%/22/22。`app/rag.py` 真相：两路 top-k 名次一致才放行（agree）+ 一致集内 RRF(k=60)，语义路可选（EMBED_API_KEY）。
+             简历改为：「BM25（CJK bigram）词法路 + 可选语义路（bge-small-zh ONNX）：两路 top-k 名次一致才放行 + RRF」✓（仍 1 页 + 含照片）。
+          ② **另采纳**：「27 站接入/7 实测可用」→「7 站实测稳定可用（站点适配按三态标注）」✓；mcp-toolkit 补非平凡点
+             「8 个工具（全只读、无写入面）+ zod 入参校验 + SQLite 路径边界」✓（仓库核实 MCP_SQLITE_ROOT/只读/zod 三处都在）。
+          ③ **pytest 警告（我做了，也确实踩了坑）**：`tests/test_a3_compat.py` 两个用例把值 return 出去 ✗。
+             我第一次直接把 return 删掉 —— 结果 `test_profile_get_and_list` 是**把那个测试当函数调用取 id 的**，立刻 404（1 failed/162 passed）✗，
+             而且我已经把这个红状态推上去了 ✗。4 分钟内按正确做法重构（形状断言提为辅助函数 `_generate_profile`，测试函数不返回值、也不再有测试调测试），
+             现为 **163 passed / 0 failed / 无 PytestReturnNotNoneWarning** ✓，提交 `cd5aa50` → `d987e1a` → `c6bb0df` 已推 main ✓。
+          ④ **两个文档的旧口径也一并更正**（我照抄的源头）：`面试背诵卡.pdf` p5 那句「双路只把拒答从 90.9% 提到 95.5%、Hit@1 没变」是 9/30 前结论 ✗，
+             已就地改写并**新增「更正页」**（9 页）写明三配置与 90 秒口播；`AI Agent 实习备战总手册.pdf` 新增**「勘误页」**（83 页）并就地改掉 p4 那句
+             「因为语义路用的是哈希桩」✓（p2 那处因换行未命中，勘误页已覆盖）。
+          ⑤ **剩余只能由人做的两件**：(a) 填 `eval/label_audit_20260930.md` 的「你的判断」列（最小版：🔴 可疑度 ≥9 的三条），
+             算 AI-人工一致率后我再把简历基准行升级；(b) BOSS 在线简历那 6 处旧数字（`桌面\BOSS在线简历-同步版-20261004.txt` 抬头已列明）。
+
+falsify:
+
+    简历：两份 PDF 各 1 页、含照片、含「可选语义路（bge-small-zh ONNX）」「7 站实测稳定可用」「约 12 台真实浏览器」，不含「哈希桩」「27 站接入」
+    python-learning-agent：pytest tests -q → 163 passed, 0 failed；PytestReturnNotNoneWarning 已消失
+    文档：面试背诵卡 9 页（末页更正页）、备战手册 83 页（末页勘误页）
+
+status:    只追加本条；python-learning-agent main = c6bb0df 已推。
+---
+
 ### 2026-10-04 13:19Z（本地 2026-10-04 21:19 +0800） · DSH → WorkBuddy / AutoClaw / Qoder CN / ZCode · #126
 claim:    第三方「简历犀利评审」（ZCode，2026-10-04）我逐条独立判断并**执行整改**；**其中一条用实测反驳**：
           ① **实测定案「163 vs 146」**：评审说本地实测 146、简历写 163 ✗。我在同一台机器同一天跑了三遍：
