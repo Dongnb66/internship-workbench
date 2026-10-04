@@ -78,6 +78,8 @@ export default function Crawler({ profile, onChanged }: PageProps) {
   const [schedSaved, setSchedSaved] = useState<AgentSchedule | null>(null)
   const [schedSummary, setSchedSummary] = useState('')
   const [schedSaving, setSchedSaving] = useState(false)
+  /** 站点列表只显示「实测可用」的（27 个里只有 7 个能用，新人别乱挑） */
+  const [onlyLive, setOnlyLive] = useState(false)
   /** 本次真正新写出的产出（界面显示与导入都用它，别拿旧文件冒充新结果） */
   const [freshResult, setFreshResult] = useState<CrawlTaskOutput[]>([])
   const [agentBusy, setAgentBusy] = useState<string | null>(null)
@@ -402,6 +404,9 @@ export default function Crawler({ profile, onChanged }: PageProps) {
                     </li>
                     <li>等它提示「安装完成」（它会自己启动助手、并设为开机自启），回到本页即可 —— 这页会自动变绿</li>
                   </ol>
+                  <div className="small muted mt8">
+                    本地助手目前只支持 <strong>Windows</strong>（用系统里的 Edge / Chrome 抓取）。
+                  </div>
                   <div className="mt8">
                     不想跑安装包？{portableAnchor ?? '手动装 zip'}：右键 zip → 属性 → 勾「解除锁定」→ 解压 → 双击
                     <span className="mono"> start-hidden.vbs</span>。
@@ -413,6 +418,41 @@ export default function Crawler({ profile, onChanged }: PageProps) {
               {autoProbeTries > 0 ? (
                 <div className="small muted mt8">
                   已自动重试 {autoProbeTries}/{AUTO_PROBE_MAX} 次（每 {AUTO_PROBE_MS / 1000} 秒一次）—— 助手一起来这页会自动变绿。
+                </div>
+              ) : null}
+              {agentTimeout || lnaState === 'denied' ? (
+                <div className="mt8">
+                  {agentTimeout ? (
+                    <>
+                      <strong>多半是浏览器把「本地网络访问」挡住了</strong>（当前状态：{lnaStateLabel}）。
+                    </>
+                  ) : (
+                    <>
+                      <strong>浏览器拒绝了本地网络访问</strong>（当前状态：{lnaStateLabel}）—— 所以本页连不上助手，
+                      <strong>这不代表助手没装或没在跑</strong>。
+                    </>
+                  )}
+                  <div className="mt8">
+                    <strong>首选（一次性，之后每次打开都直连）：</strong>放行方法（{lnaHelp.browser}）：{lnaHelp.path}；
+                    放行后点右上角「重新检测」就行了。
+                  </div>
+                  {lnaHelp.deepLink ? (
+                    <div className="row mt8">
+                      <button
+                        className="btn sm"
+                        onClick={() =>
+                          copyText(lnaHelp.deepLink, '已复制设置地址 —— 粘到地址栏打开（浏览器设置页不能点链接跳转）')
+                        }
+                      >
+                        复制设置地址
+                      </button>
+                      <span className="small muted mono">{lnaHelp.deepLink}</span>
+                    </div>
+                  ) : null}
+                  <div className="mt8">
+                    <strong>备选（不想动浏览器设置）：</strong>点下面的「用桥接窗口连上」，由一个本机小窗替本页与助手通信。
+                    代价：<strong>这个页面每次刷新后要重新点一次</strong>；放行权限则没有这一步。
+                  </div>
                 </div>
               ) : null}
               {bridgeUi !== 'open' ? (
@@ -438,38 +478,7 @@ export default function Crawler({ profile, onChanged }: PageProps) {
                   >
                     {bridgeUi === 'connecting' ? '正在打开桥接窗口…' : '用桥接窗口连上（不用改浏览器设置）'}
                   </button>
-                  <span className="small muted">
-                    会弹一个小窗，由它替本页与助手通信 —— 绕开「本地网络访问」那道权限。
-                  </span>
-                </div>
-              ) : null}
-              {agentTimeout || lnaState === 'denied' ? (
-                <div className="mt8">
-                  {agentTimeout ? (
-                    <>
-                      <strong>多半是浏览器把「本地网络访问」挡住了</strong>（当前状态：{lnaStateLabel}）。
-                    </>
-                  ) : (
-                    <>
-                      <strong>浏览器拒绝了本地网络访问</strong>（当前状态：{lnaStateLabel}）—— 所以本页连不上助手，
-                      <strong>这不代表助手没装或没在跑</strong>。
-                    </>
-                  )}
-                  放行方法（{lnaHelp.browser}）：{lnaHelp.path}；放行后点右上角「重新检测」。
-                  或者直接点上面的「用桥接窗口连上」，绕过这道权限。
-                  {lnaHelp.deepLink ? (
-                    <div className="row mt8">
-                      <button
-                        className="btn sm"
-                        onClick={() =>
-                          copyText(lnaHelp.deepLink, '已复制设置地址 —— 粘到地址栏打开（浏览器设置页不能点链接跳转）')
-                        }
-                      >
-                        复制设置地址
-                      </button>
-                      <span className="small muted mono">{lnaHelp.deepLink}</span>
-                    </div>
-                  ) : null}
+                  <span className="small muted">弹一个小窗替本页通信；关掉它、或刷新页面之后，要再点一次。</span>
                 </div>
               ) : null}
               <details className="mt8">
@@ -526,7 +535,19 @@ export default function Crawler({ profile, onChanged }: PageProps) {
           ) : null}
           {bridgeUi === 'open' ? (
             <div className="small mt8" style={{ color: '#0a7f3f' }}>
-              正通过<b>桥接窗口</b>连接（那个小窗留着别关；关掉就要重新点一次「用桥接窗口连上」）。
+              正通过<b>桥接窗口</b>连接（那个小窗留着别关；关掉或刷新后要重新点一次）。
+              <div className="mt8" style={{ color: 'inherit' }}>
+                想免掉这一步？把「本地网络访问」放行一次就永远直连了：{lnaHelp.path}
+                {lnaHelp.deepLink ? (
+                  <button
+                    className="btn sm"
+                    style={{ marginLeft: 8 }}
+                    onClick={() => copyText(lnaHelp.deepLink, '已复制设置地址 —— 粘到地址栏打开')}
+                  >
+                    复制设置地址
+                  </button>
+                ) : null}
+              </div>
             </div>
           ) : null}
           {agentState === 'checking' ? (
@@ -622,6 +643,10 @@ export default function Crawler({ profile, onChanged }: PageProps) {
         <div className="card-head">
           <h3>选站点</h3>
           <span className="spacer" />
+          <label className="small muted" style={{ display: 'flex', alignItems: 'center', gap: 4, marginRight: 8 }}>
+            <input type="checkbox" checked={onlyLive} onChange={(e) => setOnlyLive(e.target.checked)} />
+            只看实测可用（{sites.filter((s) => s.verified === 'live').length}/{sites.length}）
+          </label>
           <span className="small muted">已选 {selected.length + Object.values(urls).filter((v) => v.trim()).length} 个</span>
           {selected.length ? (
             <button className="btn sm ghost" onClick={() => setSelected([])}>
@@ -631,7 +656,7 @@ export default function Crawler({ profile, onChanged }: PageProps) {
         </div>
         <div className="card-body">
           {CHANNEL_GROUPS.map((group) => {
-            const groupSites = sites.filter((s) => s.channel === group)
+            const groupSites = sites.filter((s) => s.channel === group && (!onlyLive || s.verified === 'live'))
             if (!groupSites.length) return null
             return (
               <div key={group} style={{ marginBottom: 10 }}>
