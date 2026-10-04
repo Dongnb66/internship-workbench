@@ -4,6 +4,20 @@
 
 ## [Unreleased]
 
+### Added
+
+- **第二层第二项：桥接窗口 —— 绕过浏览器「本地网络访问」（LNA）权限，用户不用再翻浏览器设置**（`crawler/agent/bridge.js`、`crawler/agent/bridge.html`、`crawler/agent/server.mjs` 两条路由、新 `crawler/__tests__/bridge.test.mjs`（8 条）、接口契约补一节；工作台侧 `src/lib/localAgent.ts#bridgeUrl/isBridgeMessage/openBridge/bridgeCall` + `src/pages/Crawler.tsx` 的按钮与提示；`302b321`，由 DSH 完成）。**机制（一句说清为什么能绕）**：LNA 只管**页面自己发起的 fetch**，而**顶层导航到 `127.0.0.1` 是豁免的**；于是工作台在**用户点击**里开一个小窗到助手的 `/bridge` 页（**与助手同源**），由它代工作台调接口，再用 `postMessage` 把结果送回；工作台侧 `call()` 在桥接可用时**优先走它**。**安全边界（服务端 + 协议两侧都校验，一条都不许过）**：服务端只对**白名单 origin** 提供桥接页（外来 → **403**，实测）；消息两侧都校验 **origin + nonce**；桥接只转发**助手自己的路径**（`http://…`、以 `//` 开头、含 `..` 一律拒）—— 不能被当成任意代理。**⚠️ 前提是助手包换代**：`bridge.js` 在助手包里，**旧包没有 `/bridge`，桥接根本用不了** ⇒ 所以这批同时换了包（见下）。卡片上新增「用桥接窗口连上（不用改浏览器设置）」按钮与「正通过桥接窗口连接」提示。
+
+### Changed
+
+- **助手包换代（r3）：`InternshipWorkbench-Agent-Setup.exe` 与 `internship-workbench-agent.zip` 都换成带桥接的新包**。zip **53,573,421** 字节 / sha256 `c7d11470b0f946ead6315bd9eab00162b3e64042ae2754f69412eebddd79dd6b`；安装器 **53,586,432** 字节 / sha256 `ff6e84cfff0feb58a16dfe9077387d28018e6dd5ab46f4e570ab1772945d0f9e`。**线上文件名不变**（仍叫 `internship-workbench-agent.zip`，常量就指向它）。⚠️ **请求 8 里给的 r2 哈希（安装器 `6ada6441…` / zip `ca219063…`）已作废** —— r2 是在 `bridge.js` 变更与两处 lint 清理**之前**打的，产物已过期。真机核对：装后 `/health` `ready` / `problems:[]`、`/bridge` 200（含 `bridge.js`）、外来 origin **403**、11 个产出文件 + `.profile` 保住。
+
+### Fixed
+
+- 四件套（本机实跑）：typecheck exit 0 / **69 files 858 tests** 全绿 / lint **0 error**（**25 warnings，基线已回 25**）/ build exit 0（主 bundle **`index-Cop7l6ow.js`**，613596 字节，sha256 `5813da4cf21e73a6c51f5abf171da83f251ee48f06fbb51c07f106cd9a3716c7`）。**判别器与交接单预判逐字符一致。**
+- **回执 #71 点名的 lint 债（25 → 26）已结清**：`c2c1cfe` 删掉 `scripts/build-agent-installer.mjs` 里未使用的 `REPO`；`868857a` 再去掉 `bridge.js` 的两处未使用（`log` / `catch (e)`）。**另记一条口径变化**：oxlint 扫描文件数 **191 → 195**（本批新增的 `bridge.js` / `bridge.test.mjs` 等进了扫描）⇒ 「25 全在基线」这句话**在把新文件算进去后**才重新成立 —— 它不是「回到旧口径」，是「新口径下的 25」。
+- **DSH 自报三处自己的错（都被闸门或现象当场抓住，照实记）**：① 回包解析改成 `res.text()` 后 **11 条既有测试红了**（测试桩只有 `json()`）→ 收敛成 `parseBody(body, status)`、桥接单独 `parseBridgeText`，两条路共用同一套状态码判定；② 重建安装器那条命令**漏了 workdir**，脚本没找到却**继续跑了旧安装器**（现已加「exit≠0 即中止」）；③ `Start-Process -Wait` 在 PowerShell 5.1 会等**整棵进程树**，而安装器启动的助手永不退出 ⇒ 命令被提升成后台、kill 时把助手一起带走（已起回，改用 `$p.WaitForExit(180000)`）。
+
 ### Changed
 
 - **下载入口从「zip 手动包」换成「安装包 exe（双击即装）」**（`src/lib/localAgent.ts`、`src/pages/Crawler.tsx`；`1ad6c48`）。**为什么要换**：0.8.20/0.8.21 的入口给的是一条 51 MB 的 zip —— 用户拿到手要自己解压、认准哪个是 `start-hidden.vbs`、再双击（装了 0.8.22 的「解除锁定」提示也只是把这道坎说清楚，没有消掉它）；真机走一遍就发现这步对普通用户是门槛。现在主入口是**单文件 `.exe`**：双击即装（脚本内嵌整包；装完写开机自启），**装完自动变绿**（配合 0.8.22 起的每 5 秒自动重试探测）。**旧的 zip 一条都没删** —— 常量改名为 `AGENT_PORTABLE_URL`（`AGENT_DOWNLOAD_URL` 让给 exe），给不想/不能跑 exe 的人留着，也用于排查。**单测同步收紧**：`AGENT_DOWNLOAD_URL` 只允许空或 https 的 `.exe`/`.zip` 直链，另新增一条钉住 `AGENT_PORTABLE_URL` 必须是 https 的 `.zip` —— 挡的是占位符 / 相对路径 / HTML 中间页这类值。
