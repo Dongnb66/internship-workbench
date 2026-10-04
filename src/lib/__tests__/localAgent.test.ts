@@ -4,6 +4,8 @@ import {
   AGENT_BASE,
   AGENT_DOWNLOAD_URL,
   AGENT_PORTABLE_URL,
+  bridgeUrl,
+  isBridgeMessage,
   AgentTimeoutError,
   freshOutputs,
   getTask,
@@ -328,6 +330,24 @@ describe('只导本次产出（抓取前后的 output/ 快照）', () => {
 
   it('空产出不炸', () => {
     expect(freshOutputs([], new Map([['x.json', 1]]))).toEqual([])
+  })
+})
+
+describe('桥接窗口（绕过 LNA 权限）', () => {
+  it('桥接页地址把工作台 origin 与 nonce 带过去（都要 URL 编码）', () => {
+    const url = bridgeUrl('http://127.0.0.1:8787', 'https://internship-workbench-47024.app.workbuddy.host', 'n 1')
+    expect(url.startsWith('http://127.0.0.1:8787/bridge?')).toBe(true)
+    expect(url).toContain('origin=https%3A%2F%2Finternship-workbench-47024.app.workbuddy.host')
+    expect(url).toContain('nonce=n%201')
+  })
+
+  it('只认自己那次 open 的 nonce —— 别的页面塞消息进来一律不认', () => {
+    expect(isBridgeMessage({ type: 'iw-bridge-ready', nonce: 'abc' }, 'abc')).toBe(true)
+    expect(isBridgeMessage({ type: 'iw-bridge-response', nonce: 'abc', id: '1' }, 'abc')).toBe(true)
+    expect(isBridgeMessage({ type: 'iw-bridge-ready', nonce: 'other' }, 'abc')).toBe(false)
+    expect(isBridgeMessage({ type: 'iw-bridge-response', nonce: 'abc' }, 'abc')).toBe(false) // 缺 id
+    expect(isBridgeMessage(null, 'abc')).toBe(false)
+    expect(isBridgeMessage('ready', 'abc')).toBe(false)
   })
 })
 

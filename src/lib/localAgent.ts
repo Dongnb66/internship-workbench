@@ -56,7 +56,140 @@ export const PROBE_TIMEOUT_MS = 8000
 /** 超时文案给的是可执行的下一步，不是「失败了」 */
 const TIMEOUT_HINT =
   '浏览器可能正在等你允许「本地网络访问 / 设备上的应用」：允许后点「重新检测」；' +
-  '若助手没起，在项目根目录执行 npm run agent。'
+  '也可以在卡片上点「用桥接窗口连上」，绕过这道权限。'
+
+// —— 桥接窗口（绕过浏览器「本地网络访问」权限）——
+//
+// 背景：从线上 https 页面 fetch http://127.0.0.1 要过 LNA 权限；没授权时请求既不 resolve 也不
+// reject，界面只能超时。但**顶层导航到 127.0.0.1 是豁免的** —— 所以工作台开一个小窗到助手的
+// `/bridge` 页（与助手同源），由它替工作台调接口，再用 postMessage 把结果送回来。
+// 代价：多一个小窗（最小化即可）；好处：用户完全不用去翻浏览器设置。
+const BRIDGE_READY = 'iw-bridge-ready'
+const BRIDGE_REQUEST = 'iw-bridge-request'
+const BRIDGE_RESPONSE = 'iw-bridge-response'
+/** 助手 origin（桥接页回包的 origin 必须正好是它） */
+const AGENT_ORIGIN = AGENT_BASE
+
+export type BridgeState = 'closed' | 'connecting' | 'open'
+
+let bridgeWin: Window | null = null
+let bridgeNonce = ''
+let bridgeState: BridgeState = 'closed'
+let bridgeOnReady: (() => void) | null = null
+let bridgeListening = false
+const bridgePending = new Map<string, { resolve: (v: { status: number; text: string }) => void; reject: (e: Error) => void }>()
+
+/** 桥接页地址（纯函数，便于单测）：把工作台 origin 与 nonce 带过去 */
+export function bridgeUrl(agentBase: string, origin: string, nonce: string): string {
+  return `${agentBase}/bridge?origin=${encodeURIComponent(origin)}&nonce=${encodeURIComponent(nonce)}`
+}
+
+/** 校验桥接页回包（纯函数）：形状要对、nonce 要对 —— 别的页面塞进来的消息一律不认 */
+export function isBridgeMessage(data: unknown, nonce: string): boolean {
+  if (!data || typeof data !== 'object') return false
+  const d = data as Record<string, unknown>
+  if (d.nonce !== nonce) return false
+  if (d.type === BRIDGE_READY) return true
+  return d.type === BRIDGE_RESPONSE && typeof d.id === 'string'
+}
+
+/** 桥接当前可用吗（小窗被关掉就自动降级为 closed，别让调用方卡在死窗口上） */
+function bridgeOpenNow(): boolean {
+  if (bridgeState !== 'open') return false
+  if (bridgeWin && bridgeWin.closed) { bridgeState = 'closed'; return false }
+  return true
+}
+
+export function getBridgeState(): BridgeState {
+  bridgeOpenNow()
+  return bridgeState
+}
+
+function attachBridgeListener() {
+  if (bridgeListening || typeof window === 'undefined') return
+  bridgeListening = true
+  window.addEventListener('message', (ev: MessageEvent) => {
+    if (ev.origin !== AGENT_ORIGIN) return // 只认助手，别的一律不理
+    if (!isBridgeMessage(ev.data, bridgeNonce)) return
+    const d = ev.data as Record<string, unknown>
+    if (d.type === BRIDGE_READY) {
+      bridgeState = 'open'
+      if (bridgeOnReady) { bridgeOnReady(); bridgeOnReady = null }
+      return
+    }
+    const p = bridgePending.get(d.id as string)
+    if (!p) return
+    bridgePending.delete(d.id as string)
+    if (typeof d.error === 'string' && d.error) p.reject(new Error(d.error))
+    else p.resolve({ status: Number(d.status ?? 0), text: String(d.body ?? '') })
+  })
+}
+
+/**
+ * 开桥接窗口。**必须在用户点击里调用**（否则被弹窗拦截）。
+ * 返回的 promise 在桥接页 ready 时兑现；被拦下 / 超时则 reject（界面据此给话）。
+ */
+export function openBridge(timeoutMs = 12000): Promise<void> {
+  const origin = typeof location === 'undefined' ? '' : location.origin
+  bridgeNonce = Math.random().toString(36).slice(2) + Date.now().toString(36)
+  attachBridgeListener()
+  bridgeState = 'connecting'
+  bridgeWin = window.open(bridgeUrl(AGENT_BASE, origin, bridgeNonce), 'iw-agent-bridge', 'width=430,height=240')
+  if (!bridgeWin) {
+    bridgeState = 'closed'
+    return Promise.reject(new Error('浏览器把这个小窗拦下了 —— 请允许本站弹出窗口后重试'))
+  }
+  return new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      if (bridgeState !== 'open') { bridgeState = 'closed'; reject(new Error('桥接窗口 12 秒没有回话（助手没在跑？）')) }
+    }, timeoutMs)
+    bridgeOnReady = () => { clearTimeout(timer); resolve() }
+  })
+}
+
+/** 回包统一在这里判状态码（直连与桥接两条路都走它，别让两边规则漂移） */
+function parseBody<T>(status: number, body: unknown): T {
+  if (status < 200 || status >= 300) {
+    const msg = (body as { error?: string } | null)?.error
+    throw new Error(msg || `本地助手返回 HTTP ${status}`)
+  }
+  return body as T
+}
+
+/** 桥接回的是文本（跨窗口只能传字符串），这里解析后再走同一套判定 */
+function parseBridgeText<T>(status: number, text: string): T {
+  let body: unknown = null
+  try { body = JSON.parse(text) } catch { /* 非 JSON 按 null 走状态码分支 */ }
+  return parseBody<T>(status, body)
+}
+
+/** 走桥接窗口调接口：路径经助手校验后才转发，回包按与直连一致的规则解析 */
+function bridgeCall<T>(path: string, init?: RequestInit, timeoutMs = CALL_TIMEOUT_MS): Promise<T> {
+  if (bridgeState !== 'open' || !bridgeWin) return Promise.reject(new Error('桥接窗口没开着'))
+  const id = Math.random().toString(36).slice(2)
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      bridgePending.delete(id)
+      reject(new Error(`桥接 ${timeoutMs / 1000} 秒没有回话（小窗关掉了？）`))
+    }, timeoutMs)
+    bridgePending.set(id, {
+      resolve: (r) => { clearTimeout(timer); try { resolve(parseBridgeText<T>(r.status, r.text)) } catch (e) { reject(e as Error) } },
+      reject: (e) => { clearTimeout(timer); reject(e) },
+    })
+    try {
+      bridgeWin!.postMessage(
+        { type: BRIDGE_REQUEST, nonce: bridgeNonce, id, path, method: init?.method, headers: init?.headers, body: typeof init?.body === 'string' ? init.body : undefined },
+        AGENT_ORIGIN,
+      )
+    } catch (e) {
+      bridgePending.delete(id)
+      clearTimeout(timer)
+      reject(e as Error)
+    }
+  })
+}
+
+/** 超时文案给的是可执行的下一步，不是「失败了」 */
 
 /** GET /health —— 探测助手是否在跑 */
 export interface AgentHealth {
@@ -146,6 +279,8 @@ export class AgentTimeoutError extends Error {
 }
 
 async function call<T>(path: string, init?: RequestInit, timeoutMs = CALL_TIMEOUT_MS): Promise<T> {
+  // 桥接窗口开着就直接走它：用户已经明确选了「绕过权限」这条路，别让他再等一次超时
+  if (bridgeOpenNow()) return bridgeCall<T>(path, init, timeoutMs)
   const ac = new AbortController()
   const timer = setTimeout(() => ac.abort(), timeoutMs)
   let res: Response
@@ -167,12 +302,8 @@ async function call<T>(path: string, init?: RequestInit, timeoutMs = CALL_TIMEOU
   } catch {
     /* 非 JSON 响应（代理错误页等）按 null 走下面的状态码分支 */
   }
-  if (!res.ok) {
-    const msg = (body as { error?: string } | null)?.error
-    // 409「已有一个抓取在跑」这类契约约定要提示而不是静默失败的错误，原样抛给人看
-    throw new Error(msg || `本地助手返回 HTTP ${res.status}`)
-  }
-  return body as T
+  // 409「已有一个抓取在跑」这类契约约定要提示而不是静默失败的错误，原样抛给人看
+  return parseBody<T>(res.status, body)
 }
 
 /** 探测：页面加载时调一次，决定「一键抓取」通不通 */

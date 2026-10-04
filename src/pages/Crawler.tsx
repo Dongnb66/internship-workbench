@@ -5,7 +5,7 @@ import { errText } from '../cloud'
 import { listRows } from '../lib/api'
 import { crawlFailureHint, crawlOutputHint, buildCrawlPlan, CRAWLER_PREFS_KEY, parseCrawlerPrefs, serializeCrawlerPrefs } from '../lib/crawlTask'
 import { crawlSitesForPicker, type CrawlSite } from '../lib/crawlSites'
-import { AGENT_DOWNLOAD_URL, AGENT_PORTABLE_URL, AgentTimeoutError, freshOutputs, getTask, jobsToImportText, listOutputs, listSites, lnaHelpFor, lnaPermissionState, probe, startCrawl, type AgentHealth, type CrawlTask, type CrawlTaskOutput } from '../lib/localAgent'
+import { AGENT_DOWNLOAD_URL, AGENT_PORTABLE_URL, AgentTimeoutError, freshOutputs, getTask, jobsToImportText, listOutputs, listSites, lnaHelpFor, lnaPermissionState, openBridge, probe, startCrawl, type AgentHealth, type CrawlTask, type CrawlTaskOutput } from '../lib/localAgent'
 import { notifyErr, notifyOk } from '../lib/toast'
 import type { PageProps } from './Overview'
 import type { Row } from '../types'
@@ -70,6 +70,8 @@ export default function Crawler({ profile, onChanged }: PageProps) {
   const [lnaState, setLnaState] = useState<'granted' | 'denied' | 'prompt' | 'unknown'>('unknown')
   /** 抓取前 output/ 的快照（文件名 → mtime）：跑完用它筛出「本次产出」 */
   const outputsBeforeRef = useRef<Map<string, number> | null>(null)
+  /** 桥接窗口（绕过浏览器「本地网络访问」权限）：closed / connecting / open */
+  const [bridgeUi, setBridgeUi] = useState<'closed' | 'connecting' | 'open'>('closed')
   /** 本次真正新写出的产出（界面显示与导入都用它，别拿旧文件冒充新结果） */
   const [freshResult, setFreshResult] = useState<CrawlTaskOutput[]>([])
   const [agentBusy, setAgentBusy] = useState<string | null>(null)
@@ -353,6 +355,34 @@ export default function Crawler({ profile, onChanged }: PageProps) {
                   已自动重试 {autoProbeTries}/{AUTO_PROBE_MAX} 次（每 {AUTO_PROBE_MS / 1000} 秒一次）—— 助手一起来这页会自动变绿。
                 </div>
               ) : null}
+              {bridgeUi !== 'open' ? (
+                <div className="row mt8">
+                  <button
+                    className="btn sm"
+                    disabled={bridgeUi === 'connecting'}
+                    onClick={() => {
+                      void (async () => {
+                        setBridgeUi('connecting')
+                        try {
+                          await openBridge()
+                          setBridgeUi('open')
+                          notifyOk('已通过桥接窗口连上（那个小窗留着，最小化即可）')
+                          setAutoProbeTries(0)
+                          void probeAgent()
+                        } catch (error) {
+                          setBridgeUi('closed')
+                          notifyErr(errText(error))
+                        }
+                      })()
+                    }}
+                  >
+                    {bridgeUi === 'connecting' ? '正在打开桥接窗口…' : '用桥接窗口连上（不用改浏览器设置）'}
+                  </button>
+                  <span className="small muted">
+                    会弹一个小窗，由它替本页与助手通信 —— 绕开「本地网络访问」那道权限。
+                  </span>
+                </div>
+              ) : null}
               {agentTimeout ? (
                 <div className="mt8">
                   <strong>多半是浏览器把「本地网络访问」挡住了</strong>（当前状态：{lnaStateLabel}）。
@@ -397,6 +427,11 @@ export default function Crawler({ profile, onChanged }: PageProps) {
               <span className="small" style={{ color: '#d97706' }}>本地助手正忙（任务 {agentBusy}），等它结束再开新的。</span>
             ) : null}
           </div>
+          {bridgeUi === 'open' ? (
+            <div className="small mt8" style={{ color: '#0a7f3f' }}>
+              正通过<b>桥接窗口</b>连接（那个小窗留着别关；关掉就要重新点一次「用桥接窗口连上」）。
+            </div>
+          ) : null}
           {agentState === 'checking' ? (
             <div className="small muted mt8">
               探测中。若浏览器在地址栏弹出「本地网络访问 / 设备上的应用」的授权提示，点「允许」——

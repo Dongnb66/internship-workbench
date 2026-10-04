@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>实习工作台 · 本地助手（桥接中）</title>
+    <style>
+      body { font: 14px/1.6 "Microsoft YaHei UI", system-ui, sans-serif; margin: 0; padding: 18px; color: #111; background: #fff; }
+      h1 { font-size: 15px; margin: 0 0 8px; }
+      p { margin: 0 0 6px; color: #444; }
+      .ok { color: #0a7f3f; font-weight: 600; }
+      .tip { color: #888; font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <h1>本地助手 ↔ 实习工作台</h1>
+    <p id="status">正在与工作台建立桥接…</p>
+    <p class="tip">这个窗口是工作台与本机助手之间的通道。<strong>抓取时请留着它</strong>（最小化可以）；关掉工作台页面它也会自己关闭。</p>
+    <script type="module">
+      import { createBridge } from '/bridge.js'
+      var q = new URLSearchParams(location.search)
+      var nonce = q.get('nonce') || ''
+      var openerOrigin = q.get('origin') || ''
+      var status = document.getElementById('status')
+      var bridge = createBridge({
+        openerOrigin: openerOrigin,
+        nonce: nonce,
+        postToOpener: function (m) {
+          if (window.opener) window.opener.postMessage(m, openerOrigin)
+        },
+        fetchImpl: function (p, init) { return fetch(p, init) },
+      })
+      window.addEventListener('message', function (ev) { bridge.onMessage(ev) })
+      status.className = 'ok'
+      status.textContent = '已连上工作台 ✓'
+      window.setInterval(function () {
+        if (window.opener && window.opener.closed) window.close()
+      }, 2000)
+    </script>
+  </body>
+</html>

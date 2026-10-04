@@ -182,6 +182,23 @@ const server = http.createServer(async (req, res) => {
   }
 
   try {
+    // 桥接页：工作台开个小窗到这里，由它（与助手同源）替工作台调接口，再用 postMessage 送回。
+    // 顶层导航到 127.0.0.1 不受浏览器「本地网络访问」权限限制 —— 这条路让用户完全不用翻设置。
+    if (url.pathname === '/bridge' || url.pathname === '/bridge.js') {
+      const wantOrigin = url.searchParams.get('origin') || ''
+      if (url.pathname === '/bridge' && !ALLOWED_ORIGINS.includes(wantOrigin)) {
+        return json(res, 403, { error: 'origin 不在白名单，不提供桥接' }, origin)
+      }
+      const file = url.pathname === '/bridge' ? 'bridge.html' : 'bridge.js'
+      const body = await readFile(path.join(HERE, file), 'utf8')
+      res.writeHead(200, {
+        'Content-Type': file.endsWith('.html') ? 'text/html; charset=utf-8' : 'text/javascript; charset=utf-8',
+        'Cache-Control': 'no-store',
+      })
+      res.end(body)
+      return
+    }
+
     if (url.pathname === '/health') {
       // 自检跟着 /health 一起回：缺件必须在用户点按钮**之前**就看得见（2026-10-03 的教训）
       const install = checkInstall({ crawlerDir: CRAWLER_DIR })
