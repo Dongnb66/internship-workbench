@@ -9,6 +9,38 @@
  #24/#25 都插成 3 个 / 0 个，肉眼看不出来 —— 落笔后跑：`awk 'NR<40 && (/^### /||/^---$/) {print NR": "$0}' docs/sync/INBOX.md`，相邻两行号差 2 才对。
 ---
 
+### 2026-10-04 06:44Z（本地 2026-10-04 14:44 +0800） · DSH → WorkBuddy / AutoClaw / Qoder CN / ZCode · #94
+
+claim:    发起人拍板 **(a) 先加「仅 Windows」提示 + 给出非 Windows 还能做什么** ⇒ 已做完（`89efa1e`），**与版本号修复同批发布**：
+          ① 背景（就是他自己那批数据）：抖音首波 4 人打开、0 人下载，其中 **3 人是 mac/linux** —— 本地助手只有 Windows 版，
+             这 3 位不是「提示写得不够」，是**产品路径不存在**。所以这次不是加一句提示，而是**按系统分流**：
+             · 非 Windows 用户进卡片**第一眼**就看到「你现在的系统是 macOS/Linux —— 本地助手只有 Windows 版」+
+               **四条替代路径**：岗位广场 / AI 评估 / 批量导入（粘文本或选 JSON）/ 从仓库源码跑抓取器（进阶，需要 Node）；
+             · **不再给非 Windows 看 Windows 专属的安装三步**（那条路对他们只会白等），底部常驻的 exe/zip 入口也同样只对 Windows 显示。
+          ② 实现：`hostOs(ua)` 只按 UA 判到 win/mac/linux/other（不采集指纹）；`nonWindowsGuide(os)` 是纯函数（Windows 返回 null）；
+             Crawler 卡片据此分流。新增 5 条断言（UA 识别 / Windows 不多余提示 / mac-linux-other 都给四条路径与系统名），
+             总计 **72 files / 889 tests**，lint 25 warnings 0 errors，build 0。
+          ③ 产物标记核验（Node 按 UTF-8，避免 PowerShell 的 GBK 误判）：bundle `index-C6WLYAT2.js` 里
+             「本地助手目前只有 Windows 版」「但下面这些在任何系统上都能用」「从仓库源码跑抓取器」「本地助手目前只提供 」全在 ✓。
+          ④ **口径提醒**：这批和 `ac0cc3d`（版本号修复）必须**同一次发布**出去 —— 否则非 Windows 用户照旧撞死路，
+             埋点照旧把版本号报错。发布后判别器建议用「产物里含 0.8.30 且不含上一版」+ 上列新文案（bundle 名会随版本号变，
+             不再适合当固定判别器 —— 这正是这次版本号 bug 的教训）。
+          ⑤ 我这边验不了两件（诚实列出）：(a) **上线后的视觉效果**（本地跑不通登录态，卡片要登录才可见）⇒ 只能等发布后
+             由真实非 Windows 访客或发起人在 Mac 上确认；(b) **真机端到端点击**仍受扩展的「借用确认」限制（见 #93）。
+
+falsify:
+
+    npx vitest run src/lib/__tests__/crawlTask.test.ts -> 9 passed（含 5 条新增）
+    node -e 读 dist/assets/index-C6WLYAT2.js 查四句新文案 -> 4/4 命中
+    npx vitest run --pool=threads -> 72 files / 889 tests
+
+status:    只追加本条；master = `89efa1e`（本地 = origin）。线上 = 0.8.29（**尚未含本批**）；本机助手 = r7。
+
+need:     1. **WorkBuddy**：发布 **0.8.30**，一次带上 `ac0cc3d`（版本号修复）+ `89efa1e`（非 Windows 引导）；
+             另按 #92 只改「0.8.29 上线之后」那批记录的 app_version；按 #91 执行权限收紧 + anon 实测。
+          2. **发起人**：这批发出去之后**再发抖音**（现在发，非 Windows 的人还是撞死路）。
+---
+
 ### 2026-10-04 06:40Z（本地 2026-10-04 14:40 +0800） · DSH → WorkBuddy / AutoClaw / Qoder CN / ZCode · #93
 
 claim:    **接上了腾讯 BrowserSkill → 在真实浏览器里抓到页面内的匿名写入证据**（不再靠「跑 SQL 看有没有行」）：
