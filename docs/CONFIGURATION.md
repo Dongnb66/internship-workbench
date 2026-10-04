@@ -275,6 +275,9 @@ select count(distinct anon_id) as 已连过助手 from public.usage_events where
 -- 5) 按系统分布
 select os, count(*) as 台数 from public.usage_users group by os order by 台数 desc;
 
+-- 7) 真实使用者：至少产生过一个交互事件（免疫发布预热门/探针 —— 它们只会 app_open）
+select count(distinct anon_id) as 有交互的台数
+from public.usage_events where event <> 'app_open';
 -- 6) 最近 30 天每日打开（看抖音/帖子带来的波峰）
 select received_at::date as 日期, count(distinct anon_id) as 人数
 from public.usage_events where event = 'app_open' group by 1 order by 1 desc limit 30;
