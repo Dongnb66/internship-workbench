@@ -12,6 +12,11 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   test: {
     environment: 'node',
+    // 默认 5 秒对本仓库偏紧：有 7 处断言会**走整棵源树**做源码推导
+    // （profileTemplate / byoHygiene / rlsGuards / aiPromptCoverage / aiQuotaCoverage / agentTools / channelCapability），
+    // 并行负载下它们会越过 5s，出现「看着像真失败」的假红 —— 2026-10-03/04 实测过一次。
+    // 给 20s 留 4 倍余量；真正卡死的用例仍会失败，只是晚一点。
+    testTimeout: 20_000,
     include: [
       'src/**/*.test.ts',
       // 需要在 node 里读文件/做源码推导的检查写成 .mjs：app 的 tsconfig 只给 DOM 类型，
