@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { crawlFailureHint } from '../crawlTask'
+import { hostOs, nonWindowsGuide, crawlFailureHint } from '../crawlTask'
 
 /**
  * 失败提示的分派判据。
@@ -42,5 +42,32 @@ describe('抓取失败提示按日志分派', () => {
   it('空任务也不炸', () => {
     expect(typeof crawlFailureHint({})).toBe('string')
     expect(typeof crawlFailureHint({ log: [], error: null })).toBe('string')
+  })
+})
+
+describe('本地助手只有 Windows 版：非 Windows 的引导', () => {
+  it('UA 认到系统（只看粒度，不采集指纹）', () => {
+    expect(hostOs('Mozilla/5.0 (Windows NT 10.0; Win64; x64)')).toBe('win')
+    expect(hostOs('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)')).toBe('mac')
+    expect(hostOs('Mozilla/5.0 (X11; Linux x86_64)')).toBe('linux')
+    expect(hostOs('')).toBe('other')
+  })
+
+  it('Windows 不给多余提示', () => {
+    expect(nonWindowsGuide('win')).toBe(null)
+  })
+
+  it('mac / linux / 未知都给四条替代路径与系统名', () => {
+    for (const os of ['mac', 'linux', 'other'] as const) {
+      const g = nonWindowsGuide(os)
+      expect(g).not.toBe(null)
+      expect(g!.lanes.length).toBe(4)
+      expect(g!.lanes.map((l) => l.name)).toContain('岗位广场')
+      expect(g!.lanes.map((l) => l.name)).toContain('批量导入')
+      expect(g!.lanes.map((l) => l.name)).toContain('AI 评估')
+      expect(g!.osLabel.length).toBeGreaterThan(0)
+    }
+    expect(nonWindowsGuide('mac')!.osLabel).toBe('macOS')
+    expect(nonWindowsGuide('linux')!.osLabel).toBe('Linux')
   })
 })

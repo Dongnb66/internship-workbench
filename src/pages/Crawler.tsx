@@ -3,7 +3,7 @@ import JobImportModal from '../components/JobImportModal'
 import { Field } from '../components/ui'
 import { errText } from '../cloud'
 import { listRows } from '../lib/api'
-import { crawlFailureHint, crawlOutputHint, buildCrawlPlan, CRAWLER_PREFS_KEY, parseCrawlerPrefs, serializeCrawlerPrefs } from '../lib/crawlTask'
+import { hostOs, nonWindowsGuide, crawlFailureHint, crawlOutputHint, buildCrawlPlan, CRAWLER_PREFS_KEY, parseCrawlerPrefs, serializeCrawlerPrefs } from '../lib/crawlTask'
 import { crawlSitesForPicker, type CrawlSite } from '../lib/crawlSites'
 import { track, touchUser } from '../lib/usage'
 import { AGENT_DOWNLOAD_URL, AGENT_PORTABLE_URL, AgentTimeoutError, freshOutputs, getTask, jobsToImportText, listOutputs, listSites, lnaHelpFor, lnaPermissionState, getSchedule, openBridge, probe, saveSchedule, scheduleDirty, startCrawl, type AgentHealth, type CrawlTask, type AgentSchedule, type CrawlTaskOutput } from '../lib/localAgent'
@@ -356,6 +356,9 @@ export default function Crawler({ profile, onChanged }: PageProps) {
   const lnaHelp = lnaHelpFor()
   const lnaStateLabel = { granted: '已允许', denied: '已被拒绝', prompt: '还没决定', unknown: '查不到' }[lnaState]
   const totalJobs = freshResult.reduce((n, o) => n + (o.count || o.jobs.length), 0)
+  /** 本地助手只有 Windows 版：非 Windows 用户上来就先说清，并给出替代路径（2026-10-04 抖音首波：4 人里 3 个 mac/linux，全卡死在这） */
+  const os = hostOs()
+  const nonWin = nonWindowsGuide(os)
 
   return (
     <div className="grid" style={{ gap: 14 }}>
@@ -396,10 +399,29 @@ export default function Crawler({ profile, onChanged }: PageProps) {
             </div>
           ) : null}
 
+          {nonWin ? (
+            <div className="hint mb8">
+              <strong>你现在的系统是 {nonWin.osLabel}</strong> —— 本地助手目前只有 Windows 版，这台机器上装不了。
+              但下面这些在任何系统上都能用：
+              <ul style={{ margin: '6px 0 0 18px', padding: 0 }}>
+                {nonWin.lanes.map((l) => (
+                  <li key={l.name}>
+                    <strong>{l.name}</strong>：{l.detail}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
           {agentState === 'off' ? (
             <div className="hint warn mb8">
               {agentError ?? '本地助手没在跑，「开始抓取」用不了。'}
-              {downloadAnchor ? (
+              {os !== 'win' ? (
+                <div className="small muted mt8">
+                  本地助手目前只提供 <strong>Windows</strong> 安装包。你在 {nonWin?.osLabel} 上想用自动抓取，
+                  可以走下面的「进阶：从仓库源码跑」（需要 Node）；不想装环境就用上面的替代路径。
+                </div>
+              ) : downloadAnchor ? (
                 <div className="mt8">
                   <strong>装上它只要一次双击：</strong>
                   <ol style={{ margin: '6px 0 0 18px', padding: 0 }}>
@@ -571,7 +593,7 @@ export default function Crawler({ profile, onChanged }: PageProps) {
               「指定地址」里有没清空的地址，一键抓取带不了它们 —— 要抓这类请用下方手动命令方式。
             </div>
           ) : null}
-          {downloadAnchor ? (
+          {os === 'win' && downloadAnchor ? (
             <div className="small muted mt8">
               没装过、或抓取报「装得不完整」？{downloadAnchor}（双击即装）；
               {portableAnchor ? <>或{portableAnchor} —— 解压后双击 start-hidden.vbs。</> : null}

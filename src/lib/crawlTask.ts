@@ -153,3 +153,34 @@ export function crawlFailureHint(task: { log?: string[]; error?: string | null }
   }
   return '失败原因看日志最后一行，常见的是站点改版或需要登录（🔒 站点先跑 node login.mjs --site <站点id>）。'
 }
+
+/** 用户当前系统（只看 UA，粒度到 win/mac/linux）：界面据此换引导 —— 本地助手只有 Windows 版 */
+export function hostOs(ua?: string): 'win' | 'mac' | 'linux' | 'other' {
+  const s = ua ?? (typeof navigator === 'undefined' ? '' : navigator.userAgent)
+  if (!s) return 'other'
+  if (/Win/i.test(s)) return 'win'
+  if (/Mac/i.test(s)) return 'mac'
+  if (/Linux|Android/i.test(s)) return 'linux'
+  return 'other'
+}
+
+export interface NonWindowsGuide {
+  osLabel: string
+  /** 非 Windows 用户在当前系统上仍然能做的事 —— 别让人对着装不了的安装包干等 */
+  lanes: { name: string; detail: string }[]
+}
+
+/** 非 Windows 的替代路径；Windows 返回 null（不做多余提示） */
+export function nonWindowsGuide(os: 'win' | 'mac' | 'linux' | 'other'): NonWindowsGuide | null {
+  if (os === 'win') return null
+  const osLabel = os === 'mac' ? 'macOS' : os === 'linux' ? 'Linux' : '你的系统'
+  return {
+    osLabel,
+    lanes: [
+      { name: '岗位广场', detail: '直接浏览公共岗位库，把想要的岗位加进自己的岗位池' },
+      { name: 'AI 评估', detail: '给岗位池里的岗位算匹配分、分析 JD（不依赖本地助手）' },
+      { name: '批量导入', detail: '在「岗位池 → 批量导入」粘文本或选 JSON，把岗位导进来' },
+      { name: '从仓库源码跑抓取器（进阶）', detail: '需要 Node 与仓库；非登录型站点可用，适合能自己开终端的人' },
+    ],
+  }
+}
