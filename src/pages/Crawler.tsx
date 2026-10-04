@@ -130,7 +130,9 @@ export default function Crawler({ profile, onChanged }: PageProps) {
       setAgentError(errText(error))
       setAgentReady(undefined)
       setAgentTimeout(error instanceof AgentTimeoutError)
-      if (error instanceof AgentTimeoutError) setLnaState(await lnaPermissionState())
+      // 权限被「阻止」时失败是**立即的网络错误**（不是超时），但同样要知道权限状态：
+      // 否则界面会说成「助手没在跑 / 去跑 npm run agent」——助手其实在跑，是浏览器挡的。
+      setLnaState(await lnaPermissionState())
       setAgentState('off')
     }
   }
@@ -383,10 +385,20 @@ export default function Crawler({ profile, onChanged }: PageProps) {
                   </span>
                 </div>
               ) : null}
-              {agentTimeout ? (
+              {agentTimeout || lnaState === 'denied' ? (
                 <div className="mt8">
-                  <strong>多半是浏览器把「本地网络访问」挡住了</strong>（当前状态：{lnaStateLabel}）。
+                  {agentTimeout ? (
+                    <>
+                      <strong>多半是浏览器把「本地网络访问」挡住了</strong>（当前状态：{lnaStateLabel}）。
+                    </>
+                  ) : (
+                    <>
+                      <strong>浏览器拒绝了本地网络访问</strong>（当前状态：{lnaStateLabel}）—— 所以本页连不上助手，
+                      <strong>这不代表助手没装或没在跑</strong>。
+                    </>
+                  )}
                   放行方法（{lnaHelp.browser}）：{lnaHelp.path}；放行后点右上角「重新检测」。
+                  或者直接点上面的「用桥接窗口连上」，绕过这道权限。
                   {lnaHelp.deepLink ? (
                     <div className="row mt8">
                       <button
