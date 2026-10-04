@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **⚠️ 结清挂了好几批的测试 flake 口径**（`vitest.config.ts`；`4d47e09`）。**现象**：默认 `testTimeout` 5 秒对本仓库偏紧 —— 有 **7 处断言会走整棵源树做源码推导**（`profileTemplate` / `byoHygiene` / `rlsGuards` / `aiPromptCoverage` / `aiQuotaCoverage` / `agentTools` / `channelCapability`），并行负载下会越过 5 秒，表现为「**看着像真失败的假红**」：失败形态是**超时**而不是断言不成立。2026-10-03 受控三路并发可稳定复现（3/3 全红，4 / 5 / 12 条，耗时 5.0–12.4 s）。**修法按构造消掉这一类**：全局提到 **20 s**（4 倍余量），不再逐条给用例加 timeout。**真正卡死的用例仍会失败，只是晚一点。**
+- **桥接页在 Edge 里脚本根本没执行 —— 页面静默停在「正在与工作台建立桥接…」**（`crawler/agent/bridge.html` + `crawler/agent/server.mjs`；`4e0355d`）。**这是桥接真机验证时暴露的**：把该站点的「设备上的应用」设为**阻止**后强刷，点「用桥接窗口连上」—— 小窗一直停在初始文案。**根因**：`bridge.html` 原来用 `<script type="module">` + `import '/bridge.js'`，模块脚本走的是另一条加载路径（跨源与 CSP 任一不满足就**无声失败**）。**页面不动、不报错、控制台也不一定出声** ⇒ 表现与「连不上助手」一模一样，**没法区分**。**修法两条**：① 改成**服务端原地注入的经典脚本**（无 `import`，不依赖模块加载）；② 加 `try/catch`，出错**写进小窗 + 回传工作台** —— 「静默不执行」以后不会再无声无息。
+- **权限被浏览器拒绝时，界面把原因说反了**（`src/pages/Crawler.tsx`；`5cd7657`）。**现象**：LNA 权限被阻止时失败是**立即的网络错误**，不是超时；而 LNA 指引只在超时分支显示 ⇒ 界面落到兜底文案「连不上助手…去跑 `npm run agent`」—— **助手其实一直在跑**，这句话把人指向完全相反的方向。**修法**：**任何失败都去查权限状态**，被拒时明说「**浏览器拒绝了本地网络访问，这不代表助手没装或没在跑**」，并指向桥接窗口。
+- **桥接页自己的报错接不到卡片上**（`src/lib/localAgent.ts` + 其测试；`865c688`）：配合上一条，桥接侧一失败，小窗里看得到、工作台上看不到。现在两边都看得到。
+- **底部常驻那行文案写重了**（`src/pages/Crawler.tsx`；`a27f851`）：「手动安装（zip）」后面又跟了一遍 zip 说明，读起来像重复了两遍。
+- 四件套（本机实跑）：typecheck exit 0 / **69 files 858 tests** 全绿 / lint 0 error（**25 warnings**，195 files）/ build exit 0（主 bundle **`index-Bmsa_Bde.js`**，614258 字节，sha256 `65459b5e851ccf3ed30a57f4a6af3852584d009be9193a18c2d73c449a44501c`）。**判别器与交接单预判逐字符一致。**
+
+### Changed
+
+- **助手包换代（r4）**：zip **53,574,185** 字节 / sha256 `5f5fd20ad7e6eb3799a4c404b0564e36315aa8c4ad52eb9c9e099d1d28d6c824`；安装器 **53,587,456** 字节 / sha256 `dc1e79d7b7a9dcb76c32e714a195ca98f635dae1b8a63735de982c093664db1d`。**线上文件名不变**（仍叫 `internship-workbench-agent.zip`）。**r3 哈希（zip `c7d11470…` / 安装器 `ff6e84cf…`）已作废** —— **桥接页在助手包里**，上面那条脚本修复不换包就到不了用户手上。
+
 ### Added
 
 - **第二层第二项：桥接窗口 —— 绕过浏览器「本地网络访问」（LNA）权限，用户不用再翻浏览器设置**（`crawler/agent/bridge.js`、`crawler/agent/bridge.html`、`crawler/agent/server.mjs` 两条路由、新 `crawler/__tests__/bridge.test.mjs`（8 条）、接口契约补一节；工作台侧 `src/lib/localAgent.ts#bridgeUrl/isBridgeMessage/openBridge/bridgeCall` + `src/pages/Crawler.tsx` 的按钮与提示；`302b321`，由 DSH 完成）。**机制（一句说清为什么能绕）**：LNA 只管**页面自己发起的 fetch**，而**顶层导航到 `127.0.0.1` 是豁免的**；于是工作台在**用户点击**里开一个小窗到助手的 `/bridge` 页（**与助手同源**），由它代工作台调接口，再用 `postMessage` 把结果送回；工作台侧 `call()` 在桥接可用时**优先走它**。**安全边界（服务端 + 协议两侧都校验，一条都不许过）**：服务端只对**白名单 origin** 提供桥接页（外来 → **403**，实测）；消息两侧都校验 **origin + nonce**；桥接只转发**助手自己的路径**（`http://…`、以 `//` 开头、含 `..` 一律拒）—— 不能被当成任意代理。**⚠️ 前提是助手包换代**：`bridge.js` 在助手包里，**旧包没有 `/bridge`，桥接根本用不了** ⇒ 所以这批同时换了包（见下）。卡片上新增「用桥接窗口连上（不用改浏览器设置）」按钮与「正通过桥接窗口连接」提示。
