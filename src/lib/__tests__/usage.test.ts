@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import {
   __setUsageSink,
   buildEventPayload,
+  userPatch,
   isUsageEvent,
   makeAnonId,
   sanitizeDetail,
@@ -72,6 +73,21 @@ describe('匿名计数：匿名 id 与载荷', () => {
     expect(p.event).toBe('crawl_ok')
     expect(p.detail).toEqual({ jobs: 5 })
     expect(p.received_at).toBe('2026-10-05T00:00:00.000Z')
+    expect(typeof p.app_version).toBe('string')
+  })
+})
+
+describe('用户表更新字段：agent_installed 那个真 bug', () => {
+  it('真装上助手时要把它写成 true（否则老用户永远停在 false）', () => {
+    expect(userPatch('2026-10-04T00:00:00.000Z', true).agent_installed).toBe(true)
+  })
+  it('不确定时不写这个字段（不把未知写成 false）', () => {
+    expect('agent_installed' in userPatch('now')).toBe(false)
+    expect('agent_installed' in userPatch('now', false)).toBe(false)
+  })
+  it('每次更新都推进 last_seen 与 app_version', () => {
+    const p = userPatch('T', true)
+    expect(p.last_seen).toBe('T')
     expect(typeof p.app_version).toBe('string')
   })
 })

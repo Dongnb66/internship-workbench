@@ -166,6 +166,19 @@ export function track(event: UsageEvent, detail?: Record<string, unknown>): void
   touchUser()
 }
 
+/**
+ * 更新已有用户行时该带哪些字段（纯函数，便于测试）。
+ *
+ * ⚠️ agent_installed 必须按需带上：2026-10-04 他查出的真 bug —— 这个字段原来只在 INSERT 里写，
+ * 于是「后来才装上助手」的老用户在库里永远是 false，直接让「多少人真把助手跑起来了」这个口径失真。
+ * 没传（undefined）时不写它：不知道就别写成 false。
+ */
+export function userPatch(now: string, agentInstalled?: boolean): Record<string, unknown> {
+  const patch: Record<string, unknown> = { last_seen: now, app_version: USAGE_APP_VERSION }
+  if (agentInstalled === true) patch.agent_installed = true
+  return patch
+}
+
 /** 用户表：首次插入 + 之后只更新 last_seen（人数/活跃直接查这张） */
 export function touchUser(agentInstalled?: boolean): void {
   if (!usageEnabled()) return
@@ -179,7 +192,13 @@ export function touchUser(agentInstalled?: boolean): void {
       if (agentInstalled !== undefined) row.agent_installed = agentInstalled
       const ins = await db.from('usage_users').insert({ ...row, first_seen: now, last_seen: now })
       if (!ins?.error) return
-      await db.from('usage_users').update({ last_seen: now, app_version: USAGE_APP_VERSION }).eq('anon_id', anon)
+      // 只看 anon_id 一列（列级 SELECT 授权给的就是它）⇒ 能判断「更新到底命中了几行」：
+      // PostgREST 在命中 0 行时也回 204，静默无操作会让 last_seen 停住、活跃/留存变哑。
+      const upd = await db.from('usage_users').update(userPatch(now, agentInstalled)).eq('anon_id', anon).select('anon_id')
+      const rows = Array.isArray(upd?.data) ? upd.data.length : null
+      if (!upd?.error && (rows === null || rows > 0)) return
+      // 没命中（例如本地匿名身份在库里不存在）⇒ 补插一次，让「一台浏览器一行」自己恢复
+      await db.from('usage_users').insert({ ...row, first_seen: now, last_seen: now })
     } catch {
       /* 静默 */
     }
