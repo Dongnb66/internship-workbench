@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import {
   __setUsageSink,
   buildEventPayload,
-  userPatch,
+  buildUserRow,
   isUsageEvent,
   makeAnonId,
   sanitizeDetail,
@@ -77,18 +77,20 @@ describe('匿名计数：匿名 id 与载荷', () => {
   })
 })
 
-describe('用户表更新字段：agent_installed 那个真 bug', () => {
-  it('真装上助手时要把它写成 true（否则老用户永远停在 false）', () => {
-    expect(userPatch('2026-10-04T00:00:00.000Z', true).agent_installed).toBe(true)
+describe('用户表：只 INSERT（UPDATE 通道真机证实不可靠，2026-10-04）', () => {
+  const row = (anon: string, now: string, installed?: boolean) => buildUserRow(anon, now, installed)
+  it('一行 = 一台浏览器：anon_id + first/last_seen + 版本 + 系统', () => {
+    const r = row('a_x', 'T')
+    expect(r.anon_id).toBe('a_x')
+    expect(r.first_seen).toBe('T')
+    expect(r.last_seen).toBe('T')
+    expect(typeof r.app_version).toBe('string')
+    expect(typeof r.os).toBe('string')
   })
-  it('不确定时不写这个字段（不把未知写成 false）', () => {
-    expect('agent_installed' in userPatch('now')).toBe(false)
-    expect('agent_installed' in userPatch('now', false)).toBe(false)
-  })
-  it('每次更新都推进 last_seen 与 app_version', () => {
-    const p = userPatch('T', true)
-    expect(p.last_seen).toBe('T')
-    expect(typeof p.app_version).toBe('string')
+  it('真装上助手时才写 agent_installed：不确定不写（不把未知写成 false）', () => {
+    expect(row('a_x', 'T', true).agent_installed).toBe(true)
+    expect('agent_installed' in row('a_x', 'T', false)).toBe(false)
+    expect('agent_installed' in row('a_x', 'T')).toBe(false)
   })
 })
 

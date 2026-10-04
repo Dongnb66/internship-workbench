@@ -167,19 +167,28 @@ export function track(event: UsageEvent, detail?: Record<string, unknown>): void
 }
 
 /**
- * 更新已有用户行时该带哪些字段（纯函数，便于测试）。
+ * 用户表的一行（纯函数，便于测试）。
  *
- * ⚠️ agent_installed 必须按需带上：2026-10-04 他查出的真 bug —— 这个字段原来只在 INSERT 里写，
- * 于是「后来才装上助手」的老用户在库里永远是 false，直接让「多少人真把助手跑起来了」这个口径失真。
- * 没传（undefined）时不写它：不知道就别写成 false。
+ * ⚠️ 2026-10-04 的教训：这张表**只 INSERT，不 UPDATE**。
+ * 立项时的设计是「首次插入 + 之后 UPDATE last_seen」，但真机上那条 UPDATE 从来没成功过
+ * （WorkBuddy 用 pg_stat_user_tables 判的：usage_users n_tup_ins=31 / n_live_tup=10 ⇒ 21 次撞主键，
+ *   而 n_tup_upd=1 且那 1 次是管理员手工改的 ⇒ 匿名 UPDATE 一次都没生效，且前端静默吞错、不报错）。
+ * 所以活跃与「装过助手」都改成**从 usage_events 推导**（那张表的 INSERT 是通的：n_tup_ins=23 / n_live_tup=11）。
+ * 不再依赖任何 UPDATE ⇒ 权限可以收到「只允许 INSERT」，少一条会静默失败的链路。
  */
-export function userPatch(now: string, agentInstalled?: boolean): Record<string, unknown> {
-  const patch: Record<string, unknown> = { last_seen: now, app_version: USAGE_APP_VERSION }
-  if (agentInstalled === true) patch.agent_installed = true
-  return patch
+export function buildUserRow(anon: string, now: string, agentInstalled?: boolean): Record<string, unknown> {
+  const row: Record<string, unknown> = {
+    anon_id: anon,
+    first_seen: now,
+    last_seen: now,
+    app_version: USAGE_APP_VERSION,
+    os: USAGE_OS,
+  }
+  if (agentInstalled === true) row.agent_installed = true
+  return row
 }
 
-/** 用户表：首次插入 + 之后只更新 last_seen（人数/活跃直接查这张） */
+/** 用户表：**只 INSERT**（一台浏览器一行）。活跃/已装助手一律从 usage_events 推导，理由见 buildUserRow 注释 */
 export function touchUser(agentInstalled?: boolean): void {
   if (!usageEnabled()) return
   const anon = anonId()
@@ -188,19 +197,9 @@ export function touchUser(agentInstalled?: boolean): void {
     try {
       const mod = await import('../cloud')
       const db = mod.cloud.database as any
-      const row: Record<string, unknown> = { anon_id: anon, app_version: USAGE_APP_VERSION, os: USAGE_OS }
-      if (agentInstalled !== undefined) row.agent_installed = agentInstalled
-      const ins = await db.from('usage_users').insert({ ...row, first_seen: now, last_seen: now })
-      if (!ins?.error) return
-      // 只看 anon_id 一列（列级 SELECT 授权给的就是它）⇒ 能判断「更新到底命中了几行」：
-      // PostgREST 在命中 0 行时也回 204，静默无操作会让 last_seen 停住、活跃/留存变哑。
-      const upd = await db.from('usage_users').update(userPatch(now, agentInstalled)).eq('anon_id', anon).select('anon_id')
-      const rows = Array.isArray(upd?.data) ? upd.data.length : null
-      if (!upd?.error && (rows === null || rows > 0)) return
-      // 没命中（例如本地匿名身份在库里不存在）⇒ 补插一次，让「一台浏览器一行」自己恢复
-      await db.from('usage_users').insert({ ...row, first_seen: now, last_seen: now })
+      await db.from('usage_users').insert(buildUserRow(anon, now, agentInstalled))
     } catch {
-      /* 静默 */
+      /* 撞主键 = 这台浏览器已登记过；已经没有 UPDATE，所以这里静默就是正确行为 */
     }
   })()
 }
