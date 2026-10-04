@@ -450,8 +450,8 @@ export default function Crawler({ profile, onChanged }: PageProps) {
           ) : null}
           {downloadAnchor ? (
             <div className="small muted mt8">
-              没装过、或抓取报「装得不完整」？{downloadAnchor}（双击即装）；{portableAnchor ?? null}
-              {portableAnchor ? '（zip：解压后双击 start-hidden.vbs）' : ''}
+              没装过、或抓取报「装得不完整」？{downloadAnchor}（双击即装）；
+              {portableAnchor ? <>或{portableAnchor} —— 解压后双击 start-hidden.vbs。</> : null}
             </div>
           ) : null}
 
