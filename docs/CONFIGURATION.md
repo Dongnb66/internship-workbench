@@ -1,4 +1,7 @@
-# CONFIGURATION · 云端与数据库配置
+#-- 8) 【仅验证用，不作占比】事件侧当场算出的系统（手机识别是否生效；样本只有开过 ?diag=1 的台）
+select detail->>'os' as os, count(distinct anon_id) as 台数
+from public.usage_events where event = 'diag' group by 1 order by 2 desc;
+ CONFIGURATION · 云端与数据库配置
 
 ## 1. 前端唯一需要改的地方
 
