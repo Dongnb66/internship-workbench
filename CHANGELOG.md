@@ -4,6 +4,20 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **⚠️ 埋点把每一批都报成上一版 —— 同页面两套版本号，其中一套是假的**（`scripts/appVersionPlugin.mjs` + `src/lib/usageEnv.ts`；`ac0cc3d`）。**现象**：0.8.29 上线后，库里每条记录的 `app_version` 都是 `0.8.28`；而 `index.html` 的 `app-version` meta 一直是 `0.8.29`（它构建时从 `package.json` 注入）。**根因**：`usageEnv.ts` 里把版本号写成了**字面量**（生成那个文件时从 `package.json` 读了一次就固化了），升版本时不会跟着变。**为什么它特别危险**：**构建不报错、判别器 sha256 也对、逐字节核验全过** ⇒ 四件套与整套发布纪律**都发现不了它**；危害是「按版本聚合人数」永久失真。**这正是项目自己早写过的那句** ——「写死的标记在升级后会变成假话，而假话比没标记更坏」。**修法**：`appVersionPlugin` 增加 `config() → define.__APP_VERSION__`（构建期注入，单一真相源仍是 `package.json`），`usageEnv.ts` 改读它 + `typeof` 兜底（vitest 直跑源码时给 `'dev'`，不知道就说不知道）。**防复发**：新增 `src/lib/__tests__/versionHygiene.test.mjs` 扫 `src/` 与 `scripts/`，禁止「给版本语义的常量赋值字面量」这种写法；判据刻意收窄，注释里的历史版本叙述与 `127.0.0.1` 这类 IP 都不会被误伤。**本批已验收**：产物里唯一的版本字面量是 `0.8.30`，**不含 `0.8.29`、也不含 `0.8.28`**。
+- **权限收紧：匿名端只能写、不能整表读**（`db/migrations/005_usage_events.sql` 追加两句；已执行）。`REVOKE SELECT ON public.usage_users, public.usage_events FROM anon, authenticated;` + `GRANT SELECT (anon_id) ON public.usage_users TO anon, authenticated;`。**为什么不能只做全表 REVOKE**（这是我上一轮建议的漏洞，DSH 指出）：`UPDATE … WHERE anon_id = $1` **需要被读列的 SELECT 权限**，全表收回会把 `usage_users.last_seen` 的更新打死；而前端统计是**刻意静默**的 ⇒ 症状是「界面正常、数据变哑」：人数照常 +1（INSERT 不受影响）但**活跃/留存永远停在首见那天**，且没有任何报错。所以只把 WHERE 用到的那一列授回来；**真实可读性仍由「RLS 已开 + 无 SELECT 策略」兜住** —— 有列权限也读不到任何一行。两条都幂等、可逆。
+
+### Added
+
+- **非 Windows 用户第一眼就能看清「本地助手装不了」，并给四条替代路径**（`src/pages/Crawler.tsx` + `src/lib/usageEnv.ts` 的 `hostOs()`/`nonWindowsGuide()`；`89efa1e`）。**为什么必须做**：0.8.29 上线后第一批真实数据是「4 人打开、0 人下载」，其中 **3 人是 mac/linux** —— 他们不是「提示不够」，是**路径根本不存在**（本地助手只有 Windows 版）。现在非 Windows 用户会看到「**你现在的系统是 macOS** —— 本地助手目前只有 Windows 版，这台机器上装不了。**但下面这些在任何系统上都能用**」，随后四条替代：**岗位广场 / AI 评估 / 批量导入 / 从仓库源码跑抓取器（进阶）**。同时**不再给非 Windows 显示 Windows 的安装三步**，底部 exe/zip 入口也只对 Windows 显示。`hostOs()` **只按 UA 判到 win/mac/linux**（不采集指纹）；`nonWindowsGuide()` 是**纯函数**（5 条新断言）。
+
+### Changed
+
+- **判别器换方式**：从本批起**不用固定 bundle 名**。原因正是上面的修复 —— **版本号进了产物**，升版本会改变内容哈希，`index-XXXX.js` 这个名字随之变（0.8.29 是 `index-BbuHdbME.js`，0.8.30 变成 `index-IMqrLf9m.js`）。**新的判据**：产物里**含 `0.8.30` 且不含 `0.8.29`**，外加三句本批新文案（「本地助手目前只有 Windows 版」「但下面这些在任何系统上都能用」「从仓库源码跑抓取器」）。版本号唯一真相仍是 `app-version` + 逐字节 sha256。
+- 四件套（本机实跑）：typecheck exit 0 / **72 files 889 tests** 全绿 / lint 0 error（**25 warnings**，**201 files**）/ build exit 0（主 bundle **`index-IMqrLf9m.js`**，622998 字节，sha256 `3bdcb6a542a1709e8f34a0633a1cc103b037830371b56bc52edb8e178a08eb60`）。⚠️ **本批不换助手包**，线上继续 r7（`5e9840ba…` / `0f42913a…`，已用 `verifyPublish --sha256` 全量复核未变）。
+
 ### Added
 
 - **匿名使用计数 —— 从此能回答「有多少人在用 / 卡在哪一步」**（新 `src/lib/usage.ts` + `src/lib/usageEnv.ts` + `db/migrations/005_usage_events.sql` + `src/lib/__tests__/usage.test.ts`；`a70980b`）。**为什么要有**：项目要发出去拉真实用户，而此前代码里**没有任何计数** ⇒ 发出去也拿不到人数，简历/作品集上只能写「自用」。**这不是自己拍脑袋想的**，按老规矩先读了三份开源实现再定：
