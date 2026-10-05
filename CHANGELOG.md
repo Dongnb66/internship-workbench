@@ -6,6 +6,15 @@
 
 ### Fixed
 
+- **顿号拆分器把多词术语劈碎 —— 单个空格也当分隔符**（`src/lib/format.ts` + `miniprogram/utils/format.js`；`37e8562`，DSH 修，来自第三方体验评测报告 #5）。**现象**：两端都用 `split(/[,，、\s]+/)`，而 `\s` 连**单个空格**都拆 ⇒「AI Agent 应用开发、LLM 应用」被劈成「AI、Agent、应用开发、LLM、应用」，术语被毁、计数虚高。**修法**：改成 `split(/[,，、;；|]+|\s{2,}/)` —— 只有**连续两个及以上空格**才当分隔符，**网页端与小程序端同口径**（契约测试守住）；`format.test.ts` 同步更新契约，并新增回归断言「`AI Agent 应用开发、LLM 应用` 必须保持两个完整项」。
+- **界面把源码路径与变量名显示给用户**（`src/pages/Settings.tsx`；`37e8562`，报告 #3）。目标条件页直接渲染了 `src/lib/ownerAccount.ts` 与 `OWNER_EMAIL` ⇒ 用户看到的是文件名与变量名。改为纯用户语言的文案。
+- **「AI 未接上」的文案在首屏复读三遍**（`src/pages/Overview.tsx`；`37e8562`，报告 #2）。渲染 agent 报告前按行去重（`collapseRepeats`），同一段话只留首次出现；未接 Key 时首屏不再占满两屏。
+- **两处「文档里的数字」已经静默漂移 —— README 徽章写 779，实测 900；表数写 11，实测 13**（`1c9af21`，WorkBuddy）。**根因（两条同源）**：凡手写在文档里的数字，**既没有派生源、也没有门**，就一定会过期。① 同一份「私有表有哪些」在本仓库被手写了**五处**（004 迁移、`rlsGuards.test.mjs`、`Settings.tsx`、`README.md`、`docs/CONFIGURATION.md`），`CONFIGURATION` §4 甚至要求人肉补刀「`Settings.tsx` 的 `TABLES` 数组加上表名，否则数据导出会漏这张表」——**漏了不报错**；② 005 迁移加了 `usage_events` / `usage_users` 两张匿名遥测表，两个文档一个字没改。**为什么必须修**：这两个数字是对外声称，会被抄进简历与作品集 —— **一个能被面试官一条命令打穿的数字，比一个小的真数字危险得多**。**修法**：README 徽章 779 → **908**（由脚本写入，不是手改）；README / CONFIGURATION 表数 11 → **13** 并补上两张遥测表；顺带修掉 README「11 张表中 10 张私有表开启 RLS」这句**错话**（实测 13 张**全部**开启 RLS，原句隐含「只有 10 张开」）。
+
+### Added
+
+- **「文档里的数字」纳入派生断言 + 新增 CI 新鲜度门**（`src/lib/__tests__/tableContract.test.mjs`、`scripts/testBadge.mjs`、`.github/workflows/ci.yml`、`package.json`；`1c9af21`，WorkBuddy）。对标 archify 的生成物纪律：**从权威源派生 + `--check` 门 + 新增点默认失败**。① `tableContract.test.mjs`：权威源 = 004 的 `CREATE POLICY` 与 `db/migrations/` 的 `CREATE TABLE`，**派生**出全部 13 张表；断言 `Settings.tsx` 的 `TABLES` 与之**双射**、遥测表**不得进**个人导出清单、README 与 CONFIGURATION 声明的表数与点名的表名都必须对齐派生清单。② `scripts/testBadge.mjs`：权威源 = vitest `--reporter=json` 的 `numTotalTests`；`npm run test:badge` 改写徽章、`test:badge:check` **过期退出 1**；找不到徽章或报告**退出 2 并打印修复命令**（**不静默 no-op**）；**测试有失败时拒绝写**。③ `ci.yml` 新增徽章新鲜度门，`ciTrigger.test.mjs` 钉住这一步与两个 npm script 必须存在。④ `.gitignore` 忽略 `.test-report.json` —— 它是「本次跑出来的结果」，入库等于存在**两份互相矛盾的真相**。**变异验证（改坏必须变红，均实测）**：徽章改回 `tests-779` → `test:badge:check` exit 1；删掉 `ci.yml` 那一行 → `ciTrigger` 红；删掉 `.test-report.json` → exit 2 并提示先跑；表数守卫在修文档之前实测红（README 声明 11 张、派生清单 13 张）。**对标调研全文见 `docs/BENCHMARK.md` 第五节**（archify，MIT，2026-10-05 第三轮）。
+
 - **⚠️⚠️ `?diag=1` 连续两次报不出来 —— 上报体撞上 `sanitizeDetail` 的**两道**门**（`src/lib/diag.ts`；`a24c28b`，DSH 修，第一道门由 WorkBuddy 查出）**上报体的两道门都在 `sanitizeDetail` 里：① 字符串只保留 `<= 40` 字符；② **只保留前 6 个键**（`Object.entries(...).slice(0, 6)`）。**
   - **第一次错（WorkBuddy 跑真实调用链查出）**：`formatOverflow()` 把结果压成**一整行、最多 240 字符** ⇒ 被 ① **整条丢**。
     **而「无超宽元素」那种 29 字符的短文本反而能过** ⇒ **页面没超宽时报得全、真超宽时什么都报不出来** —— 行为完全反了，**恰在最需要它的时候失效**。
