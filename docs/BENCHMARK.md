@@ -269,3 +269,137 @@ issue #2368 列了 10 个 mode，#2461 又追加 4 个，而那个 PR 排队期�
 2. **新增岗位日报**（来自 campus-radar）：复用 `.seen` 历史，纯函数生成 Markdown，概览页加「今日新增」卡片；不动发布/推送链路。
 3. **黑名单（三类维度）**（来自 get_jobs）：并入既有 P1「僵尸岗位检测」一起做，共享「同源重复」判定逻辑。
 
+---
+
+## 五、2026-10-05 第三轮：archify（代码级对标，含一次真实落地）
+
+| 项目 | 规模 | 形态 | 许可 | 为什么看它 |
+| --- | --- | --- | --- | --- |
+| [tt-a1i/archify](https://github.com/tt-a1i/archify) | — | Agent Skill + Node 渲染器（本地 CLI，输出单文件 HTML） | **MIT**（LICENSE 里是双版权行：`tt-a1i (Archify) 2026` + `Cocoon AI 2025`，需留意） | **本文档 P2「迭代式架构图」正是它的主场**；且它的"派生 + `--check`"工程纪律可直接搬到本仓库 |
+
+**它不是新东西**：2026-10-01 15:21 已作为 Skill 装在 `~/.workbuddy/skills/archify`（`skill-release.json` 记 `version 3.0.1`、
+`source.repository = https://github.com/tt-a1i/archify`）。本轮做的是**补上当时没做的代码级验证**。
+
+### 实测（证据等级：机制级 —— 克隆 + 装依赖 + 真跑）
+
+```bash
+mkdir -p ~/Documents/GitHub/_benchmark && cd ~/Documents/GitHub/_benchmark
+git clone --depth 1 https://github.com/tt-a1i/archify.git   # 87 MB，HEAD 3c4e4a5
+cd archify/archify && PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm i --ignore-scripts --no-audit --no-fund
+npm test
+```
+
+- 装依赖：**18 packages / 9s**。
+- `npm test` 前四步（生成物新鲜度门）**全绿**：`check:viewer` / `check:brand-marks` / `check:validators` / `check:release-identity`（输出 `release identity ok: 3.0.1`）。
+- `test/golden.mjs`：**25 项检查 / 19 通过 / 6 失败**。
+- `scripts/run-tests.mjs`：在本机沙箱内被 SIGTERM 中断，**未跑完**（见"未证清单"）。
+
+**6 项失败是同一个根因，不是 6 个缺陷**。最小复现（用 Archify 自己的模块直采，绕开它的 CLI 包装）：
+
+```bash
+node -e "
+const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
+const d=fs.mkdtempSync(path.join(os.tmpdir(),'lk2-'));
+const src=path.join(d,'src.tmp'), dst=path.join(d,'dst.html');
+fs.writeFileSync(src,'x'); fs.linkSync(src,dst);
+console.log('建链后 dst.nlink =', fs.lstatSync(dst,{bigint:true}).nlink.toString());
+fs.unlinkSync(src);
+console.log('删掉另一个名字后 dst.nlink =', fs.lstatSync(dst,{bigint:true}).nlink.toString());
+"
+# 实测输出：建链后 2 → 删掉另一个名字后仍然 2
+```
+
+正常 NTFS/POSIX 语义下，删掉两个名字中的一个，剩下的那个 `nlink` 必须立刻降回 1。**本机（沙箱 shell 里）不降**。
+而 Archify 的发布协议正是靠 `nlink` 做幂等对账：它在移除候选名之后，按 `expectedLinks: 1` 校验公共名，
+拿到 2 就判 `candidate-hardlinked` 并**拒绝发布**（`renderers/shared/cli.mjs:175`）。
+
+> **结论：这是环境不满足它的前置假设，不是它的代码缺陷。**它的处置方式（fail closed、拒绝写一个状态不明的产物）
+> 恰恰是正确行为——这也解释了为什么它的 `delivery-contract.md` 里写着
+> "PID, receipt, and file-identity comparisons are defensive checks, not an atomic compare-and-swap"。
+> 第 6 项失败 `legacy meta.views accepted and ignored` 同理：`test/golden.mjs:133` 是
+> `try { render(...) } catch {}`，渲染抛错 → `html` 为空 → 判定失败，**同一根因，非独立缺陷**。
+
+> ⚠️ 实用提醒：如果你直接在本机用这个 Skill 生成图，八成会撞上同一个墙。判断方法就是上面那段复现脚本；
+> 若它输出 `2`，说明必须换到沙箱外（普通终端）跑。
+
+### 已吸收（本轮落地，带牙的断言已验证）
+
+**表清单契约测试** → `src/lib/__tests__/tableContract.test.mjs`
+
+| 项 | 内容 |
+| --- | --- |
+| 对方做法 | 契约从**权威源派生**，新增点**默认失败**：`schemas/*.json` → `scripts/generate-validators.mjs` → 提交生成的校验器 → `npm test` 里的 `--check` 模式在"生成物与 schema 不一致"时变红；且**生成器自己也带断言**（AJV 输出不再含 `ucs2length` 就抛错），防止扫描失效导致下游假绿 |
+| 我们的缺陷 | 同一份「私有表有哪些」在本仓库被手写了**五处**：`004_private_tables_rls.sql`、`rlsGuards.test.mjs:100`、`Settings.tsx:37`、`README.md:107`、`docs/CONFIGURATION.md`。`CONFIGURATION.md §4 第 4 步` 让人肉去补这一刀（"`Settings.tsx` 的 TABLES 数组加上表名，否则数据导出会漏这张表"）——**漏了不会报错** |
+| 我们的落点 | 权威源改为 `004` 里的 `CREATE POLICY <t>_own ON public.<t>`，派生出私有表集合；`Settings.tsx` 的 `TABLES` 必须与之逐项相等；遥测表（`usage_events`/`usage_users`）显式登记为"不进个人导出"并写明理由 |
+| 断言（4 条，全部变异验证过） | ① 扫描自检（≥10 且含 `jobs`/`profile`，防空跑成假绿）② TABLES 与派生集合双射 ③ 遥测/公共表不得进导出清单 ④ 公共表不得出现在 owner_id 策略里且必须登记 |
+
+变异验证（改坏必须变红，实测）：
+
+| 变异 | 期望 | 实测 |
+| --- | --- | --- |
+| `004` 加一行 `CREATE POLICY deadbeats_own ON public.deadbeats` | ② 红 | ✅ ② 红（`expected …(8) to deeply equal …(9)`），①③④ 仍绿 |
+| 把 `usage_users` 塞进 `Settings.tsx` 的 `TABLES` | ③ 红 | ✅ ②③ 双红 |
+| 让 `CREATE POLICY` 不再匹配（模拟扫描失效） | ① 先红 | ✅ ① 红、② 跟着红（**没有假绿**） |
+
+后来追加的第二批（同文件内 describe「表数声明必须来自派生清单，不手写」）把**文档里声明的数字**也纳入了派生：
+
+| 断言 | 盯住什么 | 修之前的实测 |
+| --- | --- | --- |
+| ② README / CONFIGURATION 声明的表数 = 派生总数 | `## 数据模型（N 张表）` 与 `## 2. 数据表（N 张）` | ❌ 两处都写 **11**，派生是 **13**（`AssertionError: README.md 声明 11 张，派生清单是 13 张`） |
+| ③ 每张派生的表都必须在两份文档里被点名 | 数对但漏列一张也要红 | ❌ `README 数据模型一节漏了 usage_events` |
+
+修法：11 改 13，并把两张匿名遥测表补进 README 的「匿名遥测（2 张）」与 CONFIGURATION 的表清单。
+顺带修掉一句不准确的表述：README 原文「11 张表中 10 张私有表开启 RLS」隐含"只有 10 张开"，
+而实测 **13 张全部开着 RLS** —— 已改成准确写法。
+
+---
+
+**tests 徽章新鲜度门** → `scripts/testBadge.mjs` + `npm run test:badge[:check]` + CI 步骤 + `ciTrigger.test.mjs` 里的钉子
+
+| 项 | 内容 |
+| --- | --- |
+| 对方做法 | archify 对**每一个**生成物都有 `--check`（viewer / brand-marks / validators / release-identity）并在 `npm test` 里跑；另有 `check-release-identity` 专门核对 README 徽章上的版本号与 `package.json` 一致 |
+| 我们的缺陷 | 我们有版本号的卫生（`versionHygiene.test.mjs` 扫全树不许写死），但**徽章上的测试数没人管**：`README.md:5` 写 `779 passed`，实测 **900**（加本轮后 908），**差 129 条**。而这个数字是对外声称——会被抄进简历与作品集 |
+| 我们的落点 | 权威源 = `vitest --reporter=json` 的 `numTotalTests`。`scripts/testBadge.mjs --write` 改写徽章，`--check` 过期退出 1；报告文件 `.test-report.json` 进 `.gitignore`（它是"本次跑出来的结果"，入库就等于存在两份互相矛盾的真相） |
+| 门 / 断言 | ① CI 新增步骤 `npm run test:badge:check`（删掉会红，由 `ciTrigger.test.mjs` 钉住，同时核对两个 npm script 真实存在）② 找不到徽章或找不到报告时退出 **2** 并打印修复命令——**不静默 no-op**（这类脚本最经典的坏法是"看着绿，其实一个字没检查"）③ 测试有失败时拒绝写徽章 |
+
+变异验证（实测）：
+
+| 变异 | 期望 | 实测 |
+| --- | --- | --- |
+| 把徽章手工改回 `tests-779%20passed` | check 退出 1 | ✅ `FAIL 中文 README：徽章写的是 779，实测是 908（差 129 条）`，exit 1 |
+| 删掉 CI 里的 `npm run test:badge:check` | `ciTrigger` 红 | ✅ `AssertionError: CI 缺了徽章新鲜度门` |
+| 删掉 `.test-report.json` | 退出 2 + 说清怎么补 | ✅ exit 2，提示先跑 `npm run test:badge:check` |
+
+**副作用（必须知道）**：本仓库测试数 **900 → 908**（测试文件仍 74 个）。README 徽章已由脚本写成 `908 passed`。
+
+> 这一步的价值不止于修一个数字：它是**「文档里的数字」第一次被纳入机器把关**。
+> 同一批修掉的表数 11→13 也是同一类问题 —— 两条都是手写死的，两条都会静默漂移。
+
+### 待吸收（按「价值 ÷ 投入」排序）
+
+| 优先级 | 能力项 | 来源 | 本项目现状与计划 |
+| --- | --- | --- | --- |
+| ~~P1~~ | ~~`tests` 徽章派生化 + 新鲜度门~~ | archify 的 `check-release-identity` + 一切生成物 `--check` | ✅ **本轮已落地**（见上一节）。实测到的漂移是 `779` vs `900`。**遗留一步**：`发版` skill 的 Step 3「四件套」还没把 `npm run test:badge:check` 写进去 —— CI 会拦，但本地发版流程会晚一步发现 |
+| P1 | **"一个行为一份契约：引用，不要复制"** | archify CONTRIBUTING：*Keep one canonical contract per behavior. Link the existing source instead of copying CLI stages, receipt fields, or error tables.* | 我们正在反复踩：同一份表清单五处、同一份口径在 README 与 CONFIGURATION 各写一遍。本轮已把表清单与表数收成一个派生源；下一步是 RLS 三件套的描述与 `docs/CONFIGURATION.md` 收敛 |
+| P2 | **按影响分级的 CI 作用域** | archify `scripts/ci-scope.mjs`（故意收窄：只改 `README*.md` 或 `docs/assets/community/*.png\|svg` 才降级为 docs 检查；**空变更集与未知路径一律走全量**，且 rename 两侧都算） | 我们现在每次全跑。可平移：纯文档 PR 跳过四件套。注意它"分类失败即全量"的 fail-closed 取向，别写成"分类失败就跳过" |
+| P2 | **交付回执（receipt）三件套** | archify `receipts`：稳定 `code` + 精确 `subject` + 可执行的 `supportedFixes`，失败阶段单独区分 | 我们的 `docs/sync/INBOX.md` 已有同构纪律（`claim`/`falsify`/`status`/`evidence@`）。可对齐的是**给失败加稳定 code**，让"同一类失败"可被机器聚合而不是每次重新描述 |
+| P2 | **用 archify 重做 `docs/architecture.html`** | 本文档 P2 项的直接升级路径 | 现在的 `docs/architecture.html` 是静态手绘。archify 能出**交互式**（缩放/搜索/上游下游可达性）单文件 HTML，且支持"before / delta / after"三视图对比架构改动 —— 后者对"这个版本改了什么结构"很有用。**前置条件**：先在沙箱外确认它渲染得出来（见上文复现脚本） |
+| P3 | **发布清单式 checklist + 平台同步清单** | archify `CONTRIBUTING.md` 的 Release checklist（6 步，每步要求"链接证据，或记下显式延期 + 负责人 + 原因 + 后续"）+ DSH 同步清单 | 我们的 `发版` skill 已是流程化的，可补"显式延期"这一档：允许推迟，但必须写清谁在什么时候补 |
+
+### 明确**不**吸收
+
+| 项 | 原因 |
+| --- | --- |
+| 硬链接 / 原子发布 / quarantine / 目录级互斥锁那一整套 | 本项目的产物是**云托管静态站 + 覆盖式发布**，没有"本地文件发布面"；它的整套复杂度是用来对抗"同一个输出目录被多个进程并发改写"的，我们没有这个场景。本轮唯一相关的收获是"fail closed 优于静默降级"，这条我们已在遵守 |
+| 内置品牌图标目录（brand marks） | `THIRD_PARTY_NOTICES.md` 里明确记录了个别图标是 **CC-BY-NC-SA-4.0（Vue）/ CC-BY-SA-3.0（Jenkins）** 等受限许可，且 CC0 只覆盖集合、不覆盖每个图标。搬图标会把许可搞乱，违反本文档开头的红线 |
+| 多语言 README（4 语言）/ 官网 / 社区包治理 / CodeRabbit 自动评审 | 个人项目过重。README 中英双语的价值已够；自动评审在有真实协作者之前没有收益 |
+| 直接搬它的代码进本仓库 | 许可上 MIT 允许，但**形态不匹配**：它的代码全绑在"本地 CLI 渲染一个 HTML 文件"上，我们没有对应的抽象。借鉴的是纪律（派生 + `--check` + fail closed），不是代码 |
+
+### 未证清单（如实标注）
+
+- **未在沙箱外验证**它的黄金用例能否通过——只证到 4 项生成物 `--check` 全绿 + 6 项失败的根因分类。
+- `scripts/run-tests.mjs` 在本机被 SIGTERM，**未跑完**；`npm run test:browser` / `test:webm` 未跑（需要 Chrome）。
+- **没看到它实际生成的图**（因为渲染在本机出不来），所以"图好不好看"这一条**我没有证据**，只有二手描述。
+- 它的 Skill 安装形态（`~/.workbuddy/skills/archify`）与仓库 `archify/` 子目录是否逐字节一致，**未逐文件 diff**。
+

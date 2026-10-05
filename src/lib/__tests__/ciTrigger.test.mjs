@@ -77,4 +77,17 @@ describe('CI 触发器', () => {
     expect(lock.packages?.['']?.version, '锁的 packages[""] version 与 package.json 不一致').toBe(pkg.version)
     expect(lock.name).toBe(pkg.name)
   })
+
+  it('tests 徽章的新鲜度门必须在 CI 里跑，且引用的脚本真实存在', () => {
+    // 2026-10-05 实抓到：README 徽章写 `779 passed`，实际跑出 900 条，差 121 条。
+    // 它是对外声称（简历/作品集都会抄这个数），却是一个纯手写字面量 —— 没有任何断言盯着它。
+    // 这类"文档里的数字"坏起来全静默，所以必须像版本号一样进 CI 门。
+    //
+    // 这一条同时防两种删法：① 把 CI 步骤删了；② 把脚本从 package.json 里删了，
+    // 只留 CI 里那一句 —— 后者会让 CI 报 "Missing script"，靠人去日志里翻。
+    const pkg = JSON.parse(readFileSync(path.join(here, '..', '..', '..', 'package.json'), 'utf8'))
+    expect(pkg.scripts?.['test:badge'], 'package.json 缺 test:badge（写徽章用）').toBeTruthy()
+    expect(pkg.scripts?.['test:badge:check'], 'package.json 缺 test:badge:check（CI 校验用）').toBeTruthy()
+    expect(ci, 'CI 缺了徽章新鲜度门（删掉它，徽章就会像 779 那样悄悄过期）').toContain('npm run test:badge:check')
+  })
 })

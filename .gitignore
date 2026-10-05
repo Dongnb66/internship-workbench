@@ -15,6 +15,10 @@ dist-ssr
 # 测试覆盖率产物
 coverage
 
+# vitest json reporter 的产出：给 scripts/testBadge.mjs 派生 README 的 tests 徽章用。
+# 它是"本次跑出来的结果"，不是仓库内容，不能入库（入库就会出现两份互相矛盾的真相）。
+.test-report.json
+
 # 导出的个人数据备份（含手机号等个人信息，不入库）
 applykit.json
 *备份*.json

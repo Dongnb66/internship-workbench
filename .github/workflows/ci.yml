@@ -52,6 +52,13 @@ jobs:
           TZ=America/New_York npm run test
           TZ=Asia/Shanghai npm run test
 
+      # 徽章新鲜度门：README 的 `tests-N passed` 必须等于真实用例数。
+      # 2026-10-05 实测到的漂移是 779 vs 900（差 121 条）—— 手写的数字没有任何东西盯着，
+      # 而它是对外声称（会被写进简历/作品集），所以这里必须机器把关。
+      # 断言本身在 src/lib/__tests__/ciTrigger.test.mjs 里钉住（删掉这一步会红）。
+      - name: Tests badge freshness (README 的 tests-N 必须等于实测)
+        run: npm run test:badge:check
+
       - name: Build
         run: npm run build
 

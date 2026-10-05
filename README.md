@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/Dongnb66/internship-workbench/actions/workflows/ci.yml/badge.svg)](https://github.com/Dongnb66/internship-workbench/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-f2542d.svg)](./LICENSE)
-[![Tests](https://img.shields.io/badge/tests-779%20passed-12a150.svg)](./src/lib/__tests__)
+[![Tests](https://img.shields.io/badge/tests-908%20passed-12a150.svg)](./src/lib/__tests__)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-f59e0b.svg)](../../pulls)
 
 ![实习管理工作台](docs/images/hero.png)
@@ -97,18 +97,20 @@ Web 端（React 19 + TypeScript + Vite）+ 微信小程序端（原生，共用�
 
 - **前端**：React 19 + TypeScript 6 + Vite 8（网页端）；原生 WXML / WXSS / JS（小程序端）。纯手写 CSS（无 UI 库）、原生 SVG / DOM 绘图（无图表库）、React 内置 hooks（无状态管理库）
 - **后端**：WorkBuddy 云服务 —— PostgREST 风格数据库 + 认证（网页端邮箱验证码 / 邮箱密码，小程序端手机号短信 + 微信登录）+ 免密钥大模型调用，无自建服务器
-- **数据安全**：11 张表中 10 张私有表开启 RLS，`owner_id TEXT NOT NULL DEFAULT auth.uid()` + `WITH CHECK`；前端永不传 `owner_id`；写操作返回空数组即判为被拒绝并抛错。第 11 张是岗位广场 `jobs_public`，走「公共只读」模式：只给 `SELECT` 授权 + 一条 `USING (true)` 读策略，**不建任何写策略**（RLS 默认拒绝）
+- **数据安全**：13 张表全部开启 RLS。10 张用户私有表用 `owner_id TEXT NOT NULL DEFAULT auth.uid()` + `WITH CHECK`；前端永不传 `owner_id`；写操作返回空数组即判为被拒绝并抛错。`jobs_public`（岗位广场）走「公共只读」模式：只给 `SELECT` 授权 + 一条 `USING (true)` 读策略，**不建任何写策略**（RLS 默认拒绝）。2 张匿名遥测表只给 `INSERT`、**没有任何 `SELECT` 策略** —— 聚合统计走管理端，匿名键读不到别人的行
 - **浏览器扩展**：Chrome MV3，仅 `activeTab` + `scripting` + `storage`，数据不出本机
 - **本地抓取器**：Node + `playwright-core`，驱动系统已装的 Edge / Chrome（**不下载自带内核**）；提取逻辑与扩展共用 `extension/collector.js`，不写第二份
 - **质量**：Vitest 单测（前端 + 抓取器纯逻辑，含跨端**契约测试**）+ oxlint + `tsc -b` + GitHub Actions CI；需真浏览器的那部分单独跑 `cd crawler && npm run selftest`（本地夹具，不碰真实站点）
 
-## 数据模型（11 张表）
+## 数据模型（13 张表）
 
 **私有（按账号隔离，10 张）**：`jobs` · `applications` · `messages` · `interviews` · `offers` · `resumes` · `tasks` · `ai_reports` · `knowledge` · `profile`
 
 **公共（所有人只读，1 张）**：`jobs_public` —— 岗位广场。没有 `owner_id`，没有 `status` / `notes` / 匹配度这些私有字段，内容只由服务端灌入。
 
-网页端用全部 11 张表；小程序端用其中 6 张（`jobs` · `applications` · `messages` · `tasks` · `ai_reports` · `profile`）—— 面试日程、Offer 对比、简历库、知识库留在桌面端做，手机端只承载高频的「记一笔 / 看一眼」。岗位广场是新增的独立页面，需登录后自桌面端进入。
+**匿名遥测（2 张）**：`usage_events` · `usage_users` —— 只记事件名 + 时间 + 版本 + 本机随机匿名 id（无 cookie、不跨站、尊重 GPC）；不含任何岗位 / 简历 / 投递内容，清 localStorage 即换新身份。只给 `INSERT`，没有任何 `SELECT` 策略。口径与统计 SQL 见 [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md)。
+
+网页端用全部 13 张表；小程序端用其中 6 张（`jobs` · `applications` · `messages` · `tasks` · `ai_reports` · `profile`）—— 面试日程、Offer 对比、简历库、知识库留在桌面端做，手机端只承载高频的「记一笔 / 看一眼」。岗位广场是新增的独立页面，需登录后自桌面端进入。
 
 字段清单与 RLS 策略见 [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md)。
 
