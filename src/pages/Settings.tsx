@@ -591,9 +591,9 @@ export default function Settings({ profile, onChanged }: PageProps) {
               </div>
             ) : (
               <div className="hint mt16">
-                还没有「用本应用的额度」这一档可用：创建者邮箱没在 <code>src/lib/ownerAccount.ts</code> 的
-                <code> OWNER_EMAIL </code>里设置，所以<strong>谁都不算创建者</strong>，这道开关对谁都不显示。
-                留空是刻意的默认关闭。要开这一档，先填上你自己的登录邮箱，再用该账号来这里勾选。
+                还没有「用本应用的额度」这一档可用：应用还没有指定创建者账号，
+                所以<strong>谁都不算创建者</strong>，这道开关对谁都不显示。
+                这是刻意的默认关闭。要开这一档，先指定创建者账号，再用该账号登录这里勾选。
               </div>
             )}
 

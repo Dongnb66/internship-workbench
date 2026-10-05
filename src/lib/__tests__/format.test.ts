@@ -90,8 +90,9 @@ describe('parseDate / 本地日历日口径', () => {
 })
 
 describe('textToArray', () => {
-  it('支持中英文逗号、顿号与空白分隔', () => {
-    expect(textToArray('Python，React、Node TypeScript')).toEqual(['Python', 'React', 'Node', 'TypeScript'])
+  it('支持中英文逗号、顿号、分号与连续空白分隔', () => {
+    expect(textToArray('Python，React、Node；TypeScript')).toEqual(['Python', 'React', 'Node', 'TypeScript'])
+      expect(textToArray('AI Agent 应用开发、LLM 应用')).toEqual(['AI Agent 应用开发', 'LLM 应用'])
   })
 
   it('去掉空项与首尾空白', () => {

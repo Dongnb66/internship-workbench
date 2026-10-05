@@ -71,7 +71,7 @@ function leftText(value) {
 /** 把「顿号/逗号/空格」分隔的输入切成数组，用于技能、期望城市这类多值字段 */
 function textToArray(value) {
   return String(value || '')
-    .split(/[,，、\s]+/)
+    .split(/[,，、;；|]+|\s{2,}/)
     .map(function (s) { return s.trim() })
     .filter(function (s) { return s })
 }

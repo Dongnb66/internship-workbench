@@ -6,6 +6,24 @@ import AgentSteps from '../components/AgentSteps'
 import { getQuotaSnapshot } from '../lib/ai'
 import { listRows, updateRow } from '../lib/api'
 import { BYO_SETUP_STEPS, currentAccess } from '../lib/billing'
+
+/**
+ * AI 未接上时，报告里的「观察 / 错误 / 行动清单」会各带一段同样的话。
+ * 面向用户只该说一遍：这里按行去重，保留首次出现，重复的丢掉。
+ */
+function collapseRepeats(text: string): string {
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const line of String(text || '').split('\n')) {
+    const key = line.replace(/\s+/g, '')
+    if (key && key.length > 8) {
+      if (seen.has(key)) continue
+      seen.add(key)
+    }
+    out.push(line)
+  }
+  return out.join('\n')
+}
 import { STAGES } from '../lib/constants'
 import { daysLeft, fmtDate, fmtDateTime, leftText, recentDays, todayISO } from '../lib/format'
 import { todayPicks } from '../lib/daily'
@@ -278,7 +296,7 @@ export default function Overview({ profile, go }: PageProps) {
           {agent.answer ? (
             <div className="hint mt8">
               <div className="cell-main">行动清单</div>
-              <div className="small mt4" style={{ whiteSpace: 'pre-wrap' }}>{agent.answer}</div>
+              <div className="small mt4" style={{ whiteSpace: 'pre-wrap' }}>{collapseRepeats(agent.answer)}</div>
             </div>
           ) : null}
           {agent.stop ? (

@@ -78,7 +78,7 @@ export function dateOnly(value?: string | null): string {
 
 export function textToArray(value: string): string[] {
   return value
-    .split(/[,，、\s]+/)
+    .split(/[,，、;；|]+|\s{2,}/)
     .map((s) => s.trim())
     .filter(Boolean)
 }
