@@ -438,12 +438,19 @@ AI 分析、简历生成全部以他的身份输出。这与仓库公不公开�
 > | `README.md` | 1 | 线上入口 |
 > | `docs/上手.md` | 1 | 第一步的入口 |
 > | `docs/architecture/高层架构设计.md` | 1 | 原型链接 |
-> | 本文件 `HANDOFF.md` | 4 | 第 15 行表格、§6「一句话可问」、§12 线上地址、§12 代码块的 `SHARE=` —— **都是要照抄的现行链接** |
-> | 本文件 `HANDOFF.md` 第 426 行 | 1 | **历史实测记录，按「保留原文」不动** |
+> | 本文件 `HANDOFF.md` | 4 | 开头「现况」表里的线上地址行、§6「一句话可问」、§12 线上地址、§12 代码块的 `SHARE=` —— **都是要照抄的现行链接** |
+> | 本文件 `HANDOFF.md` 开头「⚠️ 2026-11-15 起…」那段 | 1 | **历史实测记录，按「保留原文」不动** |
 > | `docs/sync/INBOX.md` | 若干 | **历史条目，一律不改**（只许追加更正） |
 >
-> 查漏命令：`grep -rn 'sharecode=' --include='*.{ts,tsx,mjs,js,md,cs,html}' . | grep -v node_modules`
-> —— 结果里凡不是 Origin 类、也不是 INBOX / 历史段落的，都要改。
+> 查漏命令（**用 `git grep`，不要用 `grep --include='*.{ts,tsx,…}'`**）：
+> ```bash
+> git grep -n 'sharecode=' -- . ':!docs/sync'
+> ```
+> 理由两条：① GNU grep 的 `--include` **不展开花括号**，`'*.{ts,tsx,mjs}'` 直接 0 命中 ——
+> 是假绿，比没有检查更糟（2026-11-15 实测）；② `| grep -v node_modules` 只过滤输出、
+> 不阻止遍历。`git grep` 只搜受版本控制的文件，天然排除 `node_modules` / `dist` / `.git`。
+> 结果里有一部分是「说明性引用」（测试里的注释、文档正文），不算要改的地方 ——
+> 判断标准是「这一行能不能拼出一个给访客打开的地址」，能才算。
 > **别把这句简写成「只改一处」** —— 那只在 §12 代码块内成立。
 
 发布入口：用平台的 App 发布能力，`language: node`、`startCmd: npm run serve`。
