@@ -234,11 +234,13 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
 线上站通过 WorkBuddy 的站点发布能力部署，域名绑定应用云服务环境。步骤与坑：
 
 1. **先把 `miniprogram/` 移出仓库目录**再发布，否则会被判定为小程序发布而失败：
-   ```bash
-   mv miniprogram ../_miniprogram_publish_hold
+   ```powershell
+   Move-Item -LiteralPath miniprogram -Destination ..\_miniprogram_publish_hold
    # …执行发布…
-   mv ../_miniprogram_publish_hold miniprogram   # 发布后立刻移回
+   Move-Item -LiteralPath ..\_miniprogram_publish_hold -Destination miniprogram   # 发布后立刻移回
    ```
+   **用 PowerShell 的 `Move-Item`，不要用 Git Bash 的 `mv`**（2026-11-15 实测：`mv` 报 `Permission denied`，
+   是 Windows 句柄占用；换 PowerShell 立刻成功）。移出后核一遍是 48 个文件，发完移回、`git status` 必须 clean。
 2. 发布后**让用户强刷（Ctrl+F5）**。本项目多次出现「功能没生效」的误报，首因都是浏览器拿着旧 bundle。
 3. 改完文案/UI 必须真打开线上链接确认，不能只看发布工具返回的 `verified`。
 4. **判断"线上是哪一版"只能看内容证据，不能看时间证据。** 这条 2026-09-27 实测踩过：
@@ -247,7 +249,8 @@ node sources/offerbiu.mjs --season 2027 --limit 300 --out output/offerbiu-2027.j
    当时唯一像证据的是 `ETag` / `Last-Modified`，而我抓到 mtime 在**没有任何新提交**的情况下自己往前走了 12 分钟
    （沙箱重启同样改它，连抓 3 次值稳定，说明那是一次真的重建）。所以时间戳会被重启推前，**不能**当发布判别器。
    现在有了内容型判别器：`scripts/appVersionPlugin.mjs` 把 `package.json` 的 version 注进 `dist/index.html`，
-   一句话可问 —— `curl -s https://internship-workbench-47024.app.workbuddy.host/ | grep app-version`。
+   一句话可问 —— `curl -s 'https://internship-workbench-47024.app.workbuddy.host/?sharecode=R6PQHLIZUV' | grep app-version`
+   （**必须带 `?sharecode=`**：裸域返回 403，见本节下方 §12 的说明）。
    版本号只有 package.json 一个来源，任何地方都不许写死字面量（写死的标记升级后就是假话，比没标记更坏），
    这条由 `scripts/__tests__/appVersion.test.mjs` 双向钉住：既反查配置文件里有没有字面量，也反查插件是否真的挂进 `plugins`。
 
@@ -470,9 +473,12 @@ inline config（优先级高于配置文件），从而真正监听 `$PORT`。
 ### 发布后核对（照抄即可）
 
 ```bash
-curl -s -o /dev/null -w "%{http_code}\n" https://internship-workbench-47024.app.workbuddy.host/   # 期望 200
-curl -s https://internship-workbench-47024.app.workbuddy.host/ | grep -o "<title>[^<]*</title>"    # 期望「实习管理工作台」
-curl -s https://internship-workbench-47024.app.workbuddy.host/ | grep app-version                   # 期望 content 与本机 package.json 的 version 一致（别写死数字，它每次发布都会过期）
+# 裸域返回 403「链接不完整」，所有核对都必须带分享码；轮换时只改 SHARE 这一行
+SITE='https://internship-workbench-47024.app.workbuddy.host'
+SHARE='?sharecode=R6PQHLIZUV'
+curl -s -o /dev/null -w "%{http_code}\n" "$SITE/$SHARE"          # 期望 200（不带 SHARE 会是 403）
+curl -s "$SITE/$SHARE" | grep -o "<title>[^<]*</title>"           # 期望「实习管理工作台」
+curl -s "$SITE/$SHARE" | grep app-version                          # 期望 content 与本机 package.json 的 version 一致（别写死数字，它每次发布都会过期）
 ```
 
 发完**必须**再补两条（等于"两个提交号"）：把线上首屏 bundle 抓下来与本机 `dist/` 比 sha256；
