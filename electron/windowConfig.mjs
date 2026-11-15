@@ -27,8 +27,12 @@ export const DEV_URL = 'http://localhost:5173'
  * 为什么默认加载线上而不是本地 dist：云 SDK 的 Origin 校验与 RLS 都按发布域判断，
  * 换成本地 file:// 或 127.0.0.1 会让登录与写操作直接失败。
  * 壳只负责「窗口」，不搬应用。
+ *
+ * 为什么地址上带 `?sharecode=`：2026-11-15 起裸域返回 403「链接不完整」，只有带分享码的
+ * 完整链接能进（实测 403 → 200）。分享码只影响访问，不影响 Origin（Origin 不含查询参数），
+ * 所以云 SDK 的校验照旧按 `https://<host>` 精确匹配。分享码一旦轮换，这里要跟着改。
  */
-export const ONLINE_URL = 'https://internship-workbench-47024.app.workbuddy.host/'
+export const ONLINE_URL = 'https://internship-workbench-47024.app.workbuddy.host/?sharecode=R6PQHLIZUV'
 
 /**
  * 只允许 http / https / file 三种协议。

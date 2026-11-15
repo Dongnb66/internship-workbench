@@ -26,7 +26,7 @@ internal static class Program
 {
     private const string ZipResourceName = "agent.zip";
     private const string RunValueName = "InternshipWorkbenchAgent";
-    private const string SiteUrl = "https://internship-workbench-47024.app.workbuddy.host/#crawler";
+    private const string SiteUrl = "https://internship-workbench-47024.app.workbuddy.host/?sharecode=R6PQHLIZUV#crawler";
     private const string AgentHealth = "http://127.0.0.1:8787/health";
 
     private static readonly string[] RequiredRelPaths = new string[]

@@ -12,7 +12,7 @@
 | --- | --- |
 | 本机路径 | `C:\Users\dong\Documents\GitHub\internship-workbench` |
 | 技术栈 | React 19 + Vite + TypeScript（前端）/ 平台云服务 BaaS（DB + Auth + Storage + LLM） |
-| 线上地址 | https://internship-workbench-47024.app.workbuddy.host/ （发布方式见第 12 节） |
+| 线上地址 | https://internship-workbench-47024.app.workbuddy.host/?sharecode=R6PQHLIZUV （**裸域 403「链接不完整」，必须带 sharecode**；发布方式见第 12 节） |
 | 远程仓库 | `git@github.com:Dongnb66/internship-workbench.git` —— **已转 public**（匿名可读，2026-09-28 15:33 +0800 实测 `github.com/...` 与 `api.github.com/...` 均 200） |
 | 分支 | `master`，跟踪 `origin/master`；HEAD = `f99a665`，与远端对齐，工作树干净（2026-09-30 09:48 +0800 实测） |
 | 规模 | **271** 个已跟踪文件 / **60 个测试文件 / 764 条断言全绿** + 59 条真浏览器夹具断言（`cd crawler && npm run selftest`）（2026-09-30 09:48 +0800 `npm test` 实测 → `Test Files 60 passed` / `Tests 764 passed`） |
@@ -417,9 +417,21 @@ AI 分析、简历生成全部以他的身份输出。这与仓库公不公开�
 
 ## 12. 线上发布（App 发布 / Sites）
 
-线上地址：**https://internship-workbench-47024.app.workbuddy.host/**（以 `http-service` 形式部署，非静态页）。
+线上地址：**https://internship-workbench-47024.app.workbuddy.host/?sharecode=R6PQHLIZUV**（以 `http-service` 形式部署，非静态页）。
+
+> **⚠️ 2026-11-15 起：裸域访问被平台拒（403 / `<title>链接不完整</title>`），只有带 `?sharecode=` 的完整链接返回 200。**
+> 实测：`GET /` → 403；`GET /?sharecode=R6PQHLIZUV` → 200 且 `app-version = 0.8.39`；两个 `/downloads/*` 同理（403 → 200）。
+> **Origin 类字符串不要加 sharecode**（`src/cloud.ts` 的 `endpoint`、`gateway/server.mjs` 的 `CLOUD_ORIGIN`、`crawler/agent/server.mjs` 与各测试里的 `ORIGIN`）——
+> Origin 是 `scheme://host[:port]`，不含查询参数，加了反而破坏精确匹配。要加的是「给人点 / 给壳加载」的访问链接。
+> 分享码一旦轮换，`electron/windowConfig.mjs`、`src/lib/localAgent.ts`、安装器与 README 都要跟着改。
 
 发布入口：用平台的 App 发布能力，`language: node`、`startCmd: npm run serve`。
+
+> **⚠️ 加了桌面壳之后，线上安装依赖会去下 Electron 二进制（2026-11-15 实测失败过）。**
+> 现象：`npm install` 阶段 `electron/install.js` 报 `socket hang up` → `SITES_INSTALL_FAILED` / `retryable: false`。
+> 原因是 `d69af19` 把 `electron` 放进了 `devDependencies`，而线上 http-service 根本不需要它。
+> 处置：发布时把 installCmd 覆盖成 `env ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm install`，其余参数不变，仓库零改动。
+> 不要为此把 electron 从 devDependencies 删掉 —— 本地开发 `npm run desktop` 需要它。
 
 > **`startCmd` 不是可选优化，是必需的（2026-09-28 17:0x 实测）**：同一次发布，
 > 只传 `directory` + `domainPrefix` 时，线上持续返回

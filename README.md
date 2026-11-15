@@ -14,7 +14,8 @@
 
 ### 10 秒试一下
 
-**<https://internship-workbench-47024.app.workbuddy.host/>** —— 填邮箱收个验证码就能进，不用注册密码。
+**<https://internship-workbench-47024.app.workbuddy.host/?sharecode=R6PQHLIZUV>** —— 填邮箱收个验证码就能进，不用注册密码。
+（裸域现在会返回「链接不完整」，必须带上面这段 `?sharecode=` 才能打开。）
 （AI 功能要你自己的模型 Key；**选「本机 Ollama」则不花钱**。数据存在你自己的账号里。）
 
 ### 它做了什么

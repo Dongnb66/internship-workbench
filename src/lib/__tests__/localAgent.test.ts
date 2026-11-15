@@ -112,11 +112,13 @@ describe('GET /health 探测', () => {
   it('下载入口常量只能是「空」或 https 的文件直链 —— 不允许占位符上线', () => {
     // 空 = 不显示下载入口。平台托管后填直链；这里挡的是 TODO / 相对路径 / HTML 中间页这类值。
     // 主入口是**安装包 .exe**（双击即装）；手动那条路仍是 .zip。
+    // 允许末尾带查询串：2026-11-15 起线上裸域返回 403「链接不完整」，直链必须带 ?sharecode= 才下得到
+    // （实测同一路径 403 → 200）。挡的仍然是「不是文件」的情况，所以查询串里不能再出现 .html 之类。
     // 先落到 string 再比：常量是字面量类型，直接与 '' 比会被 TS 判成「不可能的比较」（TS2367）。
     const setup: string = AGENT_DOWNLOAD_URL
-    expect(setup === '' || /^https:\/\/\S+\.(exe|zip)$/.test(setup)).toBe(true)
+    expect(setup === '' || /^https:\/\/\S+\.(exe|zip)(\?[\w=&%-]+)?$/.test(setup)).toBe(true)
     const portable: string = AGENT_PORTABLE_URL
-    expect(portable === '' || /^https:\/\/\S+\.zip$/.test(portable)).toBe(true)
+    expect(portable === '' || /^https:\/\/\S+\.zip(\?[\w=&%-]+)?$/.test(portable)).toBe(true)
   })
 
   it('自检字段（ready / problems）按契约透传；老版本助手不回这两个字段也不能炸', async () => {

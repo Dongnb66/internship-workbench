@@ -22,8 +22,14 @@ const opt = (name, dflt) => {
   return i >= 0 && args[i + 1] ? args[i + 1] : dflt
 }
 const SITE = opt('site', 'https://internship-workbench-47024.app.workbuddy.host').replace(/\/$/, '')
-const SETUP = opt('setup', SITE + '/downloads/InternshipWorkbench-Agent-Setup.exe')
-const ZIP = opt('zip', SITE + '/downloads/internship-workbench-agent.zip')
+/**
+ * 裸域从 2026-11-15 起返回 403「链接不完整」，必须带分享码才有的看（实测 403 → 200）。
+ * 下载物同样要带，否则前端点下载拿到的是 403 而不是安装包。
+ */
+const SHARE = opt('sharecode', 'R6PQHLIZUV')
+const withShare = (u) => (SHARE && !u.includes('sharecode=') ? u + (u.includes('?') ? '&' : '?') + 'sharecode=' + SHARE : u)
+const SETUP = withShare(opt('setup', SITE + '/downloads/InternshipWorkbench-Agent-Setup.exe'))
+const ZIP = withShare(opt('zip', SITE + '/downloads/internship-workbench-agent.zip'))
 const EXPECT_SHA = opt('sha256', '')
 const EXPECT_BYTES = Number(opt('bytes', '0'))
 
@@ -53,13 +59,13 @@ async function main() {
   console.log('')
 
   // 1) 应用本身
-  const html = await (await fetch(SITE + '/', { cache: 'no-store' })).text()
+  const html = await (await fetch(withShare(SITE + '/'), { cache: 'no-store' })).text()
   const version = (html.match(/app-version" content="([^"]+)"/) || [])[1]
   const bundle = (html.match(/src="([^"]+\.js)"/) || [])[1]
   if (version) ok('app-version = ' + version)
   else bad('读不到 app-version（首页被顶掉过？）')
   if (bundle) {
-    const r = await fetch(SITE + bundle, { method: 'HEAD' })
+    const r = await fetch(withShare(SITE + bundle), { method: 'HEAD' })
     if (r.ok) ok('主 bundle ' + bundle + ' -> ' + r.status)
     else bad('主 bundle 取不到', String(r.status))
   } else bad('首页里找不到主 bundle')

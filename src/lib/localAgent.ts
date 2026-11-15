@@ -27,11 +27,11 @@ export const AGENT_BASE = 'http://127.0.0.1:8787'
  */
 /** 安装包：单文件 .exe，双击即装（内嵌整包；装完写开机自启）—— 2026-10-03 新增，普通用户走这条 */
 export const AGENT_DOWNLOAD_URL =
-  'https://internship-workbench-47024.app.workbuddy.host/downloads/InternshipWorkbench-Agent-Setup.exe'
+  'https://internship-workbench-47024.app.workbuddy.host/downloads/InternshipWorkbench-Agent-Setup.exe?sharecode=R6PQHLIZUV'
 
 /** 手动安装那条路（zip + 双击 start-hidden.vbs）：给不想/不能跑 exe 的人留着，也用于排查 */
 export const AGENT_PORTABLE_URL =
-  'https://internship-workbench-47024.app.workbuddy.host/downloads/internship-workbench-agent.zip'
+  'https://internship-workbench-47024.app.workbuddy.host/downloads/internship-workbench-agent.zip?sharecode=R6PQHLIZUV'
 
 /**
  * ⚠️ 运维陷阱（2026-10-03 实测，WorkBuddy 报、DSH 复跑）：这两个文件放在发布源树的
