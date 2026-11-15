@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/Dongnb66/internship-workbench/actions/workflows/ci.yml/badge.svg)](https://github.com/Dongnb66/internship-workbench/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-f2542d.svg)](./LICENSE)
-[![Tests](https://img.shields.io/badge/tests-908%20passed-12a150.svg)](./src/lib/__tests__)
+[![Tests](https://img.shields.io/badge/tests-959%20passed-12a150.svg)](./src/lib/__tests__)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-f59e0b.svg)](../../pulls)
 
 ![实习管理工作台](docs/images/hero.png)
@@ -121,6 +121,8 @@ npm install
 npm run dev          # http://localhost:5173
 npm run build        # 类型检查 + 生产构建
 npm start            # 构建 + 预览（监听 $PORT，绑定 0.0.0.0）
+npm run desktop      # 桌面壳（Electron）：加载线上应用，支持置顶浮窗
+npm run desktop:dev  # 桌面壳加载本地 vite（先在另一个终端跑 npm run dev）
 npm test             # Vitest：前端 src/lib + 抓取器 crawler/（不需要浏览器）
 ```
 
@@ -136,6 +138,13 @@ npm test             # Vitest：前端 src/lib + 抓取器 crawler/（不需要�
 > 绕过页面直接调认证接口的代码管不了，服务端 sign-up 那一半只能由创建者在云控制台改。
 >
 > 邮箱验证码登录仅在应用的正式发布域上可用（服务端做 Origin 校验），本地预览只能看到登录页。
+
+## 桌面壳（`electron/`）
+
+同一份网页应用的桌面外壳。它只补两件浏览器给不了的东西：**窗口置顶**与**全局快捷键切换浮窗**（`Ctrl+Shift+Space`），把页面压成一个 420×360 的小窗摆到屏幕角落。
+
+- 默认加载**线上地址**而不是本地 `dist`：云 SDK 的 Origin 校验与 RLS 都按发布域判断，换成本地地址会让登录与写操作失败。需要指别处时设 `IWB_DESKTOP_URL`。
+- 渲染进程拿不到 `ipcRenderer`，只有 `preload.cjs` 暴露的 `getState` / `setFloat` / `toggleFloat`。界面靠运行时探测 `window.iwbDesktop` 决定是否显示「浮窗」按钮，因此网页端与桌面端仍是同一份构建。
 
 ## 微信小程序端
 
