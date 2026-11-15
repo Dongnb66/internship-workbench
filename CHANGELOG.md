@@ -4,7 +4,18 @@
 
 ## [Unreleased]
 
+### Added
+
+- **AI 面试辅助：面中只录自己的麦克风，会后导入会议转写，自动切成问答对并生成复盘**（`src/pages/LiveAssist.tsx`、`src/lib/interviewQA.ts`、`src/lib/transcript.ts`、`src/lib/speech.ts`、`src/lib/ai.ts`；`e547efd`）。**为什么是「只录自己 + 会后导入」而不是双轨录音**：静默录制对方音频越过了「当事人是否知情」这条线，不做。四步页：关联面试记录 → 拿到对话（面中录自己 / 会后导入 WebVTT·SRT·妙记字幕）→ 核对问答 → 生成复盘并保存。复盘固定四节（整体判断 / 逐题诊断 / 更优答法 / 下一步提升），走 `streamChat` 并带 `task` 标签。
+- **说话人识别：前缀只出现一次时不认定为说话人**（`src/lib/transcript.ts`；`e547efd`）。踩过的坑：早期版本把「疑似说话人」的前缀直接从正文剥掉，只出现一次的名字（比如题干里自带冒号的句子）会把问题吞掉；现在要求前缀出现 ≥2 次或命中已知名单才认定，否则连同冒号还原进正文（有单测钉住）。
+- **AI 模拟面试**（`src/pages/MockInterview.tsx`、`src/lib/mockInterview.ts`、`src/lib/tts.ts`；`e547efd`）。按公司与岗位出题、逐题作答、题干可朗读（可关），结束后复用同一套四节复盘。朗读走浏览器 SpeechSynthesis，桌面壳里没有也照常可用（只是不出声）。
+- **Electron 桌面壳：置顶浮窗 + 全局快捷键**（`electron/`、`src/lib/desktop.ts`、`src/App.tsx`；`d69af19`）。只补浏览器给不了的两件事：窗口置顶、`Ctrl+Shift+Space` 把页面压成 420×360 小窗。默认加载**线上地址**而非本地 `dist`（云 SDK 的 Origin 校验与 RLS 按发布域判断）；渲染进程拿不到 `ipcRenderer`，只有 preload 暴露的三个方法，界面靠运行时探测 `window.iwbDesktop` 决定是否显示浮窗按钮 —— 网页端与桌面端仍是同一份构建。本机若报 `process_singleton_win` `Lock file can not be created`（Error code 5），用 `IWB_ALLOW_MULTI=1` 启动。
+- **面试问答对结构化**（`src/pages/Interviews.tsx`、`src/lib/interviewQA.ts`；`e547efd`）。`interviews.questions` 从「一整段文本」改成 `{q,a}` 数组，`parseQA` 继续兼容旧的纯文本与 `{"v":1}` JSON（旧数据不会读不出来）；轮次按 `application_id`（缺则 company+title）聚合成一面→三面，卡片直接给「过 N 轮 · 下一场」。
+
 ### Fixed
+
+- **验证码登录后无法用密码登录，重置密码永远失败**（`src/pages/Login.tsx`；`2b6bccd`）。三个独立缺陷叠加，用户看到的现象是「填的都对，就是不行」：① 验证码登录时填的密码被上游丢掉 —— `verifyOtp` 对已存在账号忽略 `password`，界面却在任何情况下都显示密码框，用户以为注册成功、次日密码登录必然失败；现在只有上游明确返回 `isExistingUser=false` 才显示密码框。② **重置时重复发码** —— 发码那次请求已经拿到带 `updateUser` 的挑战，提交时又调了一遍 `resetPasswordForEmail`，连发两封撞上「1 分钟只能收 1 封」限流，于是永远重置不成（第三方截图的报错原文就是这条）；现在用 `useRef` 留住发码时的挑战，提交只复用它。③ 挑战只存在 `sessionStorage`，隐私模式被拦或换标签页后读不回来，表现成「码是对的但一直失效」；改为内存 + `sessionStorage` + `localStorage` 三份，并在发码后立刻校验 `verificationId` 是否存在。顺带：验码失败改为显示上游原文，切换流程时清空验证码与密码。
+- **对外数字口径 518 → 1337 条测试与断言，README 徽章 919 → 959**（`src/lib/constants.ts`、`miniprogram/utils/constants.js`、`crawler/__tests__/contract.test.mjs`、`README.md`；`9c3686e`）。按五仓 clone 实测重算：163 + 959 + 86 + 79 + 50 = 1337。「6 个仓库」与「518」进入禁词表（campus-mutual-aid 的 86 是无 Redis 的干净 clone 值，装 Redis 后 92，两个数不能混用）。打招呼纪律与其小程序副本同步，契约测试的 `PARTS` 要求拆分项逐个出现 —— 只写总数挡不住模型自编分解。
 
 - **顿号拆分器把多词术语劈碎 —— 单个空格也当分隔符**（`src/lib/format.ts` + `miniprogram/utils/format.js`；`37e8562`，DSH 修，来自第三方体验评测报告 #5）。**现象**：两端都用 `split(/[,，、\s]+/)`，而 `\s` 连**单个空格**都拆 ⇒「AI Agent 应用开发、LLM 应用」被劈成「AI、Agent、应用开发、LLM、应用」，术语被毁、计数虚高。**修法**：改成 `split(/[,，、;；|]+|\s{2,}/)` —— 只有**连续两个及以上空格**才当分隔符，**网页端与小程序端同口径**（契约测试守住）；`format.test.ts` 同步更新契约，并新增回归断言「`AI Agent 应用开发、LLM 应用` 必须保持两个完整项」。
 - **界面把源码路径与变量名显示给用户**（`src/pages/Settings.tsx`；`37e8562`，报告 #3）。目标条件页直接渲染了 `src/lib/ownerAccount.ts` 与 `OWNER_EMAIL` ⇒ 用户看到的是文件名与变量名。改为纯用户语言的文案。
