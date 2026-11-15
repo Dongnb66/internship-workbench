@@ -426,7 +426,12 @@ AI 分析、简历生成全部以他的身份输出。这与仓库公不公开�
 > 实测：`GET /` → 403；`GET /?sharecode=R6PQHLIZUV` → 200 且 `app-version = 0.8.39`；两个 `/downloads/*` 同理（403 → 200）。
 > **Origin 类字符串不要加 sharecode**（`src/cloud.ts` 的 `endpoint`、`gateway/server.mjs` 的 `CLOUD_ORIGIN`、`crawler/agent/server.mjs` 与各测试里的 `ORIGIN`）——
 > Origin 是 `scheme://host[:port]`，不含查询参数，加了反而破坏精确匹配。要加的是「给人点 / 给壳加载」的访问链接。
-> 分享码一旦轮换，`electron/windowConfig.mjs`、`src/lib/localAgent.ts`、安装器与 README 都要跟着改。
+> 分享码一旦轮换，下面这些地方要同步（2026-11-15 实测 `grep -rn R6PQHLIZUV` 共 16 处 / 10 个文件，
+> 其中真正需要人工改的是 15 处 / 9 个文件，`docs/sync/INBOX.md` 里那 1 处是历史记录、不改）：
+> `electron/windowConfig.mjs`（1）、`src/lib/localAgent.ts`（2）、`scripts/installer/Installer.cs`（1）、
+> `gateway/public/chat.html`（2）、`scripts/verifyPublish.mjs`（1）、`README.md`（1）、`docs/上手.md`（1）、
+> `docs/architecture/高层架构设计.md`（1）、本文件 §12 的核对代码块（`SHARE=` 那行）。
+> **别再把这句简写成「只改一处」** —— 那只在 §12 代码块内成立。
 
 发布入口：用平台的 App 发布能力，`language: node`、`startCmd: npm run serve`。
 
@@ -473,7 +478,8 @@ inline config（优先级高于配置文件），从而真正监听 `$PORT`。
 ### 发布后核对（照抄即可）
 
 ```bash
-# 裸域返回 403「链接不完整」，所有核对都必须带分享码；轮换时只改 SHARE 这一行
+# 裸域返回 403「链接不完整」，所有核对都必须带分享码
+# ⚠️「只改 SHARE 一行」**只在本代码块内成立**；全仓还有别的字面量，轮换时按 §12 上方那份清单一起改
 SITE='https://internship-workbench-47024.app.workbuddy.host'
 SHARE='?sharecode=R6PQHLIZUV'
 curl -s -o /dev/null -w "%{http_code}\n" "$SITE/$SHARE"          # 期望 200（不带 SHARE 会是 403）
