@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { cloud, errText } from '../cloud'
 import { Field } from '../components/ui'
 import { emailProblem } from '../lib/email'
@@ -19,47 +19,72 @@ type Pending = { email: string; verificationId: string; isExistingUser: boolean 
  * 界面只给一句「请先为当前邮箱获取验证码」，而用户刚刚才收到码，于是他只会认为
  * 「这个站的登录坏了」，反复重试同一个动作 —— 拿到码也永远登不进去。
  *
- * 换成 sessionStorage 后，同一个标签页内刷新不再丢；换标签页 / 关掉浏览器仍然会丢
- * （验证码本来就该是一次性的短时凭证），这与语义相符。
+ * 换成 sessionStorage 后，同一个标签页内刷新不再丢（跨标签页的兜底见下面 stores 那段）。
  */
 const PENDING_KEY = 'iwb.login.pending'
-const RESET_PENDING_KEY = 'iwb.login.resetPending'
+
+/**
+ * 除了 sessionStorage，还留一份内存和一份 localStorage：
+ * ① 内存 —— 隐私模式 / 内嵌窗口 / 被安全软件拦的环境里，碰 storage 会直接抛异常。
+ *    以前 catch 一吞，挑战就再也读不回来：用户手里明明有码，只会看到「验证码已失效」。
+ *    同一个页面会话里，内存这份一定在，所以发码与验码至少能连上。
+ * ② localStorage —— sessionStorage 按标签页隔离，换个标签页/新窗口打开就是空的。
+ *    挑战本身不是凭证（真正的凭证是那串验证码），跨标签页共用没有安全问题。
+ */
+let memoryPending: Pending | null = null
+
+/**
+ * 「设置 / 找回密码」发码时拿到的挑战（带 `updateUser`）。它带闭包、没法进 storage，
+ * 只活在当前页面：刷新后必须重新发码 —— 与验证码一次性相符。
+ * 存它是为了**别再发第二封邮件**：上游限制 1 分钟 1 封，发两封第二封必被限流。
+ */
+type ResetChallenge = { updateUser: (u: { nonce: string; password: string }) => Promise<{ error?: unknown }> }
+
+function stores(): Storage[] {
+  const out: Storage[] = []
+  for (const get of [() => window.sessionStorage, () => window.localStorage]) {
+    try {
+      const s = get()
+      if (s) out.push(s)
+    } catch {
+      /* 这个存储拿不到就跳过，不影响另一个 */
+    }
+  }
+  return out
+}
+
+function coercePending(v: Partial<Pending> | null | undefined): Pending | null {
+  if (!v || typeof v.email !== 'string' || typeof v.verificationId !== 'string' || !v.verificationId) return null
+  return { email: v.email, verificationId: v.verificationId, isExistingUser: v.isExistingUser === true }
+}
 
 function readPending(): Pending | null {
-  try {
-    const raw = sessionStorage.getItem(PENDING_KEY)
-    if (!raw) return null
-    const v = JSON.parse(raw) as Partial<Pending> | null
-    if (!v || typeof v.email !== 'string' || typeof v.verificationId !== 'string') return null
-    return { email: v.email, verificationId: v.verificationId, isExistingUser: v.isExistingUser === true }
-  } catch {
-    return null
+  if (memoryPending) return memoryPending
+  for (const s of stores()) {
+    try {
+      const raw = s.getItem(PENDING_KEY)
+      if (!raw) continue
+      const v = coercePending(JSON.parse(raw) as Partial<Pending> | null)
+      if (v) {
+        memoryPending = v
+        return v
+      }
+    } catch {
+      /* 这一份坏了就试下一份 */
+    }
   }
+  return null
 }
 
 function writePending(v: Pending | null) {
-  try {
-    if (v) sessionStorage.setItem(PENDING_KEY, JSON.stringify(v))
-    else sessionStorage.removeItem(PENDING_KEY)
-  } catch {
-    /* 无痕模式等场景下 sessionStorage 可能不可用；退化回「只活这一次交互」，不阻断登录 */
-  }
-}
-
-function readResetPending(): boolean {
-  try {
-    return sessionStorage.getItem(RESET_PENDING_KEY) === '1'
-  } catch {
-    return false
-  }
-}
-
-function writeResetPending(v: boolean) {
-  try {
-    if (v) sessionStorage.setItem(RESET_PENDING_KEY, '1')
-    else sessionStorage.removeItem(RESET_PENDING_KEY)
-  } catch {
-    /* 同上 */
+  memoryPending = v
+  for (const s of stores()) {
+    try {
+      if (v) s.setItem(PENDING_KEY, JSON.stringify(v))
+      else s.removeItem(PENDING_KEY)
+    } catch {
+      /* 某一个存储不可用不影响别的 */
+    }
   }
 }
 
@@ -78,6 +103,10 @@ export default function Login() {
   const [info, setInfo] = useState('')
   const [countdown, setCountdown] = useState(0)
   const [codeSent, setCodeSent] = useState(false)
+  // 密码登录失败时，把「去设置密码」的入口亮出来（老账号可能压根没设过密码）
+  const [suggestReset, setSuggestReset] = useState(false)
+  // 「设置 / 找回密码」发码时拿到的挑战：提交时复用它，避免又发一封邮件撞上 1 分钟限流
+  const resetChallenge = useRef<ResetChallenge | null>(null)
 
   const startCountdown = () => {
     setCountdown(60)
@@ -111,8 +140,13 @@ export default function Login() {
           setError(errText(started.error))
           return
         }
-        writeResetPending(true)
-        setInfo(`验证码已发送到 ${email}，请查收（含垃圾箱）`)
+        /**
+         * 挑战必须留在手里：`updateUser({ nonce })` 用的就是这一次发码的挑战。
+         * 以前没存，`submitReset` 里又调了一遍 `resetPasswordForEmail` —— 等于连发两封，
+         * 撞上「1 分钟只能收 1 封」限流，用户看到的就是一直重置不成。
+         */
+        resetChallenge.current = started.data
+        setInfo(`验证码已发送到 ${email}，请查收（含垃圾箱）。填好新密码点下面的按钮即可。`)
         setCodeSent(true)
         startCountdown()
         return
@@ -123,12 +157,19 @@ export default function Login() {
         setError(errText(sent.error))
         return
       }
-      writePending({ email, verificationId: sent.data.verificationId, isExistingUser: sent.data.isExistingUser })
-      setIsNewEmail(sent.data.isExistingUser === false)
+      const challenge = sent.data
+      if (!challenge || !challenge.verificationId) {
+        // 邮件已经发出去了，但这次挑战的凭据没拿到 —— 之后填什么码都验不过。
+        // 与其让用户跑去收件箱取码、回来再被「验证码已失效」骗一次，不如现在就说清楚。
+        setError('验证码已经发出，但这次没拿到校验凭据（上游返回缺 verificationId）。请再点一次「发送验证码」；反复出现说明云服务配置有问题。')
+        return
+      }
+      writePending({ email, verificationId: challenge.verificationId, isExistingUser: challenge.isExistingUser })
+      setIsNewEmail(challenge.isExistingUser === false)
       setInfo(
-        sent.data.isExistingUser === false
-          ? `验证码已发送到 ${email}。这个邮箱还没有账号，验完码会自动开一个。`
-          : `验证码已发送到 ${email}，请查收（含垃圾箱）`,
+        challenge.isExistingUser === false
+          ? `验证码已发送到 ${email}。这个邮箱还没有账号，验完码会自动开一个，请同时设好登录密码（下次就能直接用密码登录）。`
+          : `验证码已发送到 ${email}，请查收（含垃圾箱）。这个邮箱已有账号：如果之前从没设过密码，请用「找回密码」设一次，之后就不必每次等验证码了。`,
       )
       setCodeSent(true)
       startCountdown()
@@ -147,6 +188,7 @@ export default function Login() {
     }
     setError('')
     setInfo('')
+    setSuggestReset(false)
     setBusy(true)
     try {
       const res = await cloud.auth.signInWithPassword({ email, password })
@@ -154,8 +196,9 @@ export default function Login() {
         // 不能一刀切「邮箱或密码不正确」：早期验证码注册的账号从未设置过密码
         //（0.3.1 之前登录页没有设密码字段），signInWithPassword 必然失败——
         // 真实原因被掩盖后，用户只会反复试密码，最后误以为只能被"重置"。
+        setSuggestReset(true)
         setError(
-          `登录失败：${errText(res.error)}。若该邮箱从未设置过密码（早期用验证码注册的账号），请切到「找回密码」设置一个，或直接用「验证码登录」。`,
+          `登录失败：${errText(res.error)}。若这个邮箱是用验证码注册、从没设过密码，点右边「去设置密码」走一次找回密码，之后就能直接用密码登录。`,
         )
         return
       }
@@ -208,7 +251,9 @@ export default function Login() {
         password: current.isExistingUser ? undefined : password,
       })
       if (res.error) {
-        setError('验证码不正确或已过期，可重新获取')
+        // 带上上游原文：一律盖成「验证码不正确或已过期」时，
+        // 「码是对的但一直失败」这种情况就永远查不出原因（挑战过期 / 邮箱不一致 / 服务端拒绝都不一样）。
+        setError(`验证失败：${errText(res.error)}。码刚拿到就失败的话，请重新点「发送验证码」再来一次。`)
         return
       }
       writePending(null)
@@ -220,8 +265,9 @@ export default function Login() {
   }
 
   async function submitReset() {
-    if (!readResetPending()) {
-      setError('请先点击「发送验证码」（页面刷新过的话，验证码要重新获取）')
+    const challenge = resetChallenge.current
+    if (!challenge) {
+      setError('这个页面上的验证码已失效（页面刷新过，或换过标签页）。请重新点「发送验证码」，收到新码后再提交。')
       return
     }
     if (newPassword.length < 6) {
@@ -231,17 +277,14 @@ export default function Login() {
     setError('')
     setBusy(true)
     try {
-      const started = await cloud.auth.resetPasswordForEmail(email)
-      if (started.error) {
-        setError(errText(started.error))
-        return
-      }
-      const done = await started.data.updateUser({ nonce: code, password: newPassword })
+      // 用发码时那一次挑战，不再重复请求新邮件（重复请求会撞「1 分钟 1 封」限流）
+      const done = await challenge.updateUser({ nonce: code, password: newPassword })
       if (done.error) {
-        setError(errText(done.error))
+        setError(`重置失败：${errText(done.error)}`)
         return
       }
-      writeResetPending(false)
+      resetChallenge.current = null
+      setInfo('密码已设置成功。之后可以直接用「密码登录」，不必再等验证码。')
     } catch (e) {
       setError(errText(e))
     } finally {
@@ -256,17 +299,28 @@ export default function Login() {
     setCodeSent(false)
     setInvite('')
     setIsNewEmail(false)
+    setSuggestReset(false)
+    // 验证码是一次性的：换流程后旧码不再对应新流程的挑战，留着只会让人误提交
+    setCode('')
+    setNewPassword('')
     writePending(null)
-    writeResetPending(next === 'reset')
+    // 换流程后这次发码的挑战作废；回到重置流程必须重新发码
+    resetChallenge.current = null
   }
 
   const tabs: Array<{ key: Mode; label: string }> = [
     { key: 'otp', label: '验证码登录' },
     { key: 'password', label: '密码登录' },
-    { key: 'reset', label: '找回密码' },
+    { key: 'reset', label: '设置 / 找回密码' },
   ]
 
-  const needPasswordField = mode === 'otp'
+  /**
+   * 只有「已确认是新邮箱」才出现设密码的输入框。
+   * 老账号在 verifyOtp 里填的密码会被认证服务直接忽略（SDK 契约原文：
+   * 「注册路径可选设置密码；已存在用户忽略此项」）。以前这个框一直显示，
+   * 用户照着填、以为密码注册成功了，第二天用密码登录必然失败 —— 就是这来的。
+   */
+  const needPasswordField = mode === 'otp' && isNewEmail
   /**
    * 要不要问邀请码，读的是 `registrationMode()` 这一个事实源：名单里有真码才要。
    * 出厂是开放状态 —— 这时候页面上还写着「需要邀请码」就是在骗人，
@@ -285,7 +339,8 @@ export default function Login() {
           </div>
         </div>
         <p className="login-sub">
-          填邮箱收验证码即可：已有账号就登录，新邮箱会自动开一个。
+          填邮箱收验证码即可：已有账号就登录，新邮箱会自动开一个（注册时设好登录密码）。
+          设过密码之后就能直接用「密码登录」，不必每次等验证码。
           <strong>AI 功能需要你自己的模型 Key（或本机模型）</strong>，本应用的额度记在创建者账号上，不默认替使用者承担。
           {inviteNeeded ? '这个站现在按邀请码开账号，新邮箱记得带上创建者给你的码。' : ''}
         </p>
@@ -330,7 +385,7 @@ export default function Login() {
         {needPasswordField ? (
           <Field
             label="登录密码"
-            hint="首次使用请设置（至少 6 位）。注意：已有账号用验证码登录时，这里填的密码不会生效（认证服务会忽略），老账号补设密码请用「找回密码」"
+            hint="至少 6 位。这就是新账号的登录密码，下次可以直接用「密码登录」"
           >
             <input
               className="input"
@@ -338,9 +393,22 @@ export default function Login() {
               autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="至少 6 位（仅首次注册时生效）"
+              placeholder="至少 6 位"
             />
           </Field>
+        ) : null}
+
+        {mode === 'otp' && codeSent && !isNewEmail ? (
+          <div className="hint mb8">
+            这个邮箱已有账号，现在用验证码就能进去。想以后免验证码？
+            <button
+              className="btn sm"
+              style={{ marginLeft: 8 }}
+              onClick={() => switchMode('reset')}
+            >
+              设置密码
+            </button>
+          </div>
         ) : null}
 
         {inviteNeeded ? (
@@ -373,7 +441,23 @@ export default function Login() {
           </Field>
         ) : null}
 
-        {error ? <div className="hint mb8">{error}</div> : null}
+        {error ? (
+          <div className="hint mb8">
+            {error}
+            {suggestReset ? (
+              <button
+                className="btn sm"
+                style={{ marginLeft: 8 }}
+                onClick={() => {
+                  setSuggestReset(false)
+                  switchMode('reset')
+                }}
+              >
+                去设置密码
+              </button>
+            ) : null}
+          </div>
+        ) : null}
         {info ? <div className="small muted mb8">{info}</div> : null}
 
         {mode === 'password' ? (
