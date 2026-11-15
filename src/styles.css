@@ -267,6 +267,20 @@ a {
   width: 100%;
 }
 
+/* 桌面壳浮窗模式：小窗里侧栏与账号信息都该让位给内容 */
+.app.float .side,
+.app.float .topbar .who {
+  display: none;
+}
+
+.app.float .topbar {
+  padding: 8px 12px;
+}
+
+.app.float .content {
+  padding: 12px 14px 24px;
+}
+
 /* ---------- 通用 ---------- */
 .card {
   background: var(--panel);

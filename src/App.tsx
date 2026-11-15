@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { cloud } from './cloud'
 import { getProfile, listRows } from './lib/api'
+import { desktopBridge, type DesktopState } from './lib/desktop'
 import { useSession } from './lib/hooks'
 import { track } from './lib/usage'
 import { NAV_MAIN, REDIRECTS, TITLES } from './lib/nav'
@@ -33,6 +34,8 @@ export default function App() {
   })
   const [profile, setProfile] = useState<Profile | null>(null)
   const [counts, setCounts] = useState({ jobs: 0, applications: 0, interviews: 0, offers: 0 })
+  /** null = 跑在浏览器里（没有桌面壳）；非 null 才显示浮窗按钮 */
+  const [desk, setDesk] = useState<DesktopState | null>(null)
 
   const refreshShared = useCallback(async () => {
     try {
@@ -58,6 +61,24 @@ export default function App() {
   // 匿名计数：一次会话记一次「打开」。GPC 或用户在设置里关掉 ⇒ 一个都不发（见 lib/usage.ts）
   useEffect(() => {
     track('app_open')
+  }, [])
+
+  // 壳的初始状态只读一次：浮窗由主进程持有，后续切换以主进程返回值为准
+  useEffect(() => {
+    const bridge = desktopBridge()
+    if (!bridge) return
+    let alive = true
+    void bridge
+      .getState()
+      .then((state) => {
+        if (alive) setDesk(state)
+      })
+      .catch(() => {
+        // 主进程不可达时按浏览器模式呈现，不弹错误
+      })
+    return () => {
+      alive = false
+    }
   }, [])
 
   useEffect(() => {
@@ -124,8 +145,19 @@ export default function App() {
 
   const pageProps = { profile, onChanged: refreshShared, go }
 
+  /** 浮窗开关的唯一真相在主进程；这里只把返回值同步到界面 */
+  const toggleFloat = async () => {
+    const bridge = desktopBridge()
+    if (!bridge) return
+    try {
+      setDesk(await bridge.toggleFloat())
+    } catch {
+      // 切换失败保持原状，不打断用户操作
+    }
+  }
+
   return (
-    <div className="app">
+    <div className={desk?.float ? 'app float' : 'app'}>
       <nav className="side">
         <div className="side-brand">
           <span className="logo-dot">实</span>
@@ -155,6 +187,11 @@ export default function App() {
             <span className="avatar">{email.slice(0, 1).toUpperCase() || 'U'}</span>
             <span>{email}</span>
           </div>
+          {desk ? (
+            <button className="btn sm" onClick={() => void toggleFloat()} title="切换置顶浮窗（Ctrl+Shift+Space）">
+              {desk.float ? '退出浮窗' : '浮窗'}
+            </button>
+          ) : null}
           <button className="btn sm" onClick={() => void cloud.auth.signOut()}>
             退出
           </button>

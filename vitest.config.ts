@@ -27,6 +27,8 @@ export default defineConfig({
       'scripts/**/*.test.mjs',
       'crawler/**/*.test.mjs',
       'gateway/**/*.test.mjs',
+      // 桌面壳的窗口/启动地址规则是纯函数，不需要真窗口就能断言
+      'electron/**/*.test.mjs',
       'extension/**/*.test.mjs',
       // 小程序端的纯逻辑（计费门这类）也跑在 node 里：不依赖 wx 运行时的那部分才能被断言到。
       // 之前这一条不在清单里，等于小程序的测试根本不会被执行——写它的人以为它在跑。
