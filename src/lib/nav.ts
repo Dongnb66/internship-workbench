@@ -41,6 +41,8 @@ export const HUB_TABS: Record<string, { key: string; label: string }[]> = {
   ],
   interviews: [
     { key: 'records', label: '流程记录' },
+    { key: 'mock', label: 'AI 模拟面试' },
+    { key: 'live', label: 'AI 面试辅助' },
     { key: 'calendar', label: '提醒日历' },
   ],
   growth: [

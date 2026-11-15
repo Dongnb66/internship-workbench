@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { errText } from '../cloud'
 import { Icon } from '../components/Icon'
 import { Empty, Field, Modal, Stat } from '../components/ui'
-import { generateInterviewPrep, summarizeReflection } from '../lib/ai'
+import { generateInterviewPrep, generateInterviewReview, summarizeReflection } from '../lib/ai'
 import { applicationOptions } from '../lib/interviews'
+import { answeredCount, chainProgress, parseQA, qaToText, roundChains, serializeQA, type QAItem } from '../lib/interviewQA'
 import { interviewFactGate } from '../lib/factGate'
 import { deleteRow, insertRow, listRows, updateRow } from '../lib/api'
 import { fmtDateTime, todayISO } from '../lib/format'
@@ -33,6 +34,11 @@ export default function Interviews({ profile, onChanged }: PageProps) {
   const [aiOut, setAiOut] = useState('')
   const [aiBusy, setAiBusy] = useState(false)
   const [busy, setBusy] = useState(false)
+  /** 编辑弹窗里的问答对：保存时序列化进 interviews.questions */
+  const [qa, setQa] = useState<QAItem[]>([])
+  const [reviewFor, setReviewFor] = useState<Row | null>(null)
+  const [reviewOut, setReviewOut] = useState('')
+  const [reviewBusy, setReviewBusy] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -68,6 +74,7 @@ export default function Interviews({ profile, onChanged }: PageProps) {
 
   function openNew() {
     setForm({ company: '', title: '', round_name: '一面', kind: '面试', scheduled_at: '', mode: '线上', place: '', questions: '', reflection: '', result: 'pending', application_id: '' })
+    setQa([{ q: '', a: '' }])
     setEditing('new')
     void loadApplications()
   }
@@ -86,6 +93,8 @@ export default function Interviews({ profile, onChanged }: PageProps) {
       result: row.result ?? 'pending',
       application_id: row.application_id ? String(row.application_id) : '',
     })
+    const items = parseQA(row.questions)
+    setQa(items.length ? items : [{ q: '', a: '' }])
     setEditing(row)
     void loadApplications()
   }
@@ -105,7 +114,7 @@ export default function Interviews({ profile, onChanged }: PageProps) {
         scheduled_at: form.scheduled_at ? new Date(form.scheduled_at).toISOString() : null,
         mode: form.mode,
         place: form.place || null,
-        questions: form.questions || null,
+        questions: serializeQA(qa) || null,
         reflection: form.reflection || null,
         result: form.result || 'pending',
         // 关联投递：AI 面试准备沿它自动带入 JD / 所投简历 / 历史复盘
@@ -190,7 +199,7 @@ export default function Interviews({ profile, onChanged }: PageProps) {
         )
         .map((r) => ({
           round: String(r.round_name ?? '上一轮'),
-          questions: String(r.questions ?? ''),
+          questions: qaToText(parseQA(r.questions)),
           reflection: String(r.reflection ?? ''),
         }))
       setAiPast(past)
@@ -251,6 +260,73 @@ export default function Interviews({ profile, onChanged }: PageProps) {
     }
   }
 
+  /** 打开复盘：证据是本场问答；同一投递的往轮复盘也带上，用来核对「上次的坑补上没有」 */
+  function openReview(row: Row) {
+    setReviewFor(row)
+    setReviewOut('')
+  }
+
+  async function runReview() {
+    if (!reviewFor) return
+    const items = parseQA(reviewFor.questions)
+    if (!items.length) {
+      notifyErr('这场还没登记问答。先记下面试官问了什么、你当时怎么答的')
+      return
+    }
+    setReviewBusy(true)
+    setReviewOut('')
+    try {
+      const appId = reviewFor.application_id
+      const past = rows
+        .filter(
+          (r) =>
+            r.id !== reviewFor.id &&
+            appId &&
+            Number(r.application_id ?? -1) === Number(appId) &&
+            String(r.reflection ?? '').trim(),
+        )
+        .map((r) => `【${r.round_name ?? '往轮'}】\n${String(r.reflection)}`)
+      const text = await generateInterviewReview(
+        {
+          company: String(reviewFor.company ?? ''),
+          title: String(reviewFor.title ?? ''),
+          round: String(reviewFor.round_name ?? ''),
+          qa: items,
+          pastReflection: past.join('\n\n'),
+        },
+        profile,
+      )
+      setReviewOut(text)
+    } catch (error) {
+      notifyErr(errText(error))
+    } finally {
+      setReviewBusy(false)
+    }
+  }
+
+  /** 复盘结果的两种去处：回填本场（下次准备能读到）或存知识库（跨公司复用） */
+  async function saveReview(toReflection: boolean) {
+    if (!reviewFor || !reviewOut) return
+    try {
+      if (toReflection) {
+        await updateRow('interviews', reviewFor.id, { reflection: reviewOut })
+        await load()
+        await onChanged()
+        notifyOk('已回填到本场复盘')
+      } else {
+        await insertRow('knowledge', {
+          title: `面试复盘 · ${reviewFor.company ?? ''} ${reviewFor.title ?? ''} · ${reviewFor.round_name ?? ''} · ${todayISO()}`,
+          category: '面试复盘',
+          content: reviewOut,
+          tags: [],
+        })
+        notifyOk('已存入「个人知识库 → 面试复盘」')
+      }
+    } catch (error) {
+      notifyErr(errText(error))
+    }
+  }
+
   const pending = rows.filter((r) => (r.result ?? 'pending') === 'pending').length
   const passed = rows.filter((r) => r.result === 'pass').length
   const failed = rows.filter((r) => r.result === 'fail').length
@@ -266,6 +342,9 @@ export default function Interviews({ profile, onChanged }: PageProps) {
     }
     return map
   }, [factViolations])
+
+  // 轮次链：同一投递的一面/二面/三面聚成一条，回答「这家走到哪了」
+  const chains = useMemo(() => roundChains(rows), [rows])
 
   return (
     <div className="grid" style={{ gap: 14 }}>
@@ -300,6 +379,43 @@ export default function Interviews({ profile, onChanged }: PageProps) {
 
       <section className="card">
         <div className="card-head">
+          <h3>轮次进度</h3>
+          <span className="spacer" />
+          <span className="small muted">同一投递的面试自动串成一条链</span>
+        </div>
+        <div className="card-body">
+          {chains.length === 0 ? (
+            <div className="small muted">还没有面试记录。记完第一条，这里会显示一面 → 二面 → 三面走到了哪。</div>
+          ) : (
+            chains.map((chain) => {
+              const progress = chainProgress(chain)
+              return (
+                <div key={chain.key} className="row wrap" style={{ gap: 6, padding: '6px 0', borderBottom: '1px solid var(--line, #eef0f3)' }}>
+                  <span className="cell-main">
+                    {chain.company} · {chain.title || '未填岗位'}
+                  </span>
+                  {chain.rounds.map((r) => (
+                    <span
+                      key={String(r.id)}
+                      className={RESULT_LABEL[r.result]?.cls ?? 'badge'}
+                      title={`${r.questionCount} 题，其中 ${r.answered} 题记了回答`}
+                    >
+                      {r.round}
+                    </span>
+                  ))}
+                  <span className="spacer" />
+                  <span className="small muted">
+                    过 {progress.passed} 轮 · 下一场：{progress.next}
+                  </span>
+                </div>
+              )
+            })
+          )}
+        </div>
+      </section>
+
+      <section className="card">
+        <div className="card-head">
           <h3>流程记录</h3>
           <span className="spacer" />
           <span className="small muted">共 {rows.length} 条</span>
@@ -308,7 +424,9 @@ export default function Interviews({ profile, onChanged }: PageProps) {
           {shown.length === 0 ? (
             <Empty text={loading ? '加载中…' : '这里还没有记录。投递之后每约到一轮笔试或面试，就记一条。'} action={<button className="btn primary sm" onClick={openNew}>添加第一条</button>} />
           ) : (
-            shown.map((row) => (
+            shown.map((row) => {
+              const items = parseQA(row.questions)
+              return (
               <div key={row.id} className="card" style={{ marginBottom: 12, boxShadow: 'none' }}>
                 <div className="card-body">
                   <div className="row wrap">
@@ -323,10 +441,25 @@ export default function Interviews({ profile, onChanged }: PageProps) {
                       {fmtDateTime(row.scheduled_at)} · {row.mode ?? '暂无'} {row.place ? `· ${row.place}` : ''}
                     </span>
                   </div>
-                  {row.questions ? (
+                  {items.length ? (
                     <div className="mt8">
-                      <div className="small muted">被问到的问题</div>
-                      <div className="md">{row.questions}</div>
+                      <div className="small muted">
+                        问答 · {answeredCount(items)}/{items.length} 题记了回答
+                      </div>
+                      {items.map((item, index) => (
+                        <div key={index} className="mt8">
+                          <div className="md">
+                            <strong>{index + 1}.</strong> {item.q || '（未记录题目）'}
+                          </div>
+                          {item.a ? (
+                            <div className="small muted">我的回答：{item.a}</div>
+                          ) : (
+                            <div className="small" style={{ color: '#b45309' }}>
+                              还没记当时怎么答的，补上才能逐题复盘
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
                   ) : null}
                   {row.reflection ? (
@@ -350,6 +483,9 @@ export default function Interviews({ profile, onChanged }: PageProps) {
                     <button className="btn sm ghost" onClick={() => setResult(row, 'fail')}>
                       标记未过
                     </button>
+                    <button className="btn sm ghost" onClick={() => openReview(row)}>
+                      AI 复盘与提升
+                    </button>
                     <button
                       className="btn sm ghost"
                       onClick={() => void openAi(row)}
@@ -359,7 +495,8 @@ export default function Interviews({ profile, onChanged }: PageProps) {
                   </div>
                 </div>
               </div>
-            ))
+              )
+            })
           )}
         </div>
       </section>
@@ -441,15 +578,82 @@ export default function Interviews({ profile, onChanged }: PageProps) {
               </select>
             </Field>
           </div>
-          <Field label="被问到的问题" hint="面试完趁热记，越原始越好">
-            <textarea className="textarea" value={form.questions ?? ''} onChange={(e) => setForm({ ...form, questions: e.target.value })} />
-          </Field>
+          <div className="small muted" style={{ lineHeight: 1.8 }}>
+            逐题记：面试官问了什么、你当时怎么答的。只记题目也可以，但补上回答才能做逐题复盘。
+          </div>
+          {qa.map((item, index) => (
+            <div key={index} className="grid" style={{ gap: 6, marginTop: 10, paddingBottom: 10, borderBottom: '1px solid #eef0f3' }}>
+              <div className="row">
+                <strong style={{ fontSize: 13 }}>第 {index + 1} 题</strong>
+                <span className="spacer" />
+                <button
+                  className="btn sm ghost"
+                  onClick={() => setQa(qa.length === 1 ? [{ q: '', a: '' }] : qa.filter((_, i) => i !== index))}
+                >
+                  删掉这题
+                </button>
+              </div>
+              <input
+                className="input"
+                placeholder="面试官问：例如「你这个 Agent 项目里工具调用失败怎么兜底？」"
+                value={item.q}
+                onChange={(e) => setQa(qa.map((it, i) => (i === index ? { ...it, q: e.target.value } : it)))}
+              />
+              <textarea
+                className="textarea"
+                style={{ minHeight: 72 }}
+                placeholder="我当时怎么答的：尽量照原话说，别只写结论"
+                value={item.a}
+                onChange={(e) => setQa(qa.map((it, i) => (i === index ? { ...it, a: e.target.value } : it)))}
+              />
+            </div>
+          ))}
+          <button className="btn sm" style={{ marginTop: 10 }} onClick={() => setQa([...qa, { q: '', a: '' }])}>
+            + 再加一题
+          </button>
           <Field label="复盘">
             <textarea className="textarea" style={{ minHeight: 130 }} value={form.reflection ?? ''} onChange={(e) => setForm({ ...form, reflection: e.target.value })} />
           </Field>
           <button className="btn" onClick={polish} disabled={busy}>
             {busy ? '整理中…' : 'AI 整理成结构化复盘'}
           </button>
+        </Modal>
+      ) : null}
+
+      {reviewFor ? (
+        <Modal
+          wide
+          title={`AI 复盘与提升 · ${reviewFor.company ?? ''} ${reviewFor.round_name ?? ''}`}
+          onClose={() => setReviewFor(null)}
+          footer={
+            <>
+              <button className="btn" onClick={() => setReviewFor(null)}>
+                关闭
+              </button>
+              {reviewOut ? (
+                <>
+                  <button className="btn" onClick={() => void saveReview(false)}>
+                    存入知识库
+                  </button>
+                  <button className="btn" onClick={() => void saveReview(true)}>
+                    回填到本场复盘
+                  </button>
+                </>
+              ) : null}
+              <span className="spacer" />
+              <button className="btn primary" onClick={() => void runReview()} disabled={reviewBusy}>
+                {reviewBusy ? '复盘中…' : '生成复盘与提升方案'}
+              </button>
+            </>
+          }
+        >
+          <div className="small muted" style={{ lineHeight: 1.8 }}>
+            本场登记了 {parseQA(reviewFor.questions).length} 题，其中 {answeredCount(parseQA(reviewFor.questions))} 题记了你的回答。
+            复盘会逐题指出哪里答漏了，只针对最严重的几题给可照着说的更优答法。
+          </div>
+          <div className="md" style={{ background: '#fafbfc', padding: 12, borderRadius: 9, minHeight: 160, whiteSpace: 'pre-wrap' }}>
+            {reviewOut || '生成结果在这里：一、整体判断 二、逐题诊断 三、更优答法 四、下一步提升。'}
+          </div>
         </Modal>
       ) : null}
 

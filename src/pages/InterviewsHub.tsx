@@ -1,13 +1,16 @@
 import { useState } from 'react'
 import CalendarPage from './CalendarPage'
 import Interviews from './Interviews'
+import LiveAssist from './LiveAssist'
+import MockInterview from './MockInterview'
 import { HUB_TABS } from '../lib/nav'
 import type { PageProps } from './Overview'
 
 /**
- * 「面试」区容器：流程记录 + 提醒日历。
- * 日历里的大头本来就是面试与截止提醒，独立成页让人来回切；
- * 能力画像（abilityProfile）后续落在这个区。
+ * 「面试」区容器：流程记录 + AI 模拟面试 + AI 面试辅助 + 提醒日历。
+ * AI 面试辅助独立的理由：它是「面试进行中/刚结束」的操作台，
+ * 与录入流程记录的心态不同，混在一页会互相打断。
+ * 模拟面试也独立：对面是模型，练完只进知识库，不写回任何真实面试记录。
  */
 const TABS = HUB_TABS.interviews
 
@@ -23,6 +26,8 @@ export default function InterviewsHub(props: PageProps & { tab?: string }) {
         ))}
       </div>
       {tab === 'records' ? <Interviews {...props} /> : null}
+      {tab === 'mock' ? <MockInterview {...props} /> : null}
+      {tab === 'live' ? <LiveAssist {...props} /> : null}
       {tab === 'calendar' ? <CalendarPage {...props} /> : null}
     </div>
   )

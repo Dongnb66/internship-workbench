@@ -5,6 +5,7 @@ import { DIMS, GREETING_RULES } from './constants'
 import { todayISO } from './format'
 import { createQuotaStore, DEFAULT_QUOTA, type QuotaStatus, type QuotaStorage } from './quota'
 import { wrapUntrusted } from './untrusted'
+import { qaToText, type QAItem } from './interviewQA'
 import type { Profile } from '../types'
 
 /**
@@ -629,6 +630,113 @@ export async function summarizeReflection(text: string): Promise<string> {
     task: taskSubject('面试复盘整理', text),
     system: '你是面试复盘助手。把用户零散的面试记录整理成「问到的问题 / 我的回答漏洞 / 下一步补齐动作」三段，输出 Markdown，语言精简，不要客套话。',
     user: buildReflectionUserMessage(text),
+  })
+}
+
+// ---------------------------------------------------------------- 面试复盘与提升方案
+
+/**
+ * 一场面试的复盘输入。
+ * 与「面试准备包」方向相反：那边是打之前备题，这边是打完之后回头查——
+ * 证据是真实发生过的问答，所以逐题对照才有意义。
+ */
+export interface InterviewReviewParts {
+  company: string
+  title: string
+  round: string
+  /** 本场登记的问答，题号即顺序 */
+  qa: QAItem[]
+  jd?: string | null
+  /** 同一投递往轮的复盘，用来判断「上次的坑这次补上没有」 */
+  pastReflection?: string | null
+}
+
+export function buildInterviewReviewUserMessage(parts: InterviewReviewParts, profile: Profile | null): string {
+  const blocks = [
+    `【候选人画像】\n${profileBrief(profile)}`,
+    `【本场】${parts.company || '（未填）'} · ${parts.title || '（未填）'} · ${parts.round || '（未填轮次）'}`,
+  ]
+  const jd = String(parts.jd ?? '').trim()
+  if (jd) blocks.push(wrapUntrusted('岗位 JD', jd.slice(0, 6000)))
+  const qa = qaToText(parts.qa).slice(0, 10000)
+  blocks.push(wrapUntrusted('本场问答记录', qa || '（本场没有登记任何问答）'))
+  const past = String(parts.pastReflection ?? '').trim()
+  if (past) blocks.push(wrapUntrusted('同一投递往轮的复盘', past.slice(0, 4000)))
+  return blocks.join('\n\n')
+}
+
+const INTERVIEW_REVIEW_SYSTEM = `你是面试复盘教练。用户会给你一场面试里「面试官问了什么、他当时怎么答的」，可能还有岗位 JD 和往轮复盘。
+输出 Markdown，固定四节，不要客套开头，不要复述题目：
+
+## 一、整体判断
+2-4 句：这场最可能因为什么通过或挂掉。依据只能来自问答记录本身。
+
+## 二、逐题诊断
+按题号逐条，格式「第 N 题：<一句话结论>」。指出回答缺的关键点、逻辑断层、答非所问、事实与简历画像对不上的地方。
+没记录回答的题写「未记录回答，无法诊断」，不要凭空猜测。
+
+## 三、更优答法
+只挑诊断里问题最严重的 3-5 题，给可以直接照着说的要点式回答（分点或 STAR）。
+用到的项目与数字必须来自候选人画像，不许编造新经历。
+
+## 四、下一步提升
+按「本周做什么 / 下次面试前必须练什么」给 3-5 条可执行动作，每条都要有明确产出物（一份话术、一个 demo、一张图），不要写「多练习」这类空话。
+
+纪律：
+- 不虚构面试现场没发生的对话；
+- 答得好的也要说清好在哪，不做无差别夸奖；
+- 缺口一律用「用哪段已有经历顶上」的迁移框架，不写自我否定。`
+
+export async function generateInterviewReview(parts: InterviewReviewParts, profile: Profile | null, onDelta?: (t: string) => void): Promise<string> {
+  return streamChat({
+    task: `面试复盘：${parts.company || '未填'} · ${parts.round || '未填'}`,
+    system: INTERVIEW_REVIEW_SYSTEM,
+    user: buildInterviewReviewUserMessage(parts, profile),
+    onDelta,
+  })
+}
+
+/**
+ * 模拟面试：模型按 JD 与我的画像出一批题，我自己答，最后走**同一套**复盘。
+ *
+ * 和「AI 面试辅助」的分工：这里对面没有真人面试官，练的是同一件事，但不存在
+ * 把答案来源藏起来的问题；复盘直接复用 generateInterviewReview，口径与真面试一致，
+ * 练完的诊断能和你真实那场的诊断放在一起比。
+ *
+ * 一次调用出完整一批题（不是每题一次）：额度是每任务 8 次 / 每天 60 次，
+ * 逐题出题 + 复盘会把一场练习吃掉 6 次以上，整批出题只花 1 次。
+ */
+const MOCK_INTERVIEW_SYSTEM = `你是校园招聘的技术面试官，正在为一名中国大学生准备模拟面试。
+只输出题目本身，每行一道，用「1. 2. 3.」编号；不要写答案、不要写解析、不要开场白和结束语。
+要求：
+- 题目要能从 JD 与候选人画像里落地，围绕他真实做过的项目往下追问，不许退化成通用八股清单；
+- 至少覆盖三类：项目深挖、岗位相关基础、行为题（冲突 / 失败 / 协作）各一道以上；
+- 每题一到两句，中文，不超过 60 字，用真人面试官开口的问法；
+- 道数严格按用户给的数量，不多不少。`
+
+export interface MockInterviewParts {
+  company: string
+  title: string
+  jd: string
+  count: number
+}
+
+/** JD 是外部文本必须走隔离包装；道数夹在 1-12，避免界面传进 NaN 把 prompt 写坏 */
+export function buildMockInterviewUserMessage(parts: MockInterviewParts, profile: Profile | null): string {
+  const count = Math.min(12, Math.max(1, Number(parts.count) || 5))
+  const blocks = [`【候选人画像】\n${profileBrief(profile)}`, `【岗位】${parts.company || '未指定公司'} · ${parts.title || '未指定岗位'}`]
+  const jd = String(parts.jd ?? '').trim()
+  if (jd) blocks.push(wrapUntrusted('岗位 JD', jd.slice(0, 6000)))
+  blocks.push(`请出 ${count} 道面试题。`)
+  return blocks.join('\n\n')
+}
+
+export async function generateInterviewQuestions(parts: MockInterviewParts, profile: Profile | null, onDelta?: (t: string) => void): Promise<string> {
+  return streamChat({
+    task: `模拟面试出题：${parts.company || '自练'} · ${parts.title || '未指定岗位'}`,
+    system: MOCK_INTERVIEW_SYSTEM,
+    user: buildMockInterviewUserMessage(parts, profile),
+    onDelta,
   })
 }
 
