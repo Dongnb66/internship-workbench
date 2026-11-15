@@ -426,12 +426,25 @@ AI 分析、简历生成全部以他的身份输出。这与仓库公不公开�
 > 实测：`GET /` → 403；`GET /?sharecode=R6PQHLIZUV` → 200 且 `app-version = 0.8.39`；两个 `/downloads/*` 同理（403 → 200）。
 > **Origin 类字符串不要加 sharecode**（`src/cloud.ts` 的 `endpoint`、`gateway/server.mjs` 的 `CLOUD_ORIGIN`、`crawler/agent/server.mjs` 与各测试里的 `ORIGIN`）——
 > Origin 是 `scheme://host[:port]`，不含查询参数，加了反而破坏精确匹配。要加的是「给人点 / 给壳加载」的访问链接。
-> 分享码一旦轮换，下面这些地方要同步（2026-11-15 实测 `grep -rn R6PQHLIZUV` 共 16 处 / 10 个文件，
-> 其中真正需要人工改的是 15 处 / 9 个文件，`docs/sync/INBOX.md` 里那 1 处是历史记录、不改）：
-> `electron/windowConfig.mjs`（1）、`src/lib/localAgent.ts`（2）、`scripts/installer/Installer.cs`（1）、
-> `gateway/public/chat.html`（2）、`scripts/verifyPublish.mjs`（1）、`README.md`（1）、`docs/上手.md`（1）、
-> `docs/architecture/高层架构设计.md`（1）、本文件 §12 的核对代码块（`SHARE=` 那行）。
-> **别再把这句简写成「只改一处」** —— 那只在 §12 代码块内成立。
+> 分享码一旦轮换，**按下表逐个文件改，不设总数**（数会变：每往文档里写一次分享码，计数就 +1）：
+>
+> | 文件 | 处数 | 性质 |
+> |---|---|---|
+> | `electron/windowConfig.mjs` | 1 | `ONLINE_URL`，漏改 = 壳白屏 |
+> | `src/lib/localAgent.ts` | 2 | 两个下载直链 |
+> | `scripts/installer/Installer.cs` | 1 | 安装完打开的站点地址 |
+> | `gateway/public/chat.html` | 2 | 跳转链接 |
+> | `scripts/verifyPublish.mjs` | 1 | 基础 host 常量，`withShare()` 自动拼码 |
+> | `README.md` | 1 | 线上入口 |
+> | `docs/上手.md` | 1 | 第一步的入口 |
+> | `docs/architecture/高层架构设计.md` | 1 | 原型链接 |
+> | 本文件 `HANDOFF.md` | 4 | 第 15 行表格、§6「一句话可问」、§12 线上地址、§12 代码块的 `SHARE=` —— **都是要照抄的现行链接** |
+> | 本文件 `HANDOFF.md` 第 426 行 | 1 | **历史实测记录，按「保留原文」不动** |
+> | `docs/sync/INBOX.md` | 若干 | **历史条目，一律不改**（只许追加更正） |
+>
+> 查漏命令：`grep -rn 'sharecode=' --include='*.{ts,tsx,mjs,js,md,cs,html}' . | grep -v node_modules`
+> —— 结果里凡不是 Origin 类、也不是 INBOX / 历史段落的，都要改。
+> **别把这句简写成「只改一处」** —— 那只在 §12 代码块内成立。
 
 发布入口：用平台的 App 发布能力，`language: node`、`startCmd: npm run serve`。
 
